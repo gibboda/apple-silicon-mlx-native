@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Reproducibly rebuild a damaged, stale, or reset Python MLX environment.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # Assumes Homebrew and the MLX workspace already exist.
 # Preserves config/models.env when present.

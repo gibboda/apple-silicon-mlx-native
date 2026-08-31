@@ -1,5 +1,7 @@
 # apple-silicon-mlx-native
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 Reproducible toolkit for installing, rebuilding, validating, and operating a **pure Apple Silicon MLX-native** machine-learning environment.
 
 ## Purpose
@@ -276,4 +278,6 @@ See [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 gibboda.
+[GNU General Public License v3.0](LICENSE) — Copyright (C) 2026 Dona Gibbons (gibboda).
+
+`SPDX-License-Identifier: GPL-3.0-only`
