@@ -4,11 +4,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # Intended for GitHub Actions on pull_request closed when merged == true.
-# Branch names come from the environment so they are not interpolated into
-# workflow YAML run scripts.
+# Branch names and the merged head SHA come from the environment so they
+# are not interpolated into workflow YAML run scripts.
 #
 # Usage:
-#   HEAD_REPO=owner/repo HEAD_REF=feature/foo BASE_REF=main \
+#   HEAD_REPO=owner/repo HEAD_REF=feature/foo HEAD_SHA=<40-hex> BASE_REF=main \
 #     DEFAULT_BRANCH=main GITHUB_REPOSITORY=owner/repo \
 #     scripts/delete-merged-pr-branch.sh
 #
@@ -16,6 +16,7 @@
 #   GITHUB_REPOSITORY  owner/name of this repository (Actions sets this)
 #   HEAD_REPO          owner/name of the PR head repository
 #   HEAD_REF           PR head branch name (no refs/heads/ prefix)
+#   HEAD_SHA           merged PR head commit SHA (40 hex); required unless DRY_RUN
 #   BASE_REF           PR base branch name
 #   DEFAULT_BRANCH     repository default branch (typically main)
 #   GH_TOKEN           token with contents:write (Actions GITHUB_TOKEN)
@@ -34,9 +35,43 @@ is_truthy() {
   esac
 }
 
+# Percent-encode a git ref so `gh api` does not treat # ? as URL delimiters.
+# RFC 3986 unreserved characters stay literal; every other character becomes %HH
+# (including /, which GitHub documents as requiring encoding in ref names).
+percent_encode() {
+  local LC_ALL=C
+  local s=$1
+  local i c hex out=''
+  for ((i = 0; i < ${#s}; i++)); do
+    c=${s:i:1}
+    case $c in
+      [A-Za-z0-9._~-]) out+=$c ;;
+      *)
+        printf -v hex '%02X' "'$c"
+        out+="%$hex"
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+# Delete-a-reference returns 422 with this message when the ref is gone.
+# Do not treat generic 404/422 bodies as success.
+is_delete_missing_ref() {
+  grep -Fq 'Reference does not exist' <<<"$1"
+}
+
+# Get-a-reference returns 404 Not Found for a missing ref (not the delete
+# message above). Require the get-a-reference documentation marker so a
+# generic repository 404 is not mistaken for "already deleted".
+is_get_missing_ref() {
+  grep -Fq 'get-a-reference' <<<"$1" && grep -Eq '"status":[[:space:]]*"404"' <<<"$1"
+}
+
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-}"
 HEAD_REPO="${HEAD_REPO:-}"
 HEAD_REF="${HEAD_REF:-}"
+HEAD_SHA="${HEAD_SHA:-}"
 BASE_REF="${BASE_REF:-}"
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
 DRY_RUN="${DRY_RUN:-false}"
@@ -96,19 +131,67 @@ if [[ "${stacked_count}" != "0" ]]; then
   exit 0
 fi
 
-ref_path="repos/${GITHUB_REPOSITORY}/git/refs/heads/${HEAD_REF}"
+encoded_ref="$(percent_encode "${HEAD_REF}")"
+get_path="repos/${GITHUB_REPOSITORY}/git/ref/heads/${encoded_ref}"
+delete_path="repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_ref}"
 
-if is_truthy "${DRY_RUN}"; then
-  log_ok "DRY_RUN: would DELETE ${ref_path}"
+if is_truthy "${DRY_RUN}" && [[ -z "${HEAD_SHA}" ]]; then
+  log_ok "DRY_RUN: would DELETE ${delete_path}"
   exit 0
 fi
 
-log_info "Deleting ${ref_path}"
+if [[ -z "${HEAD_SHA}" ]]; then
+  log_error "HEAD_SHA is required to verify the ref still points at the merged head."
+  exit 1
+fi
+
+if [[ ! "${HEAD_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  log_error "HEAD_SHA must be a 40-character commit SHA."
+  exit 1
+fi
+
+log_info "Fetching ${get_path}"
+
+get_output=""
+get_status=0
+set +e
+get_output="$(gh api --method GET "${get_path}" --jq .object.sha 2>&1)"
+get_status=$?
+set -e
+
+if [[ "${get_status}" -ne 0 ]]; then
+  if is_get_missing_ref "${get_output}" || is_delete_missing_ref "${get_output}"; then
+    log_ok "Head branch '${HEAD_REF}' already deleted."
+    exit 0
+  fi
+  log_error "Failed to read ref '${HEAD_REF}': ${get_output}"
+  exit 1
+fi
+
+current_sha="$(printf '%s' "${get_output}" | tr -d '[:space:]')"
+if [[ ! "${current_sha}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  log_error "Unexpected GET ref response for '${HEAD_REF}': ${get_output}"
+  exit 1
+fi
+
+expected_sha="$(printf '%s' "${HEAD_SHA}" | tr '[:upper:]' '[:lower:]')"
+actual_sha="$(printf '%s' "${current_sha}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${actual_sha}" != "${expected_sha}" ]]; then
+  log_ok "Skipping delete of '${HEAD_REF}': ref points at ${current_sha}, merged head was ${HEAD_SHA}."
+  exit 0
+fi
+
+if is_truthy "${DRY_RUN}"; then
+  log_ok "DRY_RUN: would DELETE ${delete_path} (sha ${current_sha})"
+  exit 0
+fi
+
+log_info "Deleting ${delete_path}"
 
 delete_output=""
 delete_status=0
 set +e
-delete_output="$(gh api --method DELETE "${ref_path}" 2>&1)"
+delete_output="$(gh api --method DELETE "${delete_path}" 2>&1)"
 delete_status=$?
 set -e
 
@@ -117,9 +200,7 @@ if [[ "${delete_status}" -eq 0 ]]; then
   exit 0
 fi
 
-# GitHub returns 404/422 when the ref is already gone (native auto-delete, or a
-# previous run). Treat that as success so the workflow stays green.
-if grep -Eqi 'Reference does not exist|Not Found|"status":[[:space:]]*"404"|HTTP[[:space:]]+404|HTTP[[:space:]]+422' <<<"${delete_output}"; then
+if is_delete_missing_ref "${delete_output}"; then
   log_ok "Head branch '${HEAD_REF}' already deleted."
   exit 0
 fi

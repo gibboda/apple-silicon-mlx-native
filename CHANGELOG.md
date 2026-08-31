@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation for architecture, hardware tiers, models, media tooling status, and troubleshooting
 - Example model/server configuration (`config/models.example.env`)
 - Repository governance: CODEOWNERS, pull request template, Keep a Changelog policy
-- GitHub Actions workflow that deletes same-repo pull-request head branches after merge (`delete-merged-branch.yml`; skips forks, `main`/default, and stacked bases)
+- GitHub Actions workflow that deletes same-repo pull-request head branches after merge (`delete-merged-branch.yml`; skips forks, `main`/default, stacked bases, and refs that no longer match the merged head SHA)
 
 ### Changed
 
