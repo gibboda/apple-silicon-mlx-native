@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Conventional Commits CI no longer fails on GitHub Actions PR merge commits (`Merge <sha> into <sha>`); audit range uses `AUDIT_HEAD_SHA` instead of reserved `GITHUB_SHA`
+- Quote `detect-apple-silicon.sh --env` values for safe sourcing
+- Use two-dot commit ranges for PR/base audits so base-only commits are not included
+- Abort bootstrap when Homebrew is the Intel `/usr/local` prefix on Apple Silicon
+- Correct PR template Conventional Commits link to repository-root `README.md`
 
 ### Security
 

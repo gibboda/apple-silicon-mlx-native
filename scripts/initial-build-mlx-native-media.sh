@@ -109,9 +109,9 @@ require_cmd brew
 brew_arch="$(brew config 2>/dev/null | awk -F': ' '/CPU:/{print $2; exit}')"
 log_ok "Homebrew at $(homebrew_prefix) (CPU: ${brew_arch:-unknown})"
 
-# Reject obvious x86 Homebrew on Apple Silicon hosts.
+# Reject Intel/Rosetta Homebrew on Apple Silicon hosts before installing.
 if [[ "$(homebrew_prefix)" == "/usr/local" ]]; then
-  log_warn "Homebrew prefix is /usr/local (often Intel/Rosetta). Prefer /opt/homebrew on Apple Silicon."
+  die "Homebrew prefix is /usr/local (Intel/Rosetta). Install Apple Silicon Homebrew at /opt/homebrew, then re-run."
 fi
 
 log_header "Homebrew packages"

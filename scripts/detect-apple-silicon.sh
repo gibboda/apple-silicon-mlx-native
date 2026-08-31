@@ -120,23 +120,22 @@ print(json.dumps({
 PY
     ;;
   env)
-    cat <<EOF
-MLX_ARCH=${arch}
-MLX_CHIP=${chip}
-MLX_MEM_BYTES=${mem_bytes}
-MLX_MEM_GIB=${mem_gib}
-MLX_TIER_ID=${tier_id}
-MLX_TIER_LABEL=${tier_label}
-MLX_TIER_HINT=${tier_hint}
-MLX_CPU_CORES=${cores}
-MLX_MACOS_VERSION=${macos}
-MLX_DISK_AVAIL_GIB=${disk:-0}
-MLX_PYTHON_VERSION_DETECTED=${py}
-MLX_HOMEBREW=${brew_ok}
-MLX_HOMEBREW_PREFIX=${brew_prefix}
-MLX_XCODE_CLT=${xcode_ok}
-MLX_RECOMMENDED_MODEL=${model}
-MLX_WORKSPACE=${MLX_WORKSPACE}
-EOF
+    # Quote values so `eval "$(... --env)"` / sourcing is safe with spaces.
+    printf 'MLX_ARCH=%q\n' "${arch}"
+    printf 'MLX_CHIP=%q\n' "${chip}"
+    printf 'MLX_MEM_BYTES=%q\n' "${mem_bytes}"
+    printf 'MLX_MEM_GIB=%q\n' "${mem_gib}"
+    printf 'MLX_TIER_ID=%q\n' "${tier_id}"
+    printf 'MLX_TIER_LABEL=%q\n' "${tier_label}"
+    printf 'MLX_TIER_HINT=%q\n' "${tier_hint}"
+    printf 'MLX_CPU_CORES=%q\n' "${cores}"
+    printf 'MLX_MACOS_VERSION=%q\n' "${macos}"
+    printf 'MLX_DISK_AVAIL_GIB=%q\n' "${disk:-0}"
+    printf 'MLX_PYTHON_VERSION_DETECTED=%q\n' "${py}"
+    printf 'MLX_HOMEBREW=%q\n' "${brew_ok}"
+    printf 'MLX_HOMEBREW_PREFIX=%q\n' "${brew_prefix}"
+    printf 'MLX_XCODE_CLT=%q\n' "${xcode_ok}"
+    printf 'MLX_RECOMMENDED_MODEL=%q\n' "${model}"
+    printf 'MLX_WORKSPACE=%q\n' "${MLX_WORKSPACE}"
     ;;
 esac

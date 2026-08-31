@@ -65,10 +65,14 @@ Exempt (when EXEMPT_MERGE_COMMITS=true):
 
 Default range selection:
   1. --range / COMMIT_RANGE if provided
-  2. PR range AUDIT_BASE_SHA...AUDIT_HEAD_SHA when both are set
+  2. PR range AUDIT_BASE_SHA..AUDIT_HEAD_SHA (two-dot / head-only) when both are set
      (also accepts GITHUB_BASE_SHA with AUDIT_HEAD_SHA)
-  3. AUDIT_BASE_REF...HEAD when the base ref exists
+  3. AUDIT_BASE_REF..HEAD (two-dot) when the base ref exists
   4. Otherwise: tip commit only (HEAD)
+
+Note: Prefer two-dot ranges (A..B) so only commits reachable from B but not A
+are audited. Three-dot (A...B) is a symmetric difference and can include
+base-only commits when the base branch has moved.
 
 Exit status:
   0 — all audited commits comply
@@ -97,12 +101,13 @@ fi
 if [[ -z "${RANGE}" ]]; then
   # Prefer AUDIT_* names. GITHUB_SHA is reserved in Actions and stays as the
   # pull_request merge commit, so never use it as the audit head.
+  # Use two-dot ranges so only head-only commits are audited.
   base_sha="${AUDIT_BASE_SHA:-${GITHUB_BASE_SHA:-}}"
   head_sha="${AUDIT_HEAD_SHA:-}"
   if [[ -n "${base_sha}" && -n "${head_sha}" ]]; then
-    RANGE="${base_sha}...${head_sha}"
+    RANGE="${base_sha}..${head_sha}"
   elif git rev-parse --verify "${AUDIT_BASE_REF}" >/dev/null 2>&1; then
-    RANGE="${AUDIT_BASE_REF}...HEAD"
+    RANGE="${AUDIT_BASE_REF}..HEAD"
   else
     RANGE="HEAD"
   fi

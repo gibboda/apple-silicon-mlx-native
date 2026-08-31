@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] Commit subjects follow [Conventional Commits](../README.md#conventional-commits-policy)
+- [ ] Commit subjects follow [Conventional Commits](README.md#conventional-commits-policy)
 - [ ] `make lint` (ShellCheck) passes for touched shell scripts
 - [ ] `make validate` passes when MLX environment changes apply
 - [ ] Documentation updated (`README.md` and/or `docs/`) when behavior changes

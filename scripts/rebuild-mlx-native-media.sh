@@ -49,6 +49,9 @@ export_detect_env
 ensure_homebrew_in_path
 [[ -n "$(homebrew_prefix)" ]] || die "Homebrew not found. Run the initial build script first."
 require_cmd brew
+if [[ "$(homebrew_prefix)" == "/usr/local" ]]; then
+  die "Homebrew prefix is /usr/local (Intel/Rosetta). Install Apple Silicon Homebrew at /opt/homebrew, then re-run."
+fi
 log_ok "Homebrew validated at $(homebrew_prefix)"
 
 # Validate expected workspace
