@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Bootstrap a pure Apple Silicon MLX-native workstation environment.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # Assumptions: macOS + Apple Silicon. Does not assume Homebrew or a venv exist.
 # Never installs Rosetta-only/x86 packages. Never uses sudo pip.
