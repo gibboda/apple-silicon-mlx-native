@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Delete a merged pull-request head branch (same-repository only).
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # Intended for GitHub Actions on pull_request closed when merged == true.
 # Branch names come from the environment so they are not interpolated into
