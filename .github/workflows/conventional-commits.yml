@@ -19,8 +19,9 @@ jobs:
 
       - name: Audit Conventional Commits
         env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+          # Do not set GITHUB_SHA — Actions reserves it as the PR merge commit.
+          AUDIT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          AUDIT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           EXEMPT_MERGE_COMMITS: "true"
         run: |
           chmod +x scripts/conventional-commits-audit.sh scripts/lib/common.sh

@@ -12,6 +12,7 @@
 # Exempt by default:
 #   - GitHub merge commits: "Merge pull request #N from ..."
 #   - GitHub merge branch:  "Merge branch '...' ..."
+#   - GitHub Actions PR test merges: "Merge <sha> into <sha>"
 #   - Git revert subjects that already match: "revert: ..."
 #
 # Usage:
@@ -22,7 +23,12 @@
 # Environment:
 #   COMMIT_RANGE          Override commit range (default: see below)
 #   AUDIT_BASE_REF        Base ref for PR-style ranges (default: origin/main)
+#   AUDIT_BASE_SHA        PR base SHA (preferred over reserved GITHUB_SHA)
+#   AUDIT_HEAD_SHA        PR head SHA (preferred over reserved GITHUB_SHA)
 #   EXEMPT_MERGE_COMMITS  true|false (default: true)
+#
+# Note: Do not rely on overriding GITHUB_SHA in GitHub Actions — that variable
+# is reserved and remains the workflow merge commit on pull_request events.
 
 set -euo pipefail
 
@@ -59,9 +65,10 @@ Exempt (when EXEMPT_MERGE_COMMITS=true):
 
 Default range selection:
   1. --range / COMMIT_RANGE if provided
-  2. GitHub Actions PR range (GITHUB_BASE_SHA...GITHUB_SHA) when set
+  2. PR range AUDIT_BASE_SHA...AUDIT_HEAD_SHA when both are set
+     (also accepts GITHUB_BASE_SHA with AUDIT_HEAD_SHA)
   3. AUDIT_BASE_REF...HEAD when the base ref exists
-  4. Otherwise: all commits reachable from HEAD (full history)
+  4. Otherwise: tip commit only (HEAD)
 
 Exit status:
   0 — all audited commits comply
@@ -88,8 +95,12 @@ if [[ -n "${COMMIT_RANGE:-}" && -z "${RANGE}" ]]; then
 fi
 
 if [[ -z "${RANGE}" ]]; then
-  if [[ -n "${GITHUB_BASE_SHA:-}" && -n "${GITHUB_SHA:-}" ]]; then
-    RANGE="${GITHUB_BASE_SHA}...${GITHUB_SHA}"
+  # Prefer AUDIT_* names. GITHUB_SHA is reserved in Actions and stays as the
+  # pull_request merge commit, so never use it as the audit head.
+  base_sha="${AUDIT_BASE_SHA:-${GITHUB_BASE_SHA:-}}"
+  head_sha="${AUDIT_HEAD_SHA:-}"
+  if [[ -n "${base_sha}" && -n "${head_sha}" ]]; then
+    RANGE="${base_sha}...${head_sha}"
   elif git rev-parse --verify "${AUDIT_BASE_REF}" >/dev/null 2>&1; then
     RANGE="${AUDIT_BASE_REF}...HEAD"
   else
@@ -110,8 +121,12 @@ is_exempt_merge() {
     "Merge pull request #"*) return 0 ;;
     "Merge branch "*) return 0 ;;
     "Merge remote-tracking branch "*) return 0 ;;
-    *) return 1 ;;
   esac
+  # GitHub Actions pull_request checkout merge: "Merge <40-hex> into <40-hex>"
+  if printf '%s\n' "${subject}" | grep -Eq '^Merge [0-9a-f]{40} into [0-9a-f]{40}$'; then
+    return 0
+  fi
+  return 1
 }
 
 log_header "Conventional Commits audit"
