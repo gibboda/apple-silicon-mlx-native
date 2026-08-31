@@ -1,0 +1,28 @@
+name: Conventional Commits
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit commit subjects
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Audit Conventional Commits
+        env:
+          # Do not set GITHUB_SHA — Actions reserves it as the PR merge commit.
+          AUDIT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          AUDIT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXEMPT_MERGE_COMMITS: "true"
+        run: |
+          chmod +x scripts/conventional-commits-audit.sh scripts/lib/common.sh
+          scripts/conventional-commits-audit.sh
