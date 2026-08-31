@@ -1,4 +1,6 @@
 # apple-silicon-mlx-native — convenience targets delegate to scripts.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Shared helpers for apple-silicon-mlx-native scripts.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 # shellcheck disable=SC2034
 
 set -euo pipefail

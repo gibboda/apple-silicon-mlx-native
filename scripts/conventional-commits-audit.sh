@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Audit Git commit subjects against Conventional Commits policy.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # Accepted subject syntax:
 #   <type>[optional scope][!]: <description>
