@@ -1,0 +1,6 @@
+# Default owner for this repository
+* @gibboda
+
+# Scripts and CI require owner review
+/scripts/ @gibboda
+/.github/ @gibboda

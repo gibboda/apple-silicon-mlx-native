@@ -1,0 +1,72 @@
+# macOS / editor
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# Python
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# MLX / Hugging Face / model artifacts (never commit weights)
+models/
+*.safetensors
+*.gguf
+*.ggml
+*.bin
+*.pt
+*.pth
+*.onnx
+*.npz
+*.npz.index
+*.h5
+*.npz.data-*
+.cache/
+huggingface/
+.huggingface/
+transformers/
+mlx_models/
+outputs/
+generated/
+*.wav
+*.mp3
+*.flac
+*.mp4
+*.mov
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Local config overrides
+config/models.env
+.env
+.env.*
+!.env.example
+
+# Logs / temp
+*.log
+tmp/
+temp/
+.tmp/
+
+# ShellCheck / tooling
+shellcheck-report.txt
