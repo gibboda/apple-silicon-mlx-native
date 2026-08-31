@@ -186,6 +186,7 @@ apple-silicon-mlx-native/
 │   ├── pull_request_template.md
 │   └── workflows/
 │       ├── conventional-commits.yml
+│       ├── delete-merged-branch.yml
 │       └── shellcheck.yml
 ├── config/
 │   └── models.example.env
@@ -201,7 +202,8 @@ apple-silicon-mlx-native/
 │   ├── rebuild-mlx-native-media.sh
 │   ├── detect-apple-silicon.sh
 │   ├── validate-mlx.sh
-│   └── conventional-commits-audit.sh
+│   ├── conventional-commits-audit.sh
+│   └── delete-merged-pr-branch.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
@@ -261,6 +263,12 @@ GitHub Actions runs the same script on pull requests. GitHub-generated merge com
 ## CODEOWNERS
 
 Default owner: `@gibboda` (see `.github/CODEOWNERS`).
+
+## Merged pull request branches
+
+When a pull request is **merged**, `.github/workflows/delete-merged-branch.yml` deletes the head branch in this repository. It skips forks, never deletes `main` (or the repository default/base branch), leaves the branch in place if another open PR still uses it as a base (stacked PRs), and treats an already-deleted ref as success.
+
+This is the in-repo guarantee. GitHub’s repository setting “Automatically delete head branches” may also be enabled; the workflow still succeeds if the branch is already gone.
 
 ## Troubleshooting
 
