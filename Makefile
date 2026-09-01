@@ -8,7 +8,7 @@ SHELL := /bin/bash
 SCRIPTS := scripts
 .DEFAULT_GOAL := help
 
-.PHONY: help detect install rebuild validate audit lint
+.PHONY: help detect install rebuild validate clean uninstall audit lint test
 
 help: ## Show available targets
 	@printf '%s\n' \
@@ -17,8 +17,11 @@ help: ## Show available targets
 		'make install   — initial MLX-native bootstrap (Homebrew + venv + packages)' \
 		'make rebuild   — recreate .venv and reinstall MLX packages' \
 		'make validate  — validate mlx / mlx-lm and run a fast computation check' \
+		'make clean     — remove .venv (toolkit-owned environment); reports leftovers' \
+		'make uninstall — same as make clean' \
 		'make audit     — audit commit subjects for Conventional Commits' \
-		'make lint      — run ShellCheck on repository shell scripts'
+		'make lint      — run ShellCheck on repository shell scripts' \
+		'make test      — run portable shell self-tests'
 
 detect: ## Detect Apple Silicon hardware
 	@$(SCRIPTS)/detect-apple-silicon.sh
@@ -32,6 +35,9 @@ rebuild: ## Rebuild Python MLX environment
 validate: ## Validate MLX installation
 	@$(SCRIPTS)/validate-mlx.sh
 
+clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew
+	@$(SCRIPTS)/cleanup-mlx-native.sh --force
+
 audit: ## Conventional Commits audit
 	@$(SCRIPTS)/conventional-commits-audit.sh
 
@@ -43,5 +49,8 @@ lint: ## ShellCheck all scripts
 	@status=0; \
 	while IFS= read -r -d '' script; do \
 	  shellcheck -x "$$script" || status=1; \
-	done < <(find scripts -type f -name '*.sh' -print0); \
+	done < <(find scripts tests -type f -name '*.sh' -print0); \
 	exit $$status
+
+test: ## Run portable shell self-tests
+	@tests/cleanup-mlx-native.test.sh

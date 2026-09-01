@@ -81,6 +81,36 @@ make rebuild
 
 Recreates `.venv`, reinstalls packages, validates, and runs a small MLX computation. Preserves `config/models.env` when present.
 
+## Uninstall / cleanup
+
+Yes — keep a **cleanup** path. Do not add a nuclear uninstall that removes Homebrew, Xcode Command Line Tools, or shared formulae (`python@3.12`, `git`, `ffmpeg`). Those are system tools other software uses; this toolkit may have installed them, but it does not uniquely own them.
+
+`make clean` / `make uninstall` reverse **toolkit-owned** state (the project `.venv`) and print leftovers. Hugging Face model caches are reported, not deleted, unless you opt in.
+
+```bash
+make clean              # remove .venv; equivalent: make uninstall
+scripts/cleanup-mlx-native.sh --dry-run
+scripts/cleanup-mlx-native.sh --purge --force
+```
+
+| Target | Default `make clean` | `--purge` | `--huggingface-cache` |
+| --- | --- | --- | --- |
+| `.venv` | removed | removed | removed unless `--keep-venv` |
+| `config/models.env` | kept | removed | kept |
+| Workspace caches (`models/`, `.cache/`, …) | kept | removed | kept |
+| Hugging Face hub cache (`~/.cache/huggingface/hub`) | reported | reported | removed |
+| Homebrew / `python` / `git` / `ffmpeg` / Xcode CLT | left installed | left installed | left installed |
+
+`--purge` is `--config` plus `--workspace-caches`. It still does not touch Homebrew or the Hugging Face hub. Stop `mlx_lm.server` before removing `.venv`.
+
+```bash
+# Reclaim downloaded model disk without destroying .venv
+# (shared with other Hugging Face tools)
+scripts/cleanup-mlx-native.sh --huggingface-cache --keep-venv --force
+```
+
+Tokens under `HF_HOME` are not deleted by `--huggingface-cache` (hub only).
+
 ## Validation
 
 ```bash
@@ -202,10 +232,13 @@ apple-silicon-mlx-native/
 │   ├── lib/common.sh
 │   ├── initial-build-mlx-native-media.sh
 │   ├── rebuild-mlx-native-media.sh
+│   ├── cleanup-mlx-native.sh
 │   ├── detect-apple-silicon.sh
 │   ├── validate-mlx.sh
 │   ├── conventional-commits-audit.sh
 │   └── delete-merged-pr-branch.sh
+├── tests/
+│   └── cleanup-mlx-native.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
@@ -224,8 +257,10 @@ apple-silicon-mlx-native/
 | `make install` | Initial bootstrap |
 | `make rebuild` | Recreate `.venv` |
 | `make validate` | MLX validation |
+| `make clean` / `make uninstall` | Remove `.venv`; report leftover system tools |
 | `make audit` | Conventional Commits audit |
 | `make lint` | ShellCheck |
+| `make test` | Portable shell self-tests |
 
 ## Conventional Commits policy
 

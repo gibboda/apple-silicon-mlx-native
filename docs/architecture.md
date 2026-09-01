@@ -48,13 +48,15 @@ By default the workspace is the repository root:
 
 ```text
 apple-silicon-mlx-native/
-  .venv/                 # Python environment (gitignored)
-  config/models.env      # local overrides (gitignored)
-  scripts/               # bootstrap, rebuild, detect, validate, audit
+  .venv/                 # Python environment (gitignored; removed by cleanup)
+  config/models.env      # local overrides (gitignored; kept unless --config/--purge)
+  scripts/               # bootstrap, rebuild, cleanup, detect, validate, audit
   docs/                  # deep documentation
 ```
 
 Override with `MLX_WORKSPACE` / `MLX_VENV` when you want the environment outside the clone.
+
+Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** state, not a full workstation uninstall. Homebrew, Xcode Command Line Tools, and brew formulae stay installed; Hugging Face hub caches are reported unless `--huggingface-cache` is passed.
 
 ## Script responsibilities
 
@@ -63,6 +65,7 @@ Override with `MLX_WORKSPACE` / `MLX_VENV` when you want the environment outside
 | `detect-apple-silicon.sh` | Hardware facts + memory tier |
 | `initial-build-mlx-native-media.sh` | First-time bootstrap |
 | `rebuild-mlx-native-media.sh` | Recreate `.venv` safely |
+| `cleanup-mlx-native.sh` | Remove `.venv` and optional caches; never Homebrew |
 | `validate-mlx.sh` | Fast correctness checks |
 | `conventional-commits-audit.sh` | Commit subject policy |
 

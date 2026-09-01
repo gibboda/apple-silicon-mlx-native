@@ -85,3 +85,31 @@ GitHub merge commits are exempt by default. See `scripts/conventional-commits-au
 ## Rebuild refused to delete `.venv`
 
 The rebuild script only removes a path that looks like a virtualenv under the workspace. Check `MLX_WORKSPACE` / `MLX_VENV` and re-run with `--force` via `make rebuild`.
+
+## Cleanup / uninstall
+
+```bash
+make clean
+# or: make uninstall
+scripts/cleanup-mlx-native.sh --dry-run
+```
+
+Default cleanup only removes `.venv`. It **does not** uninstall Homebrew, Xcode Command Line Tools, or brew formulae (`python@3.12`, `git`, `ffmpeg`).
+
+To also drop local config and workspace caches (`models/`, `.cache/`, and other gitignored output dirs):
+
+```bash
+scripts/cleanup-mlx-native.sh --purge --force
+```
+
+Downloaded models usually live in the Hugging Face hub cache (`~/.cache/huggingface/hub`, or `$HF_HUB_CACHE`). That directory is shared with other tools, so cleanup only reports its size unless you opt in:
+
+```bash
+scripts/cleanup-mlx-native.sh --huggingface-cache --keep-venv --force
+```
+
+`--huggingface-cache` removes the **hub** (weights), not `HF_HOME` tokens/config.
+
+If cleanup refuses a path, it is protecting you: the target is outside the workspace, does not look like a venv, is the committed `models.example.env`, or is too shallow to be a safe cache directory. Non-interactive runs require `--force` (`make clean` passes it).
+
+Stop `mlx_lm.server` (and any other process using `.venv`) before removing the environment.

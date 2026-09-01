@@ -175,6 +175,46 @@ activate_venv() {
   source "${MLX_VENV}/bin/activate"
 }
 
+assert_workspace_safe() {
+  [[ -n "${MLX_WORKSPACE:-}" ]] || die "MLX_WORKSPACE is empty"
+  [[ "${MLX_WORKSPACE}" != "/" ]] || die "Refusing to operate on workspace /"
+  [[ -d "${MLX_WORKSPACE}" ]] || die "Expected workspace missing: ${MLX_WORKSPACE}"
+}
+
+assert_venv_under_workspace() {
+  local ws="${MLX_WORKSPACE%/}"
+  local venv="${MLX_VENV%/}"
+  [[ -n "${venv}" ]] || die "MLX_VENV is empty"
+  [[ "${venv}" != "${ws}" ]] || die "Refusing to treat the workspace root as a venv: ${venv}"
+  [[ "${venv}" == "${ws}/.venv" || "${venv}" == "${ws}/"* ]] \
+    || die "Refusing to remove venv outside workspace: ${venv}"
+}
+
+looks_like_venv() {
+  local dir="${1:-${MLX_VENV}}"
+  [[ -d "${dir}" ]] || return 1
+  [[ -f "${dir}/pyvenv.cfg" || -f "${dir}/bin/python" ]]
+}
+
+assert_path_under_workspace() {
+  local path="${1%/}"
+  local label="${2:-path}"
+  local ws="${MLX_WORKSPACE%/}"
+  [[ -n "${path}" ]] || die "Refusing empty ${label}"
+  [[ "${path}" != "/" ]] || die "Refusing to remove /"
+  [[ "${path}" != "${ws}" ]] || die "Refusing to remove workspace root as ${label}: ${path}"
+  [[ "${path}" == "${ws}/"* ]] || die "Refusing to remove ${label} outside workspace: ${path}"
+}
+
+human_du() {
+  local target="$1"
+  if [[ -e "${target}" ]]; then
+    du -sh "${target}" 2>/dev/null | awk '{print $1}'
+  else
+    echo "absent"
+  fi
+}
+
 print_hardware_summary() {
   local arch chip mem_bytes mem_gib cores macos disk py tier_line tier_id tier_label tier_hint
   arch="$(detect_architecture)"
