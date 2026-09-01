@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use two-dot commit ranges for PR/base audits so base-only commits are not included
 - Abort bootstrap when Homebrew is the Intel `/usr/local` prefix on Apple Silicon
 - Correct PR template Conventional Commits link to repository-root `README.md`
+- Canonicalize cleanup/rebuild removal paths so `..` cannot escape the workspace; `--huggingface-cache` refuses `HF_HOME` (tokens/config) and parent directories
 
 ### Security
 

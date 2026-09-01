@@ -126,7 +126,60 @@ assert_exists "${MLX_VENV}/pyvenv.cfg"
 
 # 10. refuse shallow HF cache paths
 expect_fail "rejects shallow HF hub cache" \
-  env HF_HUB_CACHE=/tmp HF_HOME=/tmp "${CLEANUP}" --huggingface-cache --force
+  env HF_HUB_CACHE=/tmp HF_HOME=/tmp "${CLEANUP}" --huggingface-cache --keep-venv --force
+
+# 11. refuse venv paths that lexically look in-workspace but resolve outside via ..
+make_venv "${MLX_VENV}"
+mkdir -p "${TMP}/outside"
+make_venv "${TMP}/outside/venv"
+if MLX_VENV="${WS}/../outside/venv" "${CLEANUP}" --force >/dev/null 2>&1; then
+  fail "refused to reject venv path with .. escaping the workspace"
+else
+  pass "rejects venv path with .. escaping the workspace"
+fi
+assert_exists "${TMP}/outside/venv/pyvenv.cfg"
+assert_exists "${MLX_VENV}/pyvenv.cfg"
+
+# 12. allow venv paths whose .. still resolves inside the workspace
+mkdir -p "${WS}/nested"
+expect_ok "accepts venv path with .. that stays in workspace" \
+  env MLX_VENV="${WS}/nested/../.venv" "${CLEANUP}" --force
+assert_missing "${WS}/.venv"
+
+# 13. refuse HF_HUB_CACHE equal to HF_HOME (would delete tokens)
+export HF_HOME="${HOME}/.cache/huggingface"
+export HF_HUB_CACHE="${HF_HOME}"
+mkdir -p "${HF_HOME}/hub"
+printf 'token\n' >"${HF_HOME}/token"
+printf 'blob\n' >"${HF_HOME}/hub/model.bin"
+expect_fail "rejects HF_HUB_CACHE equal to HF_HOME" \
+  "${CLEANUP}" --huggingface-cache --keep-venv --force
+assert_exists "${HF_HOME}/token"
+assert_exists "${HF_HOME}/hub/model.bin"
+
+# 14. refuse HF_HUB_CACHE that uses .. to escape to another directory
+mkdir -p "${TMP}/huggingface/nested" "${TMP}/victim"
+printf 'secret\n' >"${TMP}/victim/secret"
+expect_fail "rejects HF_HUB_CACHE with .. escaping to victim" \
+  env HF_HOME="${HF_HOME}" HF_HUB_CACHE="${TMP}/huggingface/nested/../../victim" \
+  "${CLEANUP}" --huggingface-cache --keep-venv --force
+assert_exists "${TMP}/victim/secret"
+
+# 15. refuse HF_HUB_CACHE pointing at a parent of HF_HOME
+expect_fail "rejects HF_HUB_CACHE parent of HF_HOME" \
+  env HF_HOME="${HF_HOME}" HF_HUB_CACHE="${HOME}/.cache" \
+  "${CLEANUP}" --huggingface-cache --keep-venv --force
+assert_exists "${HF_HOME}/token"
+
+# 16. --config path with .. that escapes the workspace
+printf 'MLX_DEFAULT_MODEL=test\n' >"${WS}/config/models.env"
+export MLX_MODELS_ENV="${WS}/config/models.env"
+mkdir -p "${TMP}/outside"
+printf 'keep-me\n' >"${TMP}/outside/secret.env"
+expect_fail "rejects config path with .. escaping the workspace" \
+  env MLX_MODELS_ENV="${WS}/config/../../outside/secret.env" \
+  "${CLEANUP}" --config --keep-venv --force
+assert_exists "${TMP}/outside/secret.env"
 
 if (( failures > 0 )); then
   printf 'CLEANUP_SELFTEST_RESULT=fail (%s)\n' "${failures}" >&2

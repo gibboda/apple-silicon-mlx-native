@@ -175,19 +175,96 @@ activate_venv() {
   source "${MLX_VENV}/bin/activate"
 }
 
+# Absolute physical path: resolve . / .. and follow existing directory symlinks.
+# Missing final components are appended to the longest existing ancestor.
+canonical_path() {
+  local path="${1:-}"
+  local current next suffix resolved part rest
+  [[ -n "${path}" ]] || return 1
+
+  if [[ "${path}" != /* ]]; then
+    path="${PWD%/}/${path}"
+  fi
+  while [[ "${path}" != "/" && "${path}" == */ ]]; do
+    path="${path%/}"
+  done
+
+  if [[ -d "${path}" ]]; then
+    (cd "${path}" && pwd -P)
+    return 0
+  fi
+
+  if [[ -e "${path}" || -L "${path}" ]]; then
+    next="$(cd "$(dirname "${path}")" && pwd -P)" || return 1
+    printf '%s/%s\n' "${next}" "$(basename "${path}")"
+    return 0
+  fi
+
+  suffix=""
+  current="${path}"
+  while [[ "${current}" != "/" && ! -d "${current}" ]]; do
+    next="$(basename "${current}")"
+    current="$(dirname "${current}")"
+    suffix="/${next}${suffix}"
+  done
+
+  if [[ -d "${current}" ]]; then
+    resolved="$(cd "${current}" && pwd -P)" || return 1
+  else
+    resolved="/"
+  fi
+
+  rest="${suffix#/}"
+  while [[ -n "${rest}" ]]; do
+    if [[ "${rest}" == */* ]]; then
+      part="${rest%%/*}"
+      rest="${rest#*/}"
+    else
+      part="${rest}"
+      rest=""
+    fi
+    if [[ -z "${part}" || "${part}" == "." ]]; then
+      continue
+    fi
+    if [[ "${part}" == ".." ]]; then
+      if [[ "${resolved}" != "/" ]]; then
+        resolved="$(dirname "${resolved}")"
+      fi
+      continue
+    fi
+    resolved="${resolved%/}/${part}"
+    if [[ -d "${resolved}" ]]; then
+      resolved="$(cd "${resolved}" && pwd -P)" || return 1
+    fi
+  done
+  printf '%s\n' "${resolved}"
+}
+
+# True when inner is outer, or a path under outer (after callers canonicalize).
+path_is_within() {
+  local inner="${1%/}"
+  local outer="${2%/}"
+  [[ -n "${inner}" && -n "${outer}" ]] || return 1
+  [[ "${inner}" == "${outer}" || "${inner}" == "${outer}/"* ]]
+}
+
 assert_workspace_safe() {
-  [[ -n "${MLX_WORKSPACE:-}" ]] || die "MLX_WORKSPACE is empty"
+  local orig="${MLX_WORKSPACE:-}"
+  [[ -n "${orig}" ]] || die "MLX_WORKSPACE is empty"
+  [[ -d "${orig}" ]] || die "Expected workspace missing: ${orig}"
+  MLX_WORKSPACE="$(canonical_path "${orig}")" || die "Cannot resolve workspace: ${orig}"
   [[ "${MLX_WORKSPACE}" != "/" ]] || die "Refusing to operate on workspace /"
-  [[ -d "${MLX_WORKSPACE}" ]] || die "Expected workspace missing: ${MLX_WORKSPACE}"
 }
 
 assert_venv_under_workspace() {
-  local ws="${MLX_WORKSPACE%/}"
-  local venv="${MLX_VENV%/}"
-  [[ -n "${venv}" ]] || die "MLX_VENV is empty"
-  [[ "${venv}" != "${ws}" ]] || die "Refusing to treat the workspace root as a venv: ${venv}"
-  [[ "${venv}" == "${ws}/.venv" || "${venv}" == "${ws}/"* ]] \
-    || die "Refusing to remove venv outside workspace: ${venv}"
+  local orig="${MLX_VENV:-}"
+  local ws venv
+  [[ -n "${orig}" ]] || die "MLX_VENV is empty"
+  ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+  venv="$(canonical_path "${orig}")" || die "Cannot resolve venv path: ${orig}"
+  MLX_VENV="${venv}"
+  [[ "${venv}" != "${ws}" ]] || die "Refusing to treat the workspace root as a venv: ${orig}"
+  [[ "${venv}" == "${ws}/"* ]] || die "Refusing to remove venv outside workspace: ${orig} (resolves to ${venv})"
 }
 
 looks_like_venv() {
@@ -197,13 +274,15 @@ looks_like_venv() {
 }
 
 assert_path_under_workspace() {
-  local path="${1%/}"
+  local orig="$1"
   local label="${2:-path}"
-  local ws="${MLX_WORKSPACE%/}"
-  [[ -n "${path}" ]] || die "Refusing empty ${label}"
+  local path ws
+  [[ -n "${orig}" ]] || die "Refusing empty ${label}"
+  ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+  path="$(canonical_path "${orig}")" || die "Cannot resolve ${label}: ${orig}"
   [[ "${path}" != "/" ]] || die "Refusing to remove /"
-  [[ "${path}" != "${ws}" ]] || die "Refusing to remove workspace root as ${label}: ${path}"
-  [[ "${path}" == "${ws}/"* ]] || die "Refusing to remove ${label} outside workspace: ${path}"
+  [[ "${path}" != "${ws}" ]] || die "Refusing to remove workspace root as ${label}: ${orig}"
+  [[ "${path}" == "${ws}/"* ]] || die "Refusing to remove ${label} outside workspace: ${orig} (resolves to ${path})"
 }
 
 human_du() {

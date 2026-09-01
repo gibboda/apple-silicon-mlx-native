@@ -100,19 +100,30 @@ huggingface_hub_cache() {
 }
 
 assert_huggingface_hub_cache_safe() {
-  local path="${1%/}"
-  local home="${HOME%/}"
-  local ws="${MLX_WORKSPACE%/}"
-  local base
-  base="$(basename "${path}")"
+  local orig="$1"
+  local path home_c hf_home_raw hf_home_c ws_c base depth home_cache
+  path="$(canonical_path "${orig}")" || die "Cannot resolve Hugging Face hub cache path: ${orig}"
+  home_c="$(canonical_path "${HOME}")" || die "Cannot resolve HOME"
+  hf_home_raw="${HF_HOME:-${HOME}/.cache/huggingface}"
+  hf_home_c="$(canonical_path "${hf_home_raw}")" || die "Cannot resolve HF_HOME: ${hf_home_raw}"
+  ws_c="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+  home_cache="$(canonical_path "${home_c}/.cache")" || home_cache="${home_c}/.cache"
 
   [[ -n "${path}" ]] || die "Hugging Face hub cache path is empty"
   [[ "${path}" != "/" ]] || die "Refusing to remove /"
-  [[ "${path}" != "${home}" ]] || die "Refusing to remove \$HOME as Hugging Face cache"
-  [[ "${path}" != "${home}/.cache" ]] || die "Refusing to remove entire ~/.cache"
-  [[ "${path}" != "${ws}" ]] || die "Refusing to remove the workspace as Hugging Face cache"
-  # Require a nested path so /usr or /opt cannot be passed by accident.
-  [[ "${path}" == /*/*/* ]] || die "Hugging Face hub cache path is too shallow to remove safely: ${path}"
+  if path_is_within "${home_c}" "${path}"; then
+    die "Refusing to remove \$HOME or a parent of it as Hugging Face cache: ${orig} (resolves to ${path})"
+  fi
+  [[ "${path}" != "${home_cache}" ]] || die "Refusing to remove entire ~/.cache"
+  if path_is_within "${ws_c}" "${path}"; then
+    die "Refusing to remove the workspace (or a parent of it) as Hugging Face cache: ${orig} (resolves to ${path})"
+  fi
+  if path_is_within "${hf_home_c}" "${path}"; then
+    die "Refusing to remove Hugging Face home (tokens/config) or a parent of it: ${orig} (resolves to ${path})"
+  fi
+  depth="$(awk -F/ '{print NF-1}' <<<"${path}")"
+  (( depth >= 3 )) || die "Hugging Face hub cache path is too shallow to remove safely: ${path}"
+  base="$(basename "${path}")"
   if [[ "${base}" != "hub" && "${path}" != *huggingface* ]]; then
     die "Refusing to remove path that does not look like a Hugging Face hub cache: ${path}"
   fi
@@ -126,8 +137,11 @@ PLANNED_PATHS=()
 PLANNED_REASONS=()
 
 queue_remove() {
-  local path="$1"
+  local orig="$1"
   local why="$2"
+  local path
+  path_exists "${orig}" || return 0
+  path="$(canonical_path "${orig}")" || die "Cannot resolve path for removal: ${orig}"
   path_exists "${path}" || return 0
   PLANNED_PATHS+=("${path}")
   PLANNED_REASONS+=("${why}")
@@ -284,7 +298,7 @@ fi
 
 # --- Hugging Face hub cache (opt-in, shared with other tools) ---
 if (( REMOVE_HF_CACHE )); then
-  hf_hub="$(huggingface_hub_cache)"
+  hf_hub="$(canonical_path "$(huggingface_hub_cache)")" || die "Cannot resolve Hugging Face hub cache"
   assert_huggingface_hub_cache_safe "${hf_hub}"
   queue_remove "${hf_hub}" "Hugging Face hub cache (downloaded models; shared with other tools)"
 fi

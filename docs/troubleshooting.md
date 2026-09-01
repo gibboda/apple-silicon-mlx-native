@@ -110,6 +110,6 @@ scripts/cleanup-mlx-native.sh --huggingface-cache --keep-venv --force
 
 `--huggingface-cache` removes the **hub** (weights), not `HF_HOME` tokens/config.
 
-If cleanup refuses a path, it is protecting you: the target is outside the workspace, does not look like a venv, is the committed `models.example.env`, or is too shallow to be a safe cache directory. Non-interactive runs require `--force` (`make clean` passes it).
+If cleanup refuses a path, it is protecting you: the target is outside the workspace, does not look like a venv, is the committed `models.example.env`, resolves through `..` to a location outside the workspace, or is too shallow / is `HF_HOME` (tokens) rather than the hub cache. Non-interactive runs require `--force` (`make clean` passes it).
 
 Stop `mlx_lm.server` (and any other process using `.venv`) before removing the environment.
