@@ -220,6 +220,9 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
   make validate
   make rebuild
 
+  # Remove toolkit-owned .venv (does not uninstall Homebrew)
+  make clean
+
 See README.md and docs/models.md for memory-aware model guidance.
 EOF
 

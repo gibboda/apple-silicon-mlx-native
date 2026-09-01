@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example model/server configuration (`config/models.example.env`)
 - Repository governance: CODEOWNERS, pull request template, Keep a Changelog policy
 - GitHub Actions workflow that deletes same-repo pull-request head branches after merge (`delete-merged-branch.yml`; skips forks, `main`/default, stacked bases, and refs that no longer match the merged head SHA)
+- Conservative uninstall/cleanup for toolkit-owned state (`scripts/cleanup-mlx-native.sh`, `make clean` / `make uninstall`) with `--dry-run`, `--keep-venv`, `--purge`, leftover reporting, and an opt-in Hugging Face hub cache removal; Homebrew and Xcode CLT are never uninstalled
+- Portable cleanup self-test (`tests/cleanup-mlx-native.test.sh`, `make test`)
 
 ### Changed
 
@@ -40,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use two-dot commit ranges for PR/base audits so base-only commits are not included
 - Abort bootstrap when Homebrew is the Intel `/usr/local` prefix on Apple Silicon
 - Correct PR template Conventional Commits link to repository-root `README.md`
+- Canonicalize cleanup/rebuild removal paths so `..` cannot escape the workspace; `--huggingface-cache` refuses `HF_HOME` (tokens/config) and parent directories
 
 ### Security
 

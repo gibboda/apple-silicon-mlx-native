@@ -57,10 +57,8 @@ fi
 log_ok "Homebrew validated at $(homebrew_prefix)"
 
 # Validate expected workspace
-[[ -d "${MLX_WORKSPACE}" ]] || die "Expected workspace missing: ${MLX_WORKSPACE}"
-[[ "${MLX_WORKSPACE}" != "/" ]] || die "Refusing to operate on workspace /"
-[[ "${MLX_VENV}" == "${MLX_WORKSPACE}/"* || "${MLX_VENV}" == "${MLX_WORKSPACE}/.venv" ]] \
-  || die "Refusing to remove venv outside workspace: ${MLX_VENV}"
+assert_workspace_safe
+assert_venv_under_workspace
 
 log_ok "Workspace validated: ${MLX_WORKSPACE}"
 
@@ -84,7 +82,7 @@ if [[ -e "${MLX_VENV}" ]]; then
   if [[ ! -d "${MLX_VENV}" ]]; then
     die "MLX_VENV exists but is not a directory: ${MLX_VENV}"
   fi
-  if [[ ! -f "${MLX_VENV}/bin/python" && ! -f "${MLX_VENV}/pyvenv.cfg" ]]; then
+  if ! looks_like_venv "${MLX_VENV}"; then
     die "Refusing to remove path that does not look like a venv: ${MLX_VENV}"
   fi
   if (( FORCE == 0 )) && [[ -t 0 ]]; then
