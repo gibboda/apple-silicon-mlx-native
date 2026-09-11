@@ -110,7 +110,7 @@ if ! is_truthy "${MLX_SKIP_MEDIA}"; then
 fi
 
 if is_truthy "${MLX_INSTALL_IMAGE}"; then
-  "${PIP}" install --upgrade mflux
+  "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
 fi
 
 log_header "Validation"

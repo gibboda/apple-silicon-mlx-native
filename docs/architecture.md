@@ -50,7 +50,7 @@ By default the workspace is the repository root:
 apple-silicon-mlx-native/
   .venv/                 # Python environment (gitignored; removed by cleanup)
   config/models.env      # local overrides (gitignored; kept unless --config/--purge)
-  scripts/               # bootstrap, rebuild, cleanup, detect, validate, audit
+  scripts/               # bootstrap, rebuild, cleanup, image, detect, validate, audit
   docs/                  # deep documentation
 ```
 
@@ -65,6 +65,8 @@ Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** st
 | `detect-apple-silicon.sh` | Hardware facts + memory tier |
 | `initial-build-mlx-native-media.sh` | First-time bootstrap |
 | `rebuild-mlx-native-media.sh` | Recreate `.venv` safely |
+| `install-mlx-image.sh` | Opt-in `mflux` into the existing venv |
+| `generate-mlx-image.sh` | Text-to-image via mflux with memory-tier defaults |
 | `cleanup-mlx-native.sh` | Remove `.venv` and optional caches; never Homebrew |
 | `validate-mlx.sh` | Fast correctness checks |
 | `conventional-commits-audit.sh` | Commit subject policy |

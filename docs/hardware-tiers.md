@@ -34,7 +34,7 @@ On an 8 GB M1-class system:
 - Prefer ~**3B–4B**, **4-bit** MLX Community models.
 - Keep context conservative (roughly 1k–2k tokens unless measured otherwise).
 - Prefer one persistent `mlx_lm.server` process over loading multiple models.
-- Treat image and especially video generation as out of scope unless you accept heavy swap risk.
+- Treat image generation as opt-in (`make install-image`) with the constrained 4B 4-bit profile; expect heavy swap. Video remains out of scope unless you accept even more risk.
 - Close memory-heavy apps (browsers with many tabs, IDEs with large indexes) before loading models.
 
 ## Overrides

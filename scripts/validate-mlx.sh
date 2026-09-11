@@ -93,6 +93,14 @@ else
   log_warn "mlx-audio not installed (optional selected media package)"
 fi
 
+# Optional Pure MLX image package (info only if absent)
+if "${python_bin}" -c 'import mflux' 2>/dev/null; then
+  mflux_ver="$("${python_bin}" -c 'import importlib.metadata as m; print(m.version("mflux"))')"
+  pass "mflux importable (version ${mflux_ver})"
+else
+  log_info "mflux not installed (opt-in text-to-image; make install-image)"
+fi
+
 # Basic MLX array creation + computation
 if "${python_bin}" - <<'PY'
 import mlx.core as mx

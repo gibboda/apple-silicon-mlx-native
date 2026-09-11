@@ -8,7 +8,7 @@ SHELL := /bin/bash
 SCRIPTS := scripts
 .DEFAULT_GOAL := help
 
-.PHONY: help detect install rebuild validate clean uninstall audit lint test
+.PHONY: help detect install rebuild validate clean uninstall audit lint test install-image image
 
 help: ## Show available targets
 	@printf '%s\n' \
@@ -17,6 +17,8 @@ help: ## Show available targets
 		'make install   — initial MLX-native bootstrap (Homebrew + venv + packages)' \
 		'make rebuild   — recreate .venv and reinstall MLX packages' \
 		'make validate  — validate mlx / mlx-lm and run a fast computation check' \
+		'make install-image — install Pure MLX text-to-image (mflux) into .venv' \
+		'make image     — generate an image (IMAGE_PROMPT="...")' \
 		'make clean     — remove .venv (toolkit-owned environment); reports leftovers' \
 		'make uninstall — same as make clean' \
 		'make audit     — audit commit subjects for Conventional Commits' \
@@ -34,6 +36,13 @@ rebuild: ## Rebuild Python MLX environment
 
 validate: ## Validate MLX installation
 	@$(SCRIPTS)/validate-mlx.sh
+
+install-image: ## Install mflux into the existing venv (does not recreate .venv)
+	@$(SCRIPTS)/install-mlx-image.sh
+
+image: ## Generate a PNG with mflux (IMAGE_PROMPT required)
+	@test -n "$(IMAGE_PROMPT)" || { echo 'Set IMAGE_PROMPT=... e.g. make image IMAGE_PROMPT="a red fox in snow"'; exit 1; }
+	@$(SCRIPTS)/generate-mlx-image.sh --prompt "$(IMAGE_PROMPT)" $(GENERATE_IMAGE_ARGS)
 
 clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew
 	@$(SCRIPTS)/cleanup-mlx-native.sh --force
@@ -53,4 +62,8 @@ lint: ## ShellCheck all scripts
 	exit $$status
 
 test: ## Run portable shell self-tests
-	@tests/cleanup-mlx-native.test.sh
+	@status=0; \
+	for t in tests/*.test.sh; do \
+	  "$$t" || status=1; \
+	done; \
+	exit $$status

@@ -7,12 +7,9 @@ on:
       - "tests/**"
       - ".github/workflows/shellcheck.yml"
       - "Makefile"
+  # Always run on pull requests so the required "ShellCheck" check is reported
+  # even when the diff is docs-only (path filters would otherwise skip it).
   pull_request:
-    paths:
-      - "scripts/**"
-      - "tests/**"
-      - ".github/workflows/shellcheck.yml"
-      - "Makefile"
 
 permissions:
   contents: read
@@ -36,12 +33,26 @@ jobs:
           done < <(find scripts tests -type f -name '*.sh' -print0)
           exit "$status"
 
-  cleanup-selftest:
-    name: Cleanup self-test
+  selftest:
+    name: Portable self-tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run cleanup self-test
-        run: tests/cleanup-mlx-native.test.sh
+      - name: Run portable self-tests
+        run: make test
+
+  # Protect main requires context "ShellCheck" (workflow name). GitHub Actions
+  # reports job names, so this gate posts that exact check.
+  required:
+    name: ShellCheck
+    needs: [shellcheck, selftest]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require lint and portable self-tests
+        run: |
+          set -euo pipefail
+          test "${{ needs.shellcheck.result }}" = "success"
+          test "${{ needs.selftest.result }}" = "success"

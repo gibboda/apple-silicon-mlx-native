@@ -185,10 +185,10 @@ if is_truthy "${MLX_INSTALL_IMAGE}"; then
   if (( MLX_MEM_GIB < 16 )); then
     log_warn "Image generation (mflux) typically needs ≥16 GB unified memory; proceeding due to MLX_INSTALL_IMAGE=1"
   fi
-  log_info "Installing Pure MLX image tooling: mflux (opt-in)"
-  "${PIP}" install --upgrade mflux
+  log_info "Installing Pure MLX image tooling: ${MLX_IMAGE_PACKAGE} (opt-in)"
+  "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
 else
-  log_info "Image tooling (mflux) not installed by default. Set MLX_INSTALL_IMAGE=1 to opt in."
+  log_info "Image tooling (${MLX_IMAGE_PACKAGE}) not installed by default. Run: make install-image"
   log_info "Video tooling is documented in docs/media.md and is not installed by default."
 fi
 
@@ -219,6 +219,10 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
   # Re-validate / rebuild later
   make validate
   make rebuild
+
+  # Opt-in Pure MLX text-to-image (mflux)
+  make install-image
+  make image IMAGE_PROMPT="a red fox in snow"
 
   # Remove toolkit-owned .venv (does not uninstall Homebrew)
   make clean
