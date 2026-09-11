@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Bootstrap a pure Apple Silicon MLX-native workstation environment.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # Assumptions: macOS + Apple Silicon. Does not assume Homebrew or a venv exist.
 # Never installs Rosetta-only/x86 packages. Never uses sudo pip.
@@ -217,6 +219,9 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
   # Re-validate / rebuild later
   make validate
   make rebuild
+
+  # Remove toolkit-owned .venv (does not uninstall Homebrew)
+  make clean
 
 See README.md and docs/models.md for memory-aware model guidance.
 EOF

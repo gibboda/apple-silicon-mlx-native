@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - "scripts/**"
+      - "tests/**"
       - ".github/workflows/shellcheck.yml"
       - "Makefile"
   pull_request:
     paths:
       - "scripts/**"
+      - "tests/**"
       - ".github/workflows/shellcheck.yml"
       - "Makefile"
 
@@ -31,5 +33,15 @@ jobs:
           status=0
           while IFS= read -r -d '' script; do
             shellcheck -x "$script" || status=1
-          done < <(find scripts -type f -name '*.sh' -print0)
+          done < <(find scripts tests -type f -name '*.sh' -print0)
           exit "$status"
+
+  cleanup-selftest:
+    name: Cleanup self-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run cleanup self-test
+        run: tests/cleanup-mlx-native.test.sh

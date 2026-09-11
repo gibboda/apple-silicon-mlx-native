@@ -1,5 +1,7 @@
 # apple-silicon-mlx-native
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 Reproducible toolkit for installing, rebuilding, validating, and operating a **pure Apple Silicon MLX-native** machine-learning environment.
 
 ## Purpose
@@ -78,6 +80,36 @@ make rebuild
 ```
 
 Recreates `.venv`, reinstalls packages, validates, and runs a small MLX computation. Preserves `config/models.env` when present.
+
+## Uninstall / cleanup
+
+Yes — keep a **cleanup** path. Do not add a nuclear uninstall that removes Homebrew, Xcode Command Line Tools, or shared formulae (`python@3.12`, `git`, `ffmpeg`). Those are system tools other software uses; this toolkit may have installed them, but it does not uniquely own them.
+
+`make clean` / `make uninstall` reverse **toolkit-owned** state (the project `.venv`) and print leftovers. Hugging Face model caches are reported, not deleted, unless you opt in.
+
+```bash
+make clean              # remove .venv; equivalent: make uninstall
+scripts/cleanup-mlx-native.sh --dry-run
+scripts/cleanup-mlx-native.sh --purge --force
+```
+
+| Target | Default `make clean` | `--purge` | `--huggingface-cache` |
+| --- | --- | --- | --- |
+| `.venv` | removed | removed | removed unless `--keep-venv` |
+| `config/models.env` | kept | removed | kept |
+| Workspace caches (`models/`, `.cache/`, …) | kept | removed | kept |
+| Hugging Face hub cache (`~/.cache/huggingface/hub`) | reported | reported | removed |
+| Homebrew / `python` / `git` / `ffmpeg` / Xcode CLT | left installed | left installed | left installed |
+
+`--purge` is `--config` plus `--workspace-caches`. It still does not touch Homebrew or the Hugging Face hub. Stop `mlx_lm.server` before removing `.venv`.
+
+```bash
+# Reclaim downloaded model disk without destroying .venv
+# (shared with other Hugging Face tools)
+scripts/cleanup-mlx-native.sh --huggingface-cache --keep-venv --force
+```
+
+Tokens under `HF_HOME` are not deleted by `--huggingface-cache` (hub only).
 
 ## Validation
 
@@ -186,6 +218,7 @@ apple-silicon-mlx-native/
 │   ├── pull_request_template.md
 │   └── workflows/
 │       ├── conventional-commits.yml
+│       ├── delete-merged-branch.yml
 │       └── shellcheck.yml
 ├── config/
 │   └── models.example.env
@@ -199,9 +232,13 @@ apple-silicon-mlx-native/
 │   ├── lib/common.sh
 │   ├── initial-build-mlx-native-media.sh
 │   ├── rebuild-mlx-native-media.sh
+│   ├── cleanup-mlx-native.sh
 │   ├── detect-apple-silicon.sh
 │   ├── validate-mlx.sh
-│   └── conventional-commits-audit.sh
+│   ├── conventional-commits-audit.sh
+│   └── delete-merged-pr-branch.sh
+├── tests/
+│   └── cleanup-mlx-native.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
@@ -220,8 +257,10 @@ apple-silicon-mlx-native/
 | `make install` | Initial bootstrap |
 | `make rebuild` | Recreate `.venv` |
 | `make validate` | MLX validation |
+| `make clean` / `make uninstall` | Remove `.venv`; report leftover system tools |
 | `make audit` | Conventional Commits audit |
 | `make lint` | ShellCheck |
+| `make test` | Portable shell self-tests |
 
 ## Conventional Commits policy
 
@@ -246,7 +285,7 @@ ci(commits): enforce conventional commits
 
 ```bash
 make audit
-scripts/conventional-commits-audit.sh --range origin/main...HEAD
+scripts/conventional-commits-audit.sh --range origin/main..HEAD
 ```
 
 GitHub Actions runs the same script on pull requests. GitHub-generated merge commits are exempt by default. Full syntax: `scripts/conventional-commits-audit.sh --help`.
@@ -262,6 +301,12 @@ GitHub Actions runs the same script on pull requests. GitHub-generated merge com
 
 Default owner: `@gibboda` (see `.github/CODEOWNERS`).
 
+## Merged pull request branches
+
+When a pull request is **merged**, `.github/workflows/delete-merged-branch.yml` deletes the head branch in this repository. It skips forks, never deletes `main` (or the repository default/base branch), leaves the branch in place if another open PR still uses it as a base (stacked PRs), skips deletion when the ref no longer points at the merged head SHA, and treats a confirmed already-deleted ref (`Reference does not exist`) as success.
+
+This is the in-repo guarantee. GitHub’s repository setting “Automatically delete head branches” may also be enabled; the workflow still succeeds if the branch is already gone.
+
 ## Troubleshooting
 
 See [docs/troubleshooting.md](docs/troubleshooting.md).
@@ -276,4 +321,6 @@ See [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 gibboda.
+[GNU General Public License v3.0](LICENSE) — Copyright (C) 2026 Dona Gibbons (gibboda).
+
+`SPDX-License-Identifier: GPL-3.0-only`

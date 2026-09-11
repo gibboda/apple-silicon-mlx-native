@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Validate the MLX Python environment for Apple Silicon.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # Usage:
 #   scripts/validate-mlx.sh

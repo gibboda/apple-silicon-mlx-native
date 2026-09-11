@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Detect Apple Silicon hardware and emit human or machine-readable output.
+# Copyright (C) 2026 Dona Gibbons (gibboda)
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # Usage:
 #   scripts/detect-apple-silicon.sh

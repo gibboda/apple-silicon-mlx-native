@@ -6,6 +6,7 @@
 
 - [ ] Commit subjects follow [Conventional Commits](README.md#conventional-commits-policy)
 - [ ] `make lint` (ShellCheck) passes for touched shell scripts
+- [ ] `make test` passes when shell self-tests apply
 - [ ] `make validate` passes when MLX environment changes apply
 - [ ] Documentation updated (`README.md` and/or `docs/`) when behavior changes
 - [ ] `CHANGELOG.md` `[Unreleased]` updated for user-visible changes
@@ -22,4 +23,5 @@
 - [ ] `make detect`
 - [ ] `make audit`
 - [ ] `make lint`
+- [ ] `make test` (when applicable)
 - [ ] `make validate` (when applicable)
