@@ -144,6 +144,8 @@ scripts/generate-mlx-image.sh --prompt "a red fox in snow"              # FLUX.2
 scripts/generate-mlx-image.sh --prompt "a red fox in snow" --family z-image-turbo
 ```
 
+`--family` does not switch to the high-tier size/steps. On 8 GB, `--family z-image-turbo` still uses the constrained 512² / 4-step / 4-bit profile unless you also pass `--width`/`--height`/`--steps`/`--quantize`. Check the plan with `--dump-plan` before a long download.
+
 Do not pass `--model flux2-klein-4b` with `--family z-image-turbo`.
 
 `mflux` is not a default bootstrap package. See [media.md](media.md).

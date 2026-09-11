@@ -26,7 +26,7 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 
 | Class | Meaning | This repo |
 | --- | --- | --- |
-| **Pure MLX** | MLX runtime; no PyTorch required | `mlx`, `mlx-lm`, `mlx-audio`; optional `mflux` |
+| **Pure MLX** | MLX runtime for inference; no PyTorch/MPS generation backend | `mlx`, `mlx-lm`, `mlx-audio`; optional `mflux` (transitive `torch` for weight loading only) |
 | **MLX-first / Apple Silicon native** | Primary path is MLX/Metal; verify deps | Video community ports — **documented only** |
 | **Fallback / non-MLX** | Other runtimes | **Not advertised as native; not installed** |
 
@@ -205,7 +205,7 @@ make install-image
 make image IMAGE_PROMPT="a red fox in snow"
 ```
 
-On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. First generate downloads several GB of weights. `mflux` still needs `torch` for weight loading; generation itself is MLX. See [docs/media.md](docs/media.md).
+On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the memory tier. See [docs/media.md](docs/media.md).
 
 ## Video generation
 

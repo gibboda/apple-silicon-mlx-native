@@ -6,7 +6,7 @@ This repository installs **only deliberately selected** media dependencies. Gaps
 
 | Class | Meaning |
 | --- | --- |
-| **PURE MLX** | Implemented on MLX; no PyTorch runtime required for inference |
+| **PURE MLX** | Implemented on MLX; no PyTorch/MPS generation backend (opt-in `mflux` may pull `torch` for weight loading) |
 | **MLX-FIRST / APPLE-SILICON NATIVE** | Targets Apple Silicon / Metal with MLX as primary path; verify transitive deps |
 | **FALLBACK / NON-MLX** | Other stacks (PyTorch, CUDA ports, cloud APIs). **Not installed** by this toolkit |
 
@@ -40,7 +40,7 @@ python -c "import mlx_audio; print('mlx-audio OK')"
 
 Why not default-install `mflux`?
 
-- Large download and disk footprint (weights arrive on **first generate**).
+- Large download and disk footprint: `make install-image` pulls a `torch` wheel (often hundreds of MB to a few GB) for safetensors loading, and weights arrive on **first generate**.
 - Peak unified-memory use often dwarfs LLM 3B–4B workloads.
 - Unsafe default on 8 GB machines (swap thrash).
 
@@ -71,7 +71,16 @@ make image IMAGE_PROMPT="a red fox in snow"
 | ≤16 GB standard | `flux2` / `flux2-klein-4b` | 8-bit, 768² | Still tight with a loaded LLM |
 | ≥24 GB | `z-image-turbo` | 8-bit, 1024², 9 steps | Higher quality default |
 
-Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). On constrained and standard memory tiers, the generate wrapper adds `--vae-tiling` automatically unless you already pass it. PNGs land in `outputs/images/` (gitignored).
+Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. **`--family` selects the mflux CLI and default checkpoint only**; width, height, steps, quantize, and `--low-ram` still follow the memory-tier profile unless you set those flags or `MLX_IMAGE_*`. So `--family z-image-turbo` on 8 GB still uses 512² / 4 steps / 4-bit, not the ≥24 GB 1024² / 9-step profile.
+
+Inspect the resolved plan without generating:
+
+```bash
+scripts/generate-mlx-image.sh --dump-plan --prompt "a red fox in snow"
+OVERRIDE_MEMORY_TIER=high scripts/generate-mlx-image.sh --dump-plan --prompt "a red fox in snow"
+```
+
+`--dump-plan` uses detected RAM when `sysctl` works, honors `OVERRIDE_MEMORY_TIER` when set, and falls back to constrained when detection is unavailable (Linux CI). Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). On constrained and standard memory tiers, the generate wrapper adds `--vae-tiling` automatically unless you already pass it. Custom `--output` paths must resolve under `MLX_WORKSPACE`. PNGs land in `outputs/images/` (gitignored).
 
 Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current `mflux` still depends on `torch` for checkpoint loading (`safetensors.torch`); it does not use PyTorch/MPS to denoise. This toolkit does not install Diffusers+MPS image stacks.
 

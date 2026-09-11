@@ -39,7 +39,7 @@ Generate a PNG with mflux (Pure MLX). Requires `make install-image`.
 
 Options:
   --prompt TEXT     Text prompt (required; or IMAGE_PROMPT)
-  --family NAME     flux2 | z-image-turbo | schnell (default: memory-tier profile)
+  --family NAME     flux2 | z-image-turbo | schnell (CLI/checkpoint; default: memory-tier profile)
   --model NAME      mflux --model value (FLUX.2 Klein id, HF repo, or local path)
   --quantize N      Weight quantize bits (3–8). Alias: -q
   --steps N         Denoising steps
@@ -49,11 +49,14 @@ Options:
   --output PATH     Output PNG (default: outputs/images/mlx-<timestamp>.png)
   --low-ram         Force mflux --low-ram
   --no-low-ram      Disable --low-ram even on constrained machines
-  --dump-plan       Print resolved family/model/CLI and exit (no generate)
+  --dump-plan       Print resolved plan (family/model/CLI/tier/size/steps) and exit
   --                Extra args passed through to the mflux CLI
   -h, --help        Show this help
 
-Defaults come from memory tier, then config/models.env (MLX_IMAGE_*).
+Defaults come from memory tier (or OVERRIDE_MEMORY_TIER), then config/models.env
+(MLX_IMAGE_*). --family changes the mflux CLI and default checkpoint only;
+width/height/steps/quantize/--low-ram still follow the memory-tier profile
+unless you set those flags or MLX_IMAGE_*.
 EOF
 }
 
@@ -184,8 +187,15 @@ if (( DUMP_PLAN == 0 )); then
   fi
   assert_apple_silicon
   export_detect_env
+elif detect_memory_bytes >/dev/null 2>&1; then
+  # Match generate defaults when sysctl RAM detection works (macOS).
+  export_detect_env
 else
-  MLX_TIER_ID="${OVERRIDE_MEMORY_TIER:-constrained}"
+  # Linux CI / missing sysctl: keep a portable constrained fallback.
+  MLX_TIER_ID="constrained"
+fi
+if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
+  MLX_TIER_ID="${OVERRIDE_MEMORY_TIER}"
 fi
 
 profile="$(recommended_image_profile_for_tier "${MLX_TIER_ID}")"
@@ -219,8 +229,35 @@ fi
 cli_name="$(image_cli_for_family "${FAMILY}")" \
   || die "Unknown --family ${FAMILY}. Use flux2, z-image-turbo, or schnell."
 
+passthru_has_flag() {
+  local flag="$1"
+  local arg
+  ((${#PASSTHRU[@]} > 0)) || return 1
+  for arg in "${PASSTHRU[@]}"; do
+    [[ "${arg}" == "${flag}" ]] && return 0
+  done
+  return 1
+}
+
+VAE_TILING=0
+if passthru_has_flag "--vae-tiling"; then
+  VAE_TILING=1
+elif [[ "${MLX_TIER_ID}" == "constrained" || "${MLX_TIER_ID}" == "standard" ]]; then
+  VAE_TILING=1
+fi
+
+if (( CUSTOM_OUTPUT )); then
+  assert_workspace_safe
+  ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+  resolved_output="$(canonical_path "${OUTPUT}")" || die "Cannot resolve output path: ${OUTPUT}"
+  path_is_within "${resolved_output}" "${ws}" \
+    || die "Output path must be under MLX_WORKSPACE (${ws}): ${OUTPUT}"
+  OUTPUT="${resolved_output}"
+fi
+
 if (( DUMP_PLAN == 1 )); then
-  printf 'family=%s\nmodel=%s\ncli=%s\n' "${FAMILY}" "${MODEL}" "${cli_name}"
+  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nquantize=%s\nsteps=%s\nwidth=%s\nheight=%s\nlow_ram=%s\nvae_tiling=%s\n' \
+    "${FAMILY}" "${MODEL}" "${cli_name}" "${MLX_TIER_ID}" "${QUANTIZE}" "${STEPS}" "${WIDTH}" "${HEIGHT}" "${LOW_RAM}" "${VAE_TILING}"
   exit 0
 fi
 
@@ -229,27 +266,10 @@ if [[ ! -x "${cli_bin}" ]]; then
   die "mflux CLI not found (${cli_bin}). Run: make install-image"
 fi
 
-passthru_has_flag() {
-  local flag="$1"
-  local arg
-  for arg in "${PASSTHRU[@]}"; do
-    [[ "${arg}" == "${flag}" ]] && return 0
-  done
-  return 1
-}
-
 if [[ -z "${OUTPUT}" ]]; then
   mkdir -p "${MLX_WORKSPACE}/outputs/images"
   OUTPUT="${MLX_WORKSPACE}/outputs/images/mlx-$(date +%Y%m%d-%H%M%S).png"
 else
-  if (( CUSTOM_OUTPUT )); then
-    assert_workspace_safe
-    ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
-    resolved_output="$(canonical_path "${OUTPUT}")" || die "Cannot resolve output path: ${OUTPUT}"
-    path_is_within "${resolved_output}" "${ws}" \
-      || die "Output path must be under MLX_WORKSPACE (${ws}): ${OUTPUT}"
-    OUTPUT="${resolved_output}"
-  fi
   mkdir -p "$(dirname "${OUTPUT}")"
 fi
 
@@ -267,10 +287,8 @@ fi
 if is_truthy "${LOW_RAM}"; then
   cmd+=(--low-ram)
 fi
-if [[ "${MLX_TIER_ID}" == "constrained" || "${MLX_TIER_ID}" == "standard" ]]; then
-  if ! passthru_has_flag "--vae-tiling"; then
-    cmd+=(--vae-tiling)
-  fi
+if (( VAE_TILING == 1 )) && ! passthru_has_flag "--vae-tiling"; then
+  cmd+=(--vae-tiling)
 fi
 if ((${#PASSTHRU[@]} > 0)); then
   cmd+=("${PASSTHRU[@]}")
