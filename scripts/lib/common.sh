@@ -21,6 +21,7 @@ MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
 # Image/video packages are NOT installed by default — see docs/media.md.
 MLX_CORE_PACKAGES=(mlx mlx-lm)
 MLX_MEDIA_PACKAGES=(mlx-audio)
+MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux}"
 MLX_HOMEBREW_PACKAGES=(python@"${MLX_PYTHON_VERSION}" git ffmpeg)
 
 readonly COLOR_RED=$'\033[0;31m'
@@ -369,6 +370,26 @@ recommended_model_for_tier() {
       ;;
     *)
       echo "mlx-community/Llama-3.2-3B-Instruct-4bit"
+      ;;
+  esac
+}
+
+# Emit: family|model|quantize|steps|width|height|low_ram
+# family selects the mflux CLI; empty model means "package default".
+recommended_image_profile_for_tier() {
+  local tier_id="${1:-}"
+  case "${tier_id}" in
+    constrained)
+      echo "flux2|flux2-klein-4b|4|4|512|512|1"
+      ;;
+    standard)
+      echo "flux2|flux2-klein-4b|8|4|768|768|1"
+      ;;
+    high|workstation|large)
+      echo "z-image-turbo||8|9|1024|1024|0"
+      ;;
+    *)
+      echo "flux2|flux2-klein-4b|8|4|768|768|1"
       ;;
   esac
 }

@@ -34,23 +34,46 @@ python -c "import mlx_audio; print('mlx-audio OK')"
 
 | Path | Class | Status in this toolkit | Memory notes |
 | --- | --- | --- | --- |
-| [`mflux`](https://github.com/filipstrand/mflux) | **PURE MLX** | **Opt-in only** (`MLX_INSTALL_IMAGE=1`) | Practical from ~16 GB+; many models want 24 GB+ |
+| [`mflux`](https://github.com/filipstrand/mflux) | **PURE MLX** generate path | **Opt-in** (`make install-image`) | 8 GB: FLUX.2 Klein **4B 4-bit**, 512², `--low-ram` (expect swap). Practical from ~16 GB+; many models want 24 GB+ |
 | Diffusers + PyTorch/MPS | FALLBACK / NON-MLX | Not installed | Heavy; not MLX-native |
 | Cloud image APIs | FALLBACK / NON-MLX | Not installed | N/A |
 
 Why not default-install `mflux`?
 
-- Large download and disk footprint.
+- Large download and disk footprint (weights arrive on **first generate**).
 - Peak unified-memory use often dwarfs LLM 3B–4B workloads.
 - Unsafe default on 8 GB machines (swap thrash).
 
-Opt in:
+Install into an existing `.venv` (does not rebuild):
+
+```bash
+make install-image
+```
+
+Or at bootstrap/rebuild time:
 
 ```bash
 MLX_INSTALL_IMAGE=1 make install
 # or
 MLX_INSTALL_IMAGE=1 make rebuild
 ```
+
+Generate (defaults follow memory tier):
+
+```bash
+make image IMAGE_PROMPT="a red fox in snow"
+# equivalent: scripts/generate-mlx-image.sh --prompt "a red fox in snow"
+```
+
+| Tier | Default family / model | Size / quant | Notes |
+| --- | --- | --- | --- |
+| ≤8 GB constrained | `flux2` / `flux2-klein-4b` | 4-bit, 512², 4 steps, `--low-ram` | Stop `mlx_lm.server` first; expect swap |
+| ≤16 GB standard | `flux2` / `flux2-klein-4b` | 8-bit, 768² | Still tight with a loaded LLM |
+| ≥24 GB | `z-image-turbo` | 8-bit, 1024², 9 steps | Higher quality default |
+
+Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` in `config/models.env`. Extra mflux flags go after `--`. PNGs land in `outputs/images/` (gitignored).
+
+Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current `mflux` still depends on `torch` for checkpoint loading (`safetensors.torch`); it does not use PyTorch/MPS to denoise. This toolkit does not install Diffusers+MPS image stacks.
 
 ---
 
@@ -71,13 +94,14 @@ There is **no** default video package in this toolkit today. If you evaluate an 
 | Workload | Guidance |
 | --- | --- |
 | Speech (small models) | Possible with care; unload LLMs first |
-| Image | Generally avoid; opt-in `mflux` only if you accept swap risk |
+| Image | Opt-in `mflux` only; constrained default is 4B 4-bit 512² with `--low-ram`. Expect swap. |
 | Video | Not recommended |
 
 ---
 
 ## Policy
 
-1. Scripts never install PyTorch as part of the normal MLX media path.
-2. README and docs must label Pure MLX vs MLX-first vs fallback clearly.
-3. New media dependencies require an explicit rationale in the PR template checklist.
+1. Scripts never install PyTorch as the LLM or image **generation** backend.
+2. Opt-in `mflux` currently pulls `torch` because its weight loader uses `safetensors.torch`. Denoising still runs on MLX. Do not add Diffusers+MPS stacks.
+3. README and docs must label Pure MLX vs MLX-first vs fallback clearly.
+4. New media dependencies require an explicit rationale in the PR template checklist.

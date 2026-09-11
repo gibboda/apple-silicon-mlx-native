@@ -43,5 +43,5 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run cleanup self-test
-        run: tests/cleanup-mlx-native.test.sh
+      - name: Run portable self-tests
+        run: make test

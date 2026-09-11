@@ -113,3 +113,31 @@ scripts/cleanup-mlx-native.sh --huggingface-cache --keep-venv --force
 If cleanup refuses a path, it is protecting you: the target is outside the workspace, does not look like a venv, is the committed `models.example.env`, resolves through `..` to a location outside the workspace, or is too shallow / is `HF_HOME` (tokens) rather than the hub cache. Non-interactive runs require `--force` (`make clean` passes it).
 
 Stop `mlx_lm.server` (and any other process using `.venv`) before removing the environment.
+
+## Text-to-image (`mflux`) missing or generate fails
+
+Install into the existing venv (does not rebuild):
+
+```bash
+make install-image
+make validate
+```
+
+Then:
+
+```bash
+make image IMAGE_PROMPT="a red fox in snow"
+```
+
+On 8 GB, stop `mlx_lm.server`, close browsers and other large apps, and keep the constrained defaults (FLUX.2 Klein 4B, 4-bit, 512px, `--low-ram`). First generate downloads several GB of weights. If the process is killed or the machine swaps heavily, drop `--width`/`--height` further or wait until you have more unified memory.
+
+If generate fails with `'flux2-klein-4b' is not Tongyi-MAI/Z-Image-Turbo`, the wrapper mixed families. Use one family only:
+
+```bash
+scripts/generate-mlx-image.sh --prompt "a red fox in snow"              # FLUX.2 Klein 4B on 8 GB
+scripts/generate-mlx-image.sh --prompt "a red fox in snow" --family z-image-turbo
+```
+
+Do not pass `--model flux2-klein-4b` with `--family z-image-turbo`.
+
+`mflux` is not a default bootstrap package. See [media.md](media.md).

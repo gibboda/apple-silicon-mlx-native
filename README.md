@@ -13,7 +13,7 @@ Bootstrap a workstation that prioritizes:
 3. [MLX Community](https://huggingface.co/mlx-community) models
 4. `mlx_lm.server`
 5. MLX-native speech/audio where appropriate (`mlx-audio`)
-6. MLX image tooling where practical (opt-in `mflux`)
+6. MLX image tooling where practical (opt-in `mflux`: `make install-image`)
 7. MLX video tooling where practical (**documented**, not default-installed)
 
 **Not in scope:** Ollama, `llama.cpp`, or PyTorch/MPS as a core dependency.
@@ -69,7 +69,8 @@ Optional:
 ```bash
 MLX_INSTALL_HOMEBREW=1 make install   # install Homebrew if missing
 MLX_SKIP_MEDIA=1 make install         # skip mlx-audio
-MLX_INSTALL_IMAGE=1 make install      # opt-in Pure MLX image (mflux)
+MLX_INSTALL_IMAGE=1 make install      # also install mflux during bootstrap
+make install-image                    # install mflux into an existing .venv
 ```
 
 ## Environment rebuild
@@ -197,13 +198,14 @@ On-disk size ≠ RAM use. Defaults by tier (see [docs/models.md](docs/models.md)
 
 ## Image generation
 
-**Pure MLX:** `mflux` (opt-in only). Not installed by default.
+**Pure MLX:** [`mflux`](https://github.com/filipstrand/mflux). Not installed by default (`make install` does not pull it).
 
 ```bash
-MLX_INSTALL_IMAGE=1 make rebuild
+make install-image
+make image IMAGE_PROMPT="a red fox in snow"
 ```
 
-See [docs/media.md](docs/media.md). Unsuitable as a default on 8 GB.
+On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. First generate downloads several GB of weights. `mflux` still needs `torch` for weight loading; generation itself is MLX. See [docs/media.md](docs/media.md).
 
 ## Video generation
 
@@ -232,13 +234,16 @@ apple-silicon-mlx-native/
 │   ├── lib/common.sh
 │   ├── initial-build-mlx-native-media.sh
 │   ├── rebuild-mlx-native-media.sh
+│   ├── install-mlx-image.sh
+│   ├── generate-mlx-image.sh
 │   ├── cleanup-mlx-native.sh
 │   ├── detect-apple-silicon.sh
 │   ├── validate-mlx.sh
 │   ├── conventional-commits-audit.sh
 │   └── delete-merged-pr-branch.sh
 ├── tests/
-│   └── cleanup-mlx-native.test.sh
+│   ├── cleanup-mlx-native.test.sh
+│   └── mlx-image.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
@@ -257,6 +262,8 @@ apple-silicon-mlx-native/
 | `make install` | Initial bootstrap |
 | `make rebuild` | Recreate `.venv` |
 | `make validate` | MLX validation |
+| `make install-image` | Install `mflux` into `.venv` |
+| `make image` | Generate a PNG (`IMAGE_PROMPT=...`) |
 | `make clean` / `make uninstall` | Remove `.venv`; report leftover system tools |
 | `make audit` | Conventional Commits audit |
 | `make lint` | ShellCheck |
@@ -316,7 +323,7 @@ See [docs/troubleshooting.md](docs/troubleshooting.md).
 - Never commit `.venv`, model weights, HF tokens, or `config/models.env`
 - `mlx_lm.server` is a local development server with basic checks — bind to `127.0.0.1` unless you intentionally expose it
 - Do not use `sudo pip`
-- Review new dependencies for PyTorch or unexpected native code before adding them
+- Review new dependencies for PyTorch or unexpected native code before adding them. Opt-in `mflux` currently requires `torch` for weight loading only; do not add PyTorch/MPS as a generation backend.
 - Generated model outputs can be wrong or unsafe; treat local models like any other untrusted software capability
 
 ## License
