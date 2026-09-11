@@ -25,6 +25,7 @@ HEIGHT=""
 SEED=""
 OUTPUT=""
 LOW_RAM=""
+CUSTOM_OUTPUT=0
 DUMP_PLAN=0
 PASSTHRU=()
 CLI_FAMILY=""
@@ -149,6 +150,7 @@ while [[ $# -gt 0 ]]; do
     --output)
       [[ $# -ge 2 ]] || die "--output requires PATH"
       OUTPUT="$2"
+      CUSTOM_OUTPUT=1
       shift 2
       ;;
     --low-ram) LOW_RAM=1; shift ;;
@@ -172,6 +174,8 @@ if [[ -f "${MLX_MODELS_ENV}" ]]; then
   # shellcheck source=/dev/null
   source "${MLX_MODELS_ENV}"
 fi
+
+SEED="${SEED:-${MLX_IMAGE_SEED:-}}"
 
 if (( DUMP_PLAN == 0 )); then
   PY="$(venv_python)"
@@ -225,10 +229,27 @@ if [[ ! -x "${cli_bin}" ]]; then
   die "mflux CLI not found (${cli_bin}). Run: make install-image"
 fi
 
+passthru_has_flag() {
+  local flag="$1"
+  local arg
+  for arg in "${PASSTHRU[@]}"; do
+    [[ "${arg}" == "${flag}" ]] && return 0
+  done
+  return 1
+}
+
 if [[ -z "${OUTPUT}" ]]; then
   mkdir -p "${MLX_WORKSPACE}/outputs/images"
   OUTPUT="${MLX_WORKSPACE}/outputs/images/mlx-$(date +%Y%m%d-%H%M%S).png"
 else
+  if (( CUSTOM_OUTPUT )); then
+    assert_workspace_safe
+    ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+    resolved_output="$(canonical_path "${OUTPUT}")" || die "Cannot resolve output path: ${OUTPUT}"
+    path_is_within "${resolved_output}" "${ws}" \
+      || die "Output path must be under MLX_WORKSPACE (${ws}): ${OUTPUT}"
+    OUTPUT="${resolved_output}"
+  fi
   mkdir -p "$(dirname "${OUTPUT}")"
 fi
 
@@ -245,6 +266,11 @@ if [[ -n "${SEED}" ]]; then
 fi
 if is_truthy "${LOW_RAM}"; then
   cmd+=(--low-ram)
+fi
+if [[ "${MLX_TIER_ID}" == "constrained" || "${MLX_TIER_ID}" == "standard" ]]; then
+  if ! passthru_has_flag "--vae-tiling"; then
+    cmd+=(--vae-tiling)
+  fi
 fi
 if ((${#PASSTHRU[@]} > 0)); then
   cmd+=("${PASSTHRU[@]}")

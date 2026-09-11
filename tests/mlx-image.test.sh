@@ -81,6 +81,16 @@ else
   pass "z-image plan has no flux2-klein-4b"
 fi
 
+plan_high="$(OVERRIDE_MEMORY_TIER=high "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "high tier default family is z-image-turbo" "family=z-image-turbo" "${plan_high}"
+expect_contains "high tier default model is z-image-turbo" "model=z-image-turbo" "${plan_high}"
+expect_contains "high tier cli is turbo generator" "cli=mflux-generate-z-image-turbo" "${plan_high}"
+if [[ "${plan_high}" == *"flux2-klein-4b"* ]]; then
+  fail "high tier plan leaked flux2-klein-4b"
+else
+  pass "high tier plan has no flux2-klein-4b"
+fi
+
 expect_fail "mismatched --model/--family rejected" \
   "${GENERATE}" --dump-plan --prompt "plan" --family z-image-turbo --model flux2-klein-4b
 

@@ -3,7 +3,9 @@
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# Does not recreate .venv. Does not install PyTorch.
+# Does not recreate .venv. Does not install Diffusers+MPS as a generation backend;
+# torch may be installed transitively (mflux uses safetensors.torch for weight loading).
+# Denoising remains MLX.
 #
 # Usage:
 #   scripts/install-mlx-image.sh

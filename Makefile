@@ -41,6 +41,7 @@ install-image: ## Install mflux into the existing venv (does not recreate .venv)
 	@$(SCRIPTS)/install-mlx-image.sh
 
 image: ## Generate a PNG with mflux (IMAGE_PROMPT required)
+	@test -n "$(IMAGE_PROMPT)" || { echo 'Set IMAGE_PROMPT=... e.g. make image IMAGE_PROMPT="a red fox in snow"'; exit 1; }
 	@$(SCRIPTS)/generate-mlx-image.sh --prompt "$(IMAGE_PROMPT)" $(GENERATE_IMAGE_ARGS)
 
 clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew

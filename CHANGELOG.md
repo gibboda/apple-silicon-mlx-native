@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Relicensed from MIT to [GNU General Public License v3.0](LICENSE) (`SPDX-License-Identifier: GPL-3.0-only`)
+- Pin opt-in `mflux` to `0.19.1` by default (`MLX_IMAGE_PACKAGE` in `scripts/lib/common.sh`; override with env)
 
 ### Deprecated
 
@@ -45,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Correct PR template Conventional Commits link to repository-root `README.md`
 - Canonicalize cleanup/rebuild removal paths so `..` cannot escape the workspace; `--huggingface-cache` refuses `HF_HOME` (tokens/config) and parent directories
 - Do not pass the constrained FLUX.2 default model into `mflux-generate-z-image-turbo` when `--family z-image-turbo` is set
+- Require custom `--output` paths to resolve under `MLX_WORKSPACE` (prevents path escape via symlinks or `..`)
 
 ### Security
 

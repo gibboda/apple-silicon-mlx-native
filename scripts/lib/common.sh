@@ -21,7 +21,7 @@ MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
 # Image/video packages are NOT installed by default — see docs/media.md.
 MLX_CORE_PACKAGES=(mlx mlx-lm)
 MLX_MEDIA_PACKAGES=(mlx-audio)
-MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux}"
+MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
 MLX_HOMEBREW_PACKAGES=(python@"${MLX_PYTHON_VERSION}" git ffmpeg)
 
 readonly COLOR_RED=$'\033[0;31m'

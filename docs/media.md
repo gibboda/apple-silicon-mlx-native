@@ -44,7 +44,7 @@ Why not default-install `mflux`?
 - Peak unified-memory use often dwarfs LLM 3B–4B workloads.
 - Unsafe default on 8 GB machines (swap thrash).
 
-Install into an existing `.venv` (does not rebuild):
+Install into an existing `.venv` (does not rebuild). **`mflux` is pinned** to `0.19.1` by default (`MLX_IMAGE_PACKAGE` in `scripts/lib/common.sh`); override before install, e.g. `MLX_IMAGE_PACKAGE=mflux==0.20.0 make install-image`.
 
 ```bash
 make install-image
@@ -71,7 +71,7 @@ make image IMAGE_PROMPT="a red fox in snow"
 | ≤16 GB standard | `flux2` / `flux2-klein-4b` | 8-bit, 768² | Still tight with a loaded LLM |
 | ≥24 GB | `z-image-turbo` | 8-bit, 1024², 9 steps | Higher quality default |
 
-Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` in `config/models.env`. Extra mflux flags go after `--`. PNGs land in `outputs/images/` (gitignored).
+Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). On constrained and standard memory tiers, the generate wrapper adds `--vae-tiling` automatically unless you already pass it. PNGs land in `outputs/images/` (gitignored).
 
 Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current `mflux` still depends on `torch` for checkpoint loading (`safetensors.torch`); it does not use PyTorch/MPS to denoise. This toolkit does not install Diffusers+MPS image stacks.
 

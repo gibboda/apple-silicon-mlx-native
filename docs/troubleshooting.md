@@ -129,7 +129,13 @@ Then:
 make image IMAGE_PROMPT="a red fox in snow"
 ```
 
-On 8 GB, stop `mlx_lm.server`, close browsers and other large apps, and keep the constrained defaults (FLUX.2 Klein 4B, 4-bit, 512px, `--low-ram`). First generate downloads several GB of weights. If the process is killed or the machine swaps heavily, drop `--width`/`--height` further or wait until you have more unified memory.
+On 8 GB, stop `mlx_lm.server`, close browsers and other large apps, and keep the constrained defaults (FLUX.2 Klein 4B, 4-bit, 512px, `--low-ram`). The wrapper also enables `--vae-tiling` on constrained and standard tiers unless you pass it yourself. For explicit control:
+
+```bash
+make image IMAGE_PROMPT="a red fox in snow" GENERATE_IMAGE_ARGS='-- --vae-tiling'
+```
+
+First generate downloads several GB of weights. If the process is killed or the machine swaps heavily, drop `--width`/`--height` further or wait until you have more unified memory.
 
 If generate fails with `'flux2-klein-4b' is not Tongyi-MAI/Z-Image-Turbo`, the wrapper mixed families. Use one family only:
 
