@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Do not pass the constrained FLUX.2 default model into `mflux-generate-z-image-turbo` when `--family z-image-turbo` is set
 - Require custom `--output` paths to resolve under `MLX_WORKSPACE` (prevents path escape via symlinks or `..`)
 - `--dump-plan` follows detected memory tier (or `OVERRIDE_MEMORY_TIER`) instead of always assuming constrained; print size/steps/`vae_tiling` and validate custom `--output` without generating
+- ShellCheck workflow posts a job named `ShellCheck` (required by Protect main) and always runs on pull requests so path filters cannot leave the check waiting
 
 ### Security
 
