@@ -1,6 +1,7 @@
 # apple-silicon-mlx-native
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/gibboda/apple-silicon-mlx-native)](https://github.com/gibboda/apple-silicon-mlx-native/releases)
 
 Reproducible toolkit for installing, rebuilding, validating, and operating a **pure Apple Silicon MLX-native** machine-learning environment.
 

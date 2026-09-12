@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-11
+
 ### Added
 
 - Apple Silicon hardware detection with human, JSON, and env output modes (`scripts/detect-apple-silicon.sh`)
@@ -31,14 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin opt-in `mflux` to `0.19.1` by default (`MLX_IMAGE_PACKAGE` in `scripts/lib/common.sh`; override with env)
 - LTX text-to-video pipeline is configurable via `MLX_VIDEO_LTX_PIPELINE` / `--pipeline` (default `distilled`) instead of hardcoded in the generate wrapper
 
-### Deprecated
-
-- N/A
-
-### Removed
-
-- N/A
-
 ### Fixed
 
 - Refuse mlx-video generate on ≤8 GB unless `--force` or `MLX_VIDEO_FORCE=1`; require `ffmpeg`, validate `--image` under `MLX_WORKSPACE`, and add `make prepare-video`
@@ -57,3 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
+
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/gibboda/apple-silicon-mlx-native/releases/tag/v0.1.0
