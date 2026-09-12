@@ -58,29 +58,34 @@ MLX_INSTALL_IMAGE=1 make install
 MLX_INSTALL_IMAGE=1 make rebuild
 ```
 
-Generate (defaults follow memory tier):
+Generate (defaults follow the composed profile: RAM tier + chip class):
 
 ```bash
 make image IMAGE_PROMPT="a red fox in snow"
 # equivalent: scripts/generate-mlx-image.sh --prompt "a red fox in snow"
 ```
 
-| Tier | Default family / model | Size / quant | Notes |
+| Memory / chip | Default family / model | Size / quant | Notes |
 | --- | --- | --- | --- |
-| ≤8 GB constrained | `flux2` / `flux2-klein-4b` | 4-bit, 512², 4 steps, `--low-ram` | Stop `mlx_lm.server` first; expect swap |
-| ≤16 GB standard | `flux2` / `flux2-klein-4b` | 8-bit, 768² | Still tight with a loaded LLM |
-| ≥24 GB | `z-image-turbo` | 8-bit, 1024², 9 steps | Higher quality default |
+| constrained, or fanless Air | `flux2` / `flux2-klein-4b` | 4-bit, 512², 4 steps, `--low-ram` | This M1 is the floor; later Airs stay here for image |
+| standard + slow (16 GB M1) | `flux2` / `flux2-klein-4b` | 4-bit, 768², `--low-ram` | Do not treat 16 GB as if it were an M5 |
+| standard + fast+ cooled (16 GB M5) | `flux2` / `flux2-klein-4b` | 8-bit, 768² | Current 16 GB 8-bit path is OK here |
+| high+ cooled (≥24 GB) | `z-image-turbo` | 8-bit, 1024², 9 steps | Higher quality default |
 
-Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. **`--family` selects the mflux CLI and default checkpoint only**; width, height, steps, quantize, and `--low-ram` still follow the memory-tier profile unless you set those flags or `MLX_IMAGE_*`. So `--family z-image-turbo` on 8 GB still uses 512² / 4 steps / 4-bit, not the ≥24 GB 1024² / 9-step profile.
+Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. **`--family` selects the mflux CLI and default checkpoint only**; width, height, steps, quantize, and `--low-ram` still follow the composed profile unless you set those flags or `MLX_IMAGE_*`. So `--family z-image-turbo` on 8 GB still uses 512² / 4 steps / 4-bit, not the ≥24 GB 1024² / 9-step profile.
 
 Inspect the resolved plan without generating:
 
 ```bash
 scripts/generate-mlx-image.sh --dump-plan --prompt "a red fox in snow"
-OVERRIDE_MEMORY_TIER=high scripts/generate-mlx-image.sh --dump-plan --prompt "a red fox in snow"
+OVERRIDE_MEMORY_TIER=high OVERRIDE_THERMAL_CLASS=cooled scripts/generate-mlx-image.sh --dump-plan --prompt "a red fox in snow"
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=1 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled \
+  scripts/generate-mlx-image.sh --dump-plan --prompt "plan"
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled \
+  scripts/generate-mlx-image.sh --dump-plan --prompt "plan"
 ```
 
-`--dump-plan` uses detected RAM when `sysctl` works, honors `OVERRIDE_MEMORY_TIER` when set, and falls back to constrained when detection is unavailable (Linux CI). Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). On constrained and standard memory tiers, the generate wrapper adds `--vae-tiling` automatically unless you already pass it. Custom `--output` paths must resolve under `MLX_WORKSPACE`. PNGs land in `outputs/images/` (gitignored).
+`--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). On constrained and standard memory tiers (and fanless), the generate wrapper adds `--vae-tiling` automatically unless you already pass it. Custom `--output` paths must resolve under `MLX_WORKSPACE`. PNGs land in `outputs/images/` (gitignored).
 
 Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current `mflux` still depends on `torch` for checkpoint loading (`safetensors.torch`); it does not use PyTorch/MPS to denoise. This toolkit does not install Diffusers+MPS image stacks.
 
@@ -122,33 +127,35 @@ MLX_INSTALL_VIDEO=1 make rebuild
 
 `MLX_INSTALL_VIDEO=1` installs the package only; it does **not** download or convert Wan weights.
 
-Generate (defaults follow memory tier):
+Generate (defaults follow the composed profile: RAM tier + chip class):
 
 ```bash
 make video VIDEO_PROMPT="a red fox running through snow"
 # equivalent: scripts/generate-mlx-video.sh --prompt "a red fox running through snow"
 ```
 
-| Tier | Default family / model | Size / frames | Notes |
+| Memory / chip | Default family / model | Size / frames | Notes |
 | --- | --- | --- | --- |
-| ≤8 GB constrained | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Not practical; UMT5 ~11 GB. Expect failure or extreme swap |
-| ≤16 GB standard | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Swap-heavy; stop `mlx_lm.server` |
-| ≤32 GB high | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 33 frames, 10 steps | First practical Wan profile |
-| ≤64 GB workstation | `ltx2` / `prince-canuma/LTX-2-distilled` | 512², 33 frames | HF download on first generate; no Wan convert |
-| >64 GB large | `ltx2` / `prince-canuma/LTX-2-distilled` | 768×512, 65 frames | Quality path |
+| constrained, 16 GB base M1, or fanless | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Generate refuses unless `--force`. Do not advertise LTX |
+| standard + fast cooled (16 GB M5) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Swap-heavy; stop `mlx_lm.server`. RAM still too small for LTX |
+| high cooled (≤32 GB) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 33–49 frames | First practical Wan profile; frames may scale with GPU cores + throughput |
+| workstation cooled (≤64 GB) | `ltx2` / `prince-canuma/LTX-2-distilled` | 512², 33 frames | HF download on first generate; no Wan convert |
+| large | `ltx2` / `prince-canuma/LTX-2-distilled` | 768×512, 65 frames | Quality path |
 
-Override with `--family`, `--model`, `--model-dir`, `--model-repo`, `--width`, `--height`, `--frames`, `--steps`, `--seed`, `--pipeline`, or `MLX_VIDEO_*` / `MLX_VIDEO_SEED` in `config/models.env`. **`--family` selects the mlx-video module and default checkpoint only**; width, height, frames, steps, and tiling still follow the memory-tier profile unless you set those flags or `MLX_VIDEO_*`. LTX pipeline defaults to `distilled` (`MLX_VIDEO_LTX_PIPELINE` or `--pipeline`). Dimensions/frames are then aligned to the family (Wan: 4n+1 frames; LTX: 8n+1 frames and 64px). So `--family ltx2` on 8 GB still starts from 832×480 / 17 frames: 832 is already 64-aligned, height snaps to 448, and 17 frames is already 8n+1 — not the workstation 512² / 33-frame profile.
+Override with `--family`, `--model`, `--model-dir`, `--model-repo`, `--width`, `--height`, `--frames`, `--steps`, `--seed`, `--pipeline`, or `MLX_VIDEO_*` / `MLX_VIDEO_SEED` in `config/models.env`. **`--family` selects the mlx-video module and default checkpoint only**; width, height, frames, steps, and tiling still follow the composed profile unless you set those flags or `MLX_VIDEO_*`. LTX pipeline defaults to `distilled` (`MLX_VIDEO_LTX_PIPELINE` or `--pipeline`). Dimensions/frames are then aligned to the family (Wan: 4n+1 frames; LTX: 8n+1 frames and 64px). So `--family ltx2` on 8 GB still starts from 832×480 / 17 frames: 832 is already 64-aligned, height snaps to 448, and 17 frames is already 8n+1 — not the workstation 512² / 33-frame profile.
 
-On ≤8 GB machines, `scripts/generate-mlx-video.sh` refuses to generate unless you pass `--force` or set `MLX_VIDEO_FORCE=1` (UMT5 ~11 GB). `--dump-plan` always works for inspecting defaults without generating.
+On ≤8 GB, 16 GB base M1, and fanless Airs, `scripts/generate-mlx-video.sh` refuses to generate unless you pass `--force` or set `MLX_VIDEO_FORCE=1` (UMT5 ~11 GB). `--dump-plan` always works for inspecting defaults without generating.
 
 Inspect the resolved plan without generating:
 
 ```bash
 scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through snow"
-OVERRIDE_MEMORY_TIER=high scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through snow"
+OVERRIDE_MEMORY_TIER=high OVERRIDE_THERMAL_CLASS=cooled scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through snow"
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=1 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled \
+  scripts/generate-mlx-video.sh --dump-plan --prompt "plan"
 ```
 
-`--dump-plan` uses detected RAM when `sysctl` works, honors `OVERRIDE_MEMORY_TIER` when set, and falls back to constrained when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). Custom `--output` and `--image` paths must exist (for `--image`) and resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
+`--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). Custom `--output` and `--image` paths must exist (for `--image`) and resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
 
 Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.19.1`).
 
@@ -162,7 +169,7 @@ Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`
 | --- | --- |
 | Speech (small models) | Possible with care; unload LLMs first |
 | Image | Opt-in `mflux` only; constrained default is 4B 4-bit 512² with `--low-ram`. Expect swap. |
-| Video | Refused by default (generate wrapper exits unless `--force` / `MLX_VIDEO_FORCE=1`; UMT5 ~11 GB) |
+| Video | Refused by default on 8 GB, 16 GB base M1, and fanless Airs (generate wrapper exits unless `--force` / `MLX_VIDEO_FORCE=1`; UMT5 ~11 GB) |
 
 ---
 

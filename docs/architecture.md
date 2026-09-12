@@ -62,19 +62,19 @@ Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** st
 
 | Script | Role |
 | --- | --- |
-| `detect-apple-silicon.sh` | Hardware facts + memory tier |
-| `initial-build-mlx-native-media.sh` | First-time bootstrap |
-| `rebuild-mlx-native-media.sh` | Recreate `.venv` safely |
+| `detect-apple-silicon.sh` | Hardware facts, chip class, memory tier, composed defaults (`--recommend`) |
+| `initial-build-mlx-native-media.sh` | First-time bootstrap; seeds `models.env` from the composed profile |
+| `rebuild-mlx-native-media.sh` | Recreate `.venv` safely; never clobbers existing `models.env` |
 | `install-mlx-image.sh` | Opt-in `mflux` into the existing venv |
-| `generate-mlx-image.sh` | Text-to-image via mflux with memory-tier defaults |
+| `generate-mlx-image.sh` | Text-to-image via mflux with composed chip+RAM defaults |
 | `install-mlx-video.sh` | Opt-in `mlx-video` into the existing venv |
 | `prepare-mlx-video-wan.sh` | Download + convert Wan2.1 1.3B to MLX 4-bit (torch for .pth load only) |
-| `generate-mlx-video.sh` | Text-to-video via mlx-video with memory-tier defaults |
+| `generate-mlx-video.sh` | Text-to-video via mlx-video with composed chip+RAM defaults |
 | `cleanup-mlx-native.sh` | Remove `.venv` and optional caches; never Homebrew |
-| `validate-mlx.sh` | Fast correctness checks |
+| `validate-mlx.sh` | Fast correctness checks plus `mx.device_info()` working-set limits |
 | `conventional-commits-audit.sh` | Commit subject policy |
 
-Shared helpers live in `scripts/lib/common.sh` so detection and tier logic stay consistent.
+Shared helpers live in `scripts/lib/common.sh` so detection and compose logic stay consistent. **RAM is the OOM fence; chip class is the performance fence.** Unknown chips warn and fall back to RAM-only defaults; install does not fail. See [hardware-tiers.md](hardware-tiers.md).
 
 ## Memory accounting (design constraint)
 
