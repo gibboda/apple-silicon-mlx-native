@@ -64,16 +64,17 @@ Options:
   --image PATH        Optional first-frame image (I2V; must exist under MLX_WORKSPACE)
   --pipeline NAME     LTX pipeline (default: distilled; or MLX_VIDEO_LTX_PIPELINE)
   --tiling MODE       VAE tiling: auto|none|default|aggressive|conservative|spatial|temporal
-  --force             Allow generate on ≤8 GB (not recommended; UMT5 ~11 GB)
+  --force             Allow generate when the composed profile refuses (8 GB, 16 GB base M1, fanless Airs)
   --dump-plan         Print resolved plan and exit
   --                  Extra args passed through to mlx-video
   -h, --help          Show this help
 
-Defaults come from memory tier (or OVERRIDE_MEMORY_TIER), then config/models.env
-(MLX_VIDEO_*). --family changes the mlx-video module and default checkpoint only;
-width/height/frames/steps/tiling still follow the memory-tier profile unless you
-set those flags or MLX_VIDEO_*. Dimensions and frames are aligned to the selected
-family (Wan 4n+1 / LTX 8n+1 and 64px).
+Defaults come from the composed profile (memory tier + throughput class +
+thermal class, or OVERRIDE_MEMORY_TIER / OVERRIDE_CHIP_* / OVERRIDE_THERMAL_CLASS),
+then config/models.env (MLX_VIDEO_*). --family changes the mlx-video module and
+default checkpoint only; width/height/frames/steps/tiling still follow the composed
+profile unless you set those flags or MLX_VIDEO_*. Dimensions and frames are aligned
+to the selected family (Wan 4n+1 / LTX 8n+1 and 64px).
 EOF
 }
 
@@ -188,21 +189,19 @@ if (( DUMP_PLAN == 0 )); then
     die "Python venv not found at ${MLX_VENV}. Run: make install && make install-video"
   fi
   assert_apple_silicon
-  export_detect_env
-elif detect_memory_bytes >/dev/null 2>&1; then
-  export_detect_env
-else
-  MLX_TIER_ID="constrained"
 fi
-if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
-  MLX_TIER_ID="${OVERRIDE_MEMORY_TIER}"
+if (( DUMP_PLAN == 1 )); then
+  MLX_SKIP_DEVICE_PROBE=1
+fi
+load_runtime_profile
+
+if (( DUMP_PLAN == 0 )) && (( FORCE == 0 )) && ! is_truthy "${MLX_VIDEO_FORCE:-}"; then
+  if [[ "${MLX_VIDEO_FORCE_REQUIRED}" == "1" ]] || { [[ -n "${MLX_MEM_GIB:-}" ]] && (( MLX_MEM_GIB <= 8 )); }; then
+    die "Text-to-video needs more unified memory than this profile allows (UMT5 text encoder ~11 GB). 8 GB, 16 GB base M1, and fanless Airs refuse unless you pass --force or set MLX_VIDEO_FORCE=1 (expect failure or extreme swap)."
+  fi
 fi
 
-if (( DUMP_PLAN == 0 )) && (( MLX_MEM_GIB <= 8 )) && (( FORCE == 0 )) && ! is_truthy "${MLX_VIDEO_FORCE:-}"; then
-  die "8 GB unified memory is too small for text-to-video (UMT5 text encoder ~11 GB). Set MLX_VIDEO_FORCE=1 or pass --force to override (expect failure or extreme swap)."
-fi
-
-profile="$(recommended_video_profile_for_tier "${MLX_TIER_ID}")"
+profile="${MLX_RECOMMENDED_VIDEO_PROFILE:-$(recommended_video_profile_for_tier "${MLX_TIER_ID}")}"
 IFS='|' read -r def_family def_model def_width def_height def_frames def_steps def_tiling <<<"${profile}"
 
 FAMILY="${CLI_FAMILY:-${MLX_VIDEO_FAMILY:-${def_family}}}"
@@ -301,8 +300,15 @@ fi
 
 STEPS_PLAN="${STEPS:-default}"
 if (( DUMP_PLAN == 1 )); then
-  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nwidth=%s\nheight=%s\nframes=%s\nsteps=%s\ntiling=%s\npipeline=%s\nmodel_dir=%s\nmodel_repo=%s\n' \
-    "${FAMILY}" "${MODEL}" "${cli_mod}" "${MLX_TIER_ID}" "${WIDTH}" "${HEIGHT}" "${FRAMES}" "${STEPS_PLAN}" "${TILING}" "${PIPELINE}" "${MODEL_DIR}" "${MODEL_REPO}"
+  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nthroughput_class=%s\nthermal_class=%s\nchip_family=%s\nchip_sku=%s\ngpu_cores=%s\nwidth=%s\nheight=%s\nframes=%s\nsteps=%s\ntiling=%s\npipeline=%s\nmodel_dir=%s\nmodel_repo=%s\nforce_required=%s\n' \
+    "${FAMILY}" "${MODEL}" "${cli_mod}" "${MLX_TIER_ID}" \
+    "${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-}}" \
+    "${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}" \
+    "${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-}}" \
+    "${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-}}" \
+    "${MLX_POLICY_GPU_CORES:-${MLX_GPU_CORES:-}}" \
+    "${WIDTH}" "${HEIGHT}" "${FRAMES}" "${STEPS_PLAN}" "${TILING}" "${PIPELINE}" "${MODEL_DIR}" "${MODEL_REPO}" \
+    "${MLX_VIDEO_FORCE_REQUIRED:-0}"
   exit 0
 fi
 
@@ -325,11 +331,15 @@ else
   mkdir -p "$(dirname "${OUTPUT}")"
 fi
 
-if (( MLX_MEM_GIB <= 8 )); then
+if [[ -n "${MLX_MEM_GIB:-}" ]] && (( MLX_MEM_GIB <= 8 )); then
   log_warn "8 GB: text-to-video is not practical (UMT5 ~11 GB). Stop mlx_lm.server; expect failure or extreme swap."
-elif (( MLX_MEM_GIB < 24 )); then
+elif [[ "${MLX_VIDEO_FORCE_REQUIRED}" == "1" ]]; then
+  log_warn "This chip/thermal profile still treats video as --force-only (UMT5 ~11 GB). Expect swap."
+elif [[ -n "${MLX_MEM_GIB:-}" ]] && (( MLX_MEM_GIB < 24 )); then
   log_warn "Under 24 GB: expecting swap. Stop mlx_lm.server and other GPU/memory-heavy apps first."
 fi
+
+apply_mlx_runtime_limits "${PY}" "${MLX_TIER_ID}" >/dev/null || true
 
 cmd=("${PY}" -m "${cli_mod}" --prompt "${PROMPT}" --width "${WIDTH}" --height "${HEIGHT}")
 

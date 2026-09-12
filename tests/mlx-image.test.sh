@@ -47,7 +47,9 @@ expect_contains() {
 }
 
 unset MLX_IMAGE_FAMILY MLX_IMAGE_MODEL MLX_IMAGE_QUANTIZE MLX_IMAGE_STEPS MLX_IMAGE_WIDTH MLX_IMAGE_HEIGHT MLX_IMAGE_LOW_RAM MLX_IMAGE_SEED
+unset OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
 export OVERRIDE_MEMORY_TIER=constrained
+export OVERRIDE_THERMAL_CLASS=cooled
 export MLX_WORKSPACE="${TMP}/ws"
 export MLX_VENV="${MLX_WORKSPACE}/.venv"
 mkdir -p "${MLX_WORKSPACE}"
@@ -92,7 +94,7 @@ else
   pass "z-image plan has no flux2-klein-4b"
 fi
 
-plan_high="$(OVERRIDE_MEMORY_TIER=high "${GENERATE}" --dump-plan --prompt "plan")"
+plan_high="$(OVERRIDE_MEMORY_TIER=high OVERRIDE_THERMAL_CLASS=cooled "${GENERATE}" --dump-plan --prompt "plan")"
 expect_contains "high tier default family is z-image-turbo" "family=z-image-turbo" "${plan_high}"
 expect_contains "high tier default model is z-image-turbo" "model=z-image-turbo" "${plan_high}"
 expect_contains "high tier cli is turbo generator" "cli=mflux-generate-z-image-turbo" "${plan_high}"
@@ -118,6 +120,29 @@ expect_fail "output via .. outside workspace rejected" \
 
 expect_ok "custom output under workspace accepted" \
   "${GENERATE}" --dump-plan --prompt "plan" --output "${MLX_WORKSPACE}/outputs/images/ok.png"
+
+plan_m1="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=1 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=8 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M1 16 GB dump-plan chip family" "chip_family=1" "${plan_m1}"
+expect_contains "M1 16 GB dump-plan sku base" "chip_sku=base" "${plan_m1}"
+expect_contains "M1 16 GB dump-plan slow" "throughput_class=slow" "${plan_m1}"
+expect_contains "M1 16 GB stays 4-bit" "quantize=4" "${plan_m1}"
+expect_contains "M1 16 GB stays low_ram" "low_ram=1" "${plan_m1}"
+
+plan_m5="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M5 16 GB dump-plan chip family" "chip_family=5" "${plan_m5}"
+expect_contains "M5 16 GB dump-plan fast" "throughput_class=fast" "${plan_m5}"
+expect_contains "M5 16 GB may use 8-bit" "quantize=8" "${plan_m5}"
+expect_contains "M5 16 GB width 768" "width=768" "${plan_m5}"
+
+plan_m3="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M3 16 GB dump-plan chip family" "chip_family=3" "${plan_m3}"
+expect_contains "M3 16 GB dump-plan moderate" "throughput_class=moderate" "${plan_m3}"
+expect_contains "M3 16 GB stays 4-bit" "quantize=4" "${plan_m3}"
+expect_contains "M3 16 GB stays low_ram" "low_ram=1" "${plan_m3}"
+expect_contains "M3 16 GB width 768" "width=768" "${plan_m3}"
 
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2

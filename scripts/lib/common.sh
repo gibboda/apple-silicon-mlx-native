@@ -119,6 +119,264 @@ detect_chip() {
   echo "${chip}"
 }
 
+trim_whitespace() {
+  local s="${1:-}"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "${s}"
+}
+
+# Parse machdep.cpu.brand_string. Longest SKU match: Ultra, then Max, then Pro, then base.
+# "Apple M1 Pro" → family 1, sku pro (not base). "Apple M10" → family 10 (not 1).
+# Emit: family|sku   (empty fields on failure)
+parse_apple_chip_brand() {
+  local brand
+  brand="$(trim_whitespace "${1:-}")"
+  if [[ "${brand}" =~ ^Apple\ M([0-9]+)(\ Ultra|\ Max|\ Pro)?$ ]]; then
+    printf '%s|' "${BASH_REMATCH[1]}"
+    case "${BASH_REMATCH[2]:-}" in
+      " Ultra") printf 'ultra\n' ;;
+      " Max") printf 'max\n' ;;
+      " Pro") printf 'pro\n' ;;
+      *) printf 'base\n' ;;
+    esac
+    return 0
+  fi
+  printf '|\n'
+  return 1
+}
+
+# Unified-memory bandwidth (GB/s) from family+SKU. Max variants use gpu_cores when bins differ.
+# Empty output = unknown chip (RAM-only policy). Small table, not a per-retail-SKU encyclopedia.
+lookup_memory_bandwidth_gbs() {
+  local family="${1:-}"
+  local sku="${2:-}"
+  local gpu_cores="${3:-0}"
+  [[ "${gpu_cores}" =~ ^[0-9]+$ ]] || gpu_cores=0
+  [[ "${family}" =~ ^[0-9]+$ ]] || { printf '\n'; return 0; }
+
+  case "${family}:${sku}" in
+    1:base) echo 68 ;;
+    1:pro) echo 200 ;;
+    1:max) echo 400 ;;
+    1:ultra) echo 800 ;;
+    2:base) echo 100 ;;
+    2:pro) echo 200 ;;
+    2:max) echo 400 ;;
+    2:ultra) echo 800 ;;
+    3:base) echo 100 ;;
+    3:pro) echo 150 ;;
+    3:max)
+      if (( gpu_cores >= 40 )); then echo 400; else echo 300; fi
+      ;;
+    3:ultra) echo 800 ;;
+    4:base) echo 120 ;;
+    4:pro) echo 273 ;;
+    4:max)
+      if (( gpu_cores >= 40 )); then echo 546; else echo 410; fi
+      ;;
+    5:base) echo 153 ;;
+    5:pro) echo 307 ;;
+    5:max)
+      if (( gpu_cores >= 40 )); then echo 614; else echo 460; fi
+      ;;
+    5:ultra) echo 1200 ;;
+    *) printf '\n' ;;
+  esac
+}
+
+# Bandwidth buckets — not generation number (M3 Pro ~150 is slower than M2 Pro ~200).
+classify_throughput_class() {
+  local bw="${1:-}"
+  [[ "${bw}" =~ ^[0-9]+$ ]] || { echo "unknown"; return 0; }
+  if (( bw < 100 )); then
+    echo "slow"
+  elif (( bw < 150 )); then
+    echo "moderate"
+  elif (( bw < 300 )); then
+    echo "fast"
+  elif (( bw <= 600 )); then
+    echo "very_fast"
+  else
+    echo "extreme"
+  fi
+}
+
+throughput_rank() {
+  case "${1:-unknown}" in
+    slow) echo 1 ;;
+    moderate) echo 2 ;;
+    fast) echo 3 ;;
+    very_fast) echo 4 ;;
+    extreme) echo 5 ;;
+    *) echo 0 ;;
+  esac
+}
+
+throughput_at_least() {
+  local have want
+  have="$(throughput_rank "${1:-}")"
+  want="$(throughput_rank "${2:-}")"
+  (( have >= want ))
+}
+
+# M5+ GPU Neural Accelerators help prefill/diffusion, not decode. Metal GPU only (no ANE).
+chip_has_gpu_nax() {
+  local family="${1:-0}"
+  [[ "${family}" =~ ^[0-9]+$ ]] || return 1
+  (( family >= 5 ))
+}
+
+detect_gpu_core_count() {
+  local n=""
+  n="$(ioreg -c AGXAccelerator -r -d 1 2>/dev/null | awk -F'= ' '/"gpu-core-count"/{gsub(/[ \t]/,"",$2); print $2; exit}')"
+  if [[ "${n}" =~ ^[0-9]+$ ]]; then
+    echo "${n}"
+  else
+    echo ""
+  fi
+}
+
+detect_p_cores() {
+  sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || echo ""
+}
+
+detect_e_cores() {
+  sysctl -n hw.perflevel1.physicalcpu 2>/dev/null || echo ""
+}
+
+detect_hw_model() {
+  sysctl -n hw.model 2>/dev/null || echo ""
+}
+
+classify_thermal_class() {
+  local model="${1:-}"
+  case "${model}" in
+    MacBookAir*) echo "fanless" ;;
+    "") echo "" ;;
+    *) echo "cooled" ;;
+  esac
+}
+
+bytes_to_gib_display() {
+  local bytes="${1:-}"
+  [[ "${bytes}" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+  awk -v b="${bytes}" 'BEGIN { printf "%.2f", b / 1024 / 1024 / 1024 }'
+}
+
+# Probe mx.device_info() when mlx is importable. Emit: working_set_bytes|gpu_arch
+# Omit (empty fields) when mlx/Metal is unavailable. Do not use mx.metal.device_info.
+probe_mlx_device_info() {
+  local py="${1:-}"
+  if [[ -z "${py}" ]]; then
+    if [[ -x "${MLX_VENV}/bin/python" ]]; then
+      py="${MLX_VENV}/bin/python"
+    elif command -v python3 >/dev/null 2>&1; then
+      py="python3"
+    else
+      echo "|"
+      return 0
+    fi
+  fi
+  "${py}" - <<'PY' 2>/dev/null || echo "|"
+import sys
+try:
+    import mlx.core as mx
+    info = mx.device_info()
+    if not isinstance(info, dict):
+        raise TypeError("device_info is not a dict")
+    ws = info.get("max_recommended_working_set_size", "")
+    arch = info.get("architecture", "")
+    ws_s = "" if ws in (None, "") else str(int(ws))
+    arch_s = "" if arch in (None, "") else str(arch)
+    print("%s|%s" % (ws_s, arch_s))
+except Exception:
+    print("|")
+    sys.exit(0)
+PY
+}
+
+# Apply mx.set_wired_limit / set_memory_limit / set_cache_limit from the Metal working set.
+# Constrained machines never exceed max_recommended_working_set_size.
+# Prints KEY=value lines. No-op when mlx/Metal is missing.
+apply_mlx_runtime_limits() {
+  local py="${1:-$(venv_python)}"
+  local tier="${2:-${MLX_TIER_ID:-}}"
+  [[ -x "${py}" ]] || return 0
+  MLX_LIMIT_TIER="${tier}" "${py}" - <<'PY' 2>/dev/null || true
+import os, sys
+try:
+    import mlx.core as mx
+    info = mx.device_info()
+except Exception as exc:
+    sys.stderr.write("mlx_runtime=unavailable (%s)\n" % (exc,))
+    sys.exit(0)
+
+ws = int(info.get("max_recommended_working_set_size") or 0)
+arch = str(info.get("architecture") or "")
+memsize = int(info.get("memory_size") or 0)
+tier = os.environ.get("MLX_LIMIT_TIER", "")
+print("working_set_bytes=%s" % (ws if ws else "",))
+print("gpu_arch=%s" % (arch,))
+print("memory_size_bytes=%s" % (memsize if memsize else "",))
+if ws <= 0:
+    sys.exit(0)
+
+wired = ws
+if tier == "constrained":
+    memory = ws
+    cache = max(ws // 4, 1)
+else:
+    memory = int(ws * 1.5)
+    if memsize > 0:
+        cap = int(memsize * 0.95)
+        if memory > cap:
+            memory = cap
+    cache = max(ws // 2, 1)
+
+def _set(name, fn, value):
+    try:
+        fn(value)
+        print("%s=%s" % (name, value))
+    except Exception as exc:
+        sys.stderr.write("%s_error=%s\n" % (name, exc))
+        print("%s=" % (name,))
+
+if hasattr(mx, "set_wired_limit"):
+    _set("wired_limit_bytes", mx.set_wired_limit, wired)
+else:
+    print("wired_limit_bytes=")
+if hasattr(mx, "set_memory_limit"):
+    _set("memory_limit_bytes", mx.set_memory_limit, memory)
+else:
+    print("memory_limit_bytes=")
+if hasattr(mx, "set_cache_limit"):
+    _set("cache_limit_bytes", mx.set_cache_limit, cache)
+else:
+    print("cache_limit_bytes=")
+PY
+}
+
+mlx_lm_help_has_flag() {
+  local module="$1"
+  local flag="$2"
+  local py
+  py="$(venv_python)"
+  [[ -x "${py}" ]] || return 1
+  "${py}" -m "${module}" --help 2>&1 | grep -q -- "${flag}"
+}
+
+dummy_mem_gib_for_tier() {
+  case "${1:-}" in
+    constrained) echo 8 ;;
+    standard) echo 16 ;;
+    high) echo 32 ;;
+    workstation) echo 64 ;;
+    large) echo 65 ;;
+    *) echo 8 ;;
+  esac
+}
+
 detect_memory_bytes() {
   sysctl -n hw.memsize
 }
@@ -306,51 +564,89 @@ human_du() {
   fi
 }
 
-print_hardware_summary() {
-  local arch chip mem_bytes mem_gib cores macos disk py tier_line tier_id tier_label tier_hint
-  arch="$(detect_architecture)"
-  chip="$(detect_chip)"
-  mem_bytes="$(detect_memory_bytes)"
-  mem_gib="$(bytes_to_gib "${mem_bytes}")"
-  cores="$(detect_cpu_cores)"
-  macos="$(detect_macos_version)"
-  disk="$(detect_disk_available_gib "${MLX_WORKSPACE}")"
-  py="$(detect_python_version)"
-  tier_line="$(classify_memory_tier "${mem_gib}")"
-  IFS='|' read -r tier_id tier_label tier_hint <<<"${tier_line}"
-
-  cat <<EOF
-Architecture:     ${arch}
-Apple chip:       ${chip}
-Memory:           ${mem_gib} GiB (${mem_bytes} bytes)
-Memory tier:      ${tier_label}
-CPU cores:        ${cores}
-macOS version:    ${macos}
-Disk available:   ${disk} GiB (workspace volume)
-Python version:   ${py}
-Workspace:        ${MLX_WORKSPACE}
-Recommended:      ${tier_hint}
-EOF
+warn_unknown_chip_policy() {
+  local brand="${1:-}"
+  local family="${2:-}"
+  local sku="${3:-}"
+  local bandwidth="${4:-}"
+  if [[ -n "${OVERRIDE_CHIP_FAMILY:-}" ]]; then
+    return 0
+  fi
+  if [[ -z "${family}" ]]; then
+    log_warn "Unrecognized Apple Silicon brand '${brand:-unknown}'; falling back to RAM-only defaults."
+    return 0
+  fi
+  if [[ -z "${bandwidth}" ]]; then
+    log_warn "Unknown Apple Silicon chip M${family} ${sku:-base}; falling back to RAM-only defaults. Install continues."
+  fi
 }
 
-export_detect_env() {
-  # Export machine-consumable variables for other scripts.
-  local mem_bytes mem_gib tier_line
+# Policy only: OVERRIDE_* change recommendations, never reported hardware facts.
+compose_chip_policy() {
+  local policy_family policy_sku policy_gpu policy_thermal policy_tier policy_bw policy_tp tier_line
+  if [[ -n "${OVERRIDE_CHIP_FAMILY:-}" ]]; then
+    policy_family="${OVERRIDE_CHIP_FAMILY}"
+    policy_sku="${OVERRIDE_CHIP_SKU:-base}"
+  else
+    policy_family="${MLX_CHIP_FAMILY:-}"
+    policy_sku="${OVERRIDE_CHIP_SKU:-${MLX_CHIP_SKU:-}}"
+  fi
+  policy_gpu="${OVERRIDE_GPU_CORES:-${MLX_GPU_CORES:-0}}"
+  policy_thermal="${OVERRIDE_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}"
+  policy_tier="${OVERRIDE_MEMORY_TIER:-${MLX_PHYSICAL_TIER_ID:-constrained}}"
+  if [[ -n "${policy_family}" && -z "${policy_sku}" ]]; then
+    policy_sku="base"
+  fi
+  [[ "${policy_gpu}" =~ ^[0-9]+$ ]] || policy_gpu=0
+
+  policy_bw="$(lookup_memory_bandwidth_gbs "${policy_family}" "${policy_sku}" "${policy_gpu}")"
+  policy_tp="$(classify_throughput_class "${policy_bw}")"
+
+  if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
+    log_warn "OVERRIDE_MEMORY_TIER=${OVERRIDE_MEMORY_TIER} (recommendations may differ from physical RAM)"
+  fi
+  if [[ -n "${OVERRIDE_CHIP_FAMILY:-}" || -n "${OVERRIDE_CHIP_SKU:-}" ]]; then
+    log_warn "OVERRIDE_CHIP_FAMILY=${OVERRIDE_CHIP_FAMILY:-} OVERRIDE_CHIP_SKU=${OVERRIDE_CHIP_SKU:-} (policy only; detect facts stay physical)"
+  fi
+  if [[ -n "${OVERRIDE_GPU_CORES:-}" ]]; then
+    log_warn "OVERRIDE_GPU_CORES=${OVERRIDE_GPU_CORES} (policy only)"
+  fi
+  if [[ -n "${OVERRIDE_THERMAL_CLASS:-}" ]]; then
+    log_warn "OVERRIDE_THERMAL_CLASS=${OVERRIDE_THERMAL_CLASS} (policy only)"
+  fi
+
+  MLX_TIER_ID="${policy_tier}"
+  tier_line="$(classify_memory_tier "$(dummy_mem_gib_for_tier "${policy_tier}")")"
+  IFS='|' read -r _ MLX_POLICY_TIER_LABEL MLX_TIER_HINT <<<"${tier_line}"
+  if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
+    MLX_TIER_LABEL="${MLX_POLICY_TIER_LABEL}"
+  fi
+
+  MLX_POLICY_CHIP_FAMILY="${policy_family}"
+  MLX_POLICY_CHIP_SKU="${policy_sku}"
+  MLX_POLICY_GPU_CORES="${policy_gpu}"
+  MLX_POLICY_THERMAL_CLASS="${policy_thermal}"
+  MLX_POLICY_BANDWIDTH_GBS="${policy_bw}"
+  MLX_POLICY_THROUGHPUT_CLASS="${policy_tp}"
+
+  MLX_RECOMMENDED_MODEL="$(recommended_model_for_profile "${policy_tier}" "${policy_tp}" "${policy_thermal}" "${policy_family}")"
+  MLX_RECOMMENDED_CONTEXT="$(recommended_context_for_profile "${policy_tier}" "${policy_tp}" "${policy_thermal}")"
+  MLX_RECOMMENDED_IMAGE_PROFILE="$(recommended_image_profile_for_profile "${policy_tier}" "${policy_tp}" "${policy_thermal}" "${policy_family}")"
+  MLX_RECOMMENDED_VIDEO_PROFILE="$(recommended_video_profile_for_profile "${policy_tier}" "${policy_tp}" "${policy_thermal}" "${policy_family}" "${policy_gpu}")"
+  if video_force_required_for_profile "${policy_tier}" "${policy_tp}" "${policy_thermal}"; then
+    MLX_VIDEO_FORCE_REQUIRED=1
+  else
+    MLX_VIDEO_FORCE_REQUIRED=0
+  fi
+}
+
+collect_hardware_facts() {
+  local mem_bytes mem_gib tier_line parsed_family parsed_sku ws_line
   mem_bytes="$(detect_memory_bytes)"
   mem_gib="$(bytes_to_gib "${mem_bytes}")"
   tier_line="$(classify_memory_tier "${mem_gib}")"
-  IFS='|' read -r MLX_TIER_ID MLX_TIER_LABEL MLX_TIER_HINT <<<"${tier_line}"
-
-  export MLX_ARCH
-  export MLX_CHIP
-  export MLX_MEM_BYTES
-  export MLX_MEM_GIB
-  export MLX_CPU_CORES
-  export MLX_MACOS_VERSION
-  export MLX_DISK_AVAIL_GIB
-  export MLX_TIER_ID
-  export MLX_TIER_LABEL
-  export MLX_TIER_HINT
+  IFS='|' read -r MLX_PHYSICAL_TIER_ID MLX_TIER_LABEL MLX_TIER_HINT <<<"${tier_line}"
+  MLX_PHYSICAL_TIER_LABEL="${MLX_TIER_LABEL}"
 
   MLX_ARCH="$(detect_architecture)"
   MLX_CHIP="$(detect_chip)"
@@ -359,6 +655,186 @@ export_detect_env() {
   MLX_CPU_CORES="$(detect_cpu_cores)"
   MLX_MACOS_VERSION="$(detect_macos_version)"
   MLX_DISK_AVAIL_GIB="$(detect_disk_available_gib "${MLX_WORKSPACE}")"
+  MLX_HW_MODEL="$(detect_hw_model)"
+  MLX_GPU_CORES="$(detect_gpu_core_count)"
+  MLX_P_CORES="$(detect_p_cores)"
+  MLX_E_CORES="$(detect_e_cores)"
+  MLX_THERMAL_CLASS="$(classify_thermal_class "${MLX_HW_MODEL}")"
+
+  parsed_family=""
+  parsed_sku=""
+  IFS='|' read -r parsed_family parsed_sku <<<"$(parse_apple_chip_brand "${MLX_CHIP}" || true)"
+  MLX_CHIP_FAMILY="${parsed_family}"
+  MLX_CHIP_SKU="${parsed_sku}"
+  MLX_BANDWIDTH_GBS="$(lookup_memory_bandwidth_gbs "${MLX_CHIP_FAMILY}" "${MLX_CHIP_SKU}" "${MLX_GPU_CORES:-0}")"
+  MLX_THROUGHPUT_CLASS="$(classify_throughput_class "${MLX_BANDWIDTH_GBS}")"
+  warn_unknown_chip_policy "${MLX_CHIP}" "${MLX_CHIP_FAMILY}" "${MLX_CHIP_SKU}" "${MLX_BANDWIDTH_GBS}"
+
+  if [[ "${MLX_SKIP_DEVICE_PROBE:-0}" == "1" ]]; then
+    MLX_WORKING_SET_BYTES=""
+    MLX_GPU_ARCH=""
+  else
+    ws_line="$(probe_mlx_device_info "$(venv_python)")"
+    IFS='|' read -r MLX_WORKING_SET_BYTES MLX_GPU_ARCH <<<"${ws_line}"
+  fi
+}
+
+export_chip_profile_vars() {
+  export MLX_ARCH MLX_CHIP MLX_MEM_BYTES MLX_MEM_GIB MLX_CPU_CORES
+  export MLX_MACOS_VERSION MLX_DISK_AVAIL_GIB
+  export MLX_PHYSICAL_TIER_ID MLX_PHYSICAL_TIER_LABEL MLX_TIER_ID MLX_TIER_LABEL MLX_TIER_HINT
+  export MLX_CHIP_FAMILY MLX_CHIP_SKU MLX_GPU_CORES MLX_P_CORES MLX_E_CORES
+  export MLX_HW_MODEL MLX_THERMAL_CLASS MLX_BANDWIDTH_GBS MLX_THROUGHPUT_CLASS
+  export MLX_WORKING_SET_BYTES MLX_GPU_ARCH
+  export MLX_POLICY_CHIP_FAMILY MLX_POLICY_CHIP_SKU MLX_POLICY_GPU_CORES
+  export MLX_POLICY_THERMAL_CLASS MLX_POLICY_BANDWIDTH_GBS MLX_POLICY_THROUGHPUT_CLASS
+  export MLX_RECOMMENDED_MODEL MLX_RECOMMENDED_CONTEXT
+  export MLX_RECOMMENDED_IMAGE_PROFILE MLX_RECOMMENDED_VIDEO_PROFILE
+  export MLX_VIDEO_FORCE_REQUIRED
+}
+
+export_detect_env() {
+  # Physical facts + composed policy. OVERRIDE_* never rewrite reported facts.
+  collect_hardware_facts
+  compose_chip_policy
+  export_chip_profile_vars
+}
+
+# Portable wrapper: real sysctl on macOS; constrained + OVERRIDE_* on Linux CI.
+load_runtime_profile() {
+  if detect_memory_bytes >/dev/null 2>&1; then
+    export_detect_env
+    return
+  fi
+  MLX_ARCH="$(detect_architecture)"
+  MLX_CHIP=""
+  MLX_MEM_BYTES=""
+  MLX_MEM_GIB=""
+  MLX_CPU_CORES=""
+  MLX_MACOS_VERSION=""
+  MLX_DISK_AVAIL_GIB=""
+  MLX_PHYSICAL_TIER_ID="constrained"
+  MLX_TIER_LABEL="8 GB — constrained"
+  MLX_TIER_HINT="3B–4B 4-bit models, short context"
+  MLX_CHIP_FAMILY=""
+  MLX_CHIP_SKU=""
+  MLX_GPU_CORES=""
+  MLX_P_CORES=""
+  MLX_E_CORES=""
+  MLX_HW_MODEL=""
+  MLX_THERMAL_CLASS=""
+  MLX_BANDWIDTH_GBS=""
+  MLX_THROUGHPUT_CLASS="unknown"
+  MLX_WORKING_SET_BYTES=""
+  MLX_GPU_ARCH=""
+  compose_chip_policy
+  export_chip_profile_vars
+}
+
+print_hardware_summary() {
+  if [[ -z "${MLX_MEM_BYTES:-}" || -z "${MLX_CHIP:-}" ]]; then
+    export_detect_env
+  fi
+  local ws_disp=""
+  if [[ -n "${MLX_WORKING_SET_BYTES:-}" ]]; then
+    ws_disp="$(bytes_to_gib_display "${MLX_WORKING_SET_BYTES}") GiB (${MLX_WORKING_SET_BYTES} bytes)"
+  else
+    ws_disp="unavailable (mlx not importable)"
+  fi
+
+  cat <<EOF
+Architecture:     ${MLX_ARCH}
+Apple chip:       ${MLX_CHIP}
+Chip family/SKU:  ${MLX_CHIP_FAMILY:-unknown} ${MLX_CHIP_SKU:-}
+GPU cores:        ${MLX_GPU_CORES:-unknown}
+CPU P/E cores:    ${MLX_P_CORES:-?}/${MLX_E_CORES:-?}
+Thermal class:    ${MLX_THERMAL_CLASS:-unknown} (${MLX_HW_MODEL:-unknown model})
+Bandwidth:        ${MLX_BANDWIDTH_GBS:-unknown} GB/s
+Throughput class: ${MLX_THROUGHPUT_CLASS:-unknown}
+Memory:           ${MLX_MEM_GIB} GiB (${MLX_MEM_BYTES} bytes)
+Memory tier:      ${MLX_PHYSICAL_TIER_LABEL:-${MLX_TIER_LABEL}} (id ${MLX_PHYSICAL_TIER_ID})
+Working set:      ${ws_disp}
+GPU arch:         ${MLX_GPU_ARCH:-unavailable}
+CPU cores:        ${MLX_CPU_CORES}
+macOS version:    ${MLX_MACOS_VERSION}
+Disk available:   ${MLX_DISK_AVAIL_GIB} GiB (workspace volume)
+Python version:   $(detect_python_version)
+Workspace:        ${MLX_WORKSPACE}
+Recommended:      ${MLX_TIER_HINT}
+Default model:    ${MLX_RECOMMENDED_MODEL}
+Default context:  ${MLX_RECOMMENDED_CONTEXT}
+EOF
+}
+
+print_composed_profile() {
+  if [[ -z "${MLX_RECOMMENDED_MODEL:-}" ]]; then
+    load_runtime_profile
+  fi
+  cat <<EOF
+# Composed MLX defaults (policy). Does not write config/models.env.
+# RAM is the OOM fence; chip class is the performance fence.
+# After moving a clone to another Mac, compare this output with models.env
+# (rebuild preserves that file and will not refresh MLX_DEFAULT_MODEL).
+
+memory_tier=${MLX_TIER_ID}
+physical_memory_tier=${MLX_PHYSICAL_TIER_ID:-}
+throughput_class=${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-}}
+thermal_class=${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}
+chip_family=${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-}}
+chip_sku=${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-}}
+gpu_cores=${MLX_POLICY_GPU_CORES:-${MLX_GPU_CORES:-}}
+bandwidth_gbs=${MLX_POLICY_BANDWIDTH_GBS:-${MLX_BANDWIDTH_GBS:-}}
+recommended_model=${MLX_RECOMMENDED_MODEL}
+recommended_context=${MLX_RECOMMENDED_CONTEXT}
+image_profile=${MLX_RECOMMENDED_IMAGE_PROFILE}
+video_profile=${MLX_RECOMMENDED_VIDEO_PROFILE}
+video_force_required=${MLX_VIDEO_FORCE_REQUIRED:-0}
+working_set_bytes=${MLX_WORKING_SET_BYTES:-}
+gpu_arch=${MLX_GPU_ARCH:-}
+EOF
+}
+
+upsert_env_assignment() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local tmp
+  tmp="$(mktemp)"
+  awk -v k="${key}" -v v="${value}" '
+    BEGIN { done=0 }
+    index($0, k "=") == 1 && !done { print k "=" v; done=1; next }
+    { print }
+    END { if (!done) print k "=" v }
+  ' "${file}" >"${tmp}"
+  mv "${tmp}" "${file}"
+}
+
+# Create config/models.env once from the composed profile. Never overwrite an existing file.
+seed_models_env_if_missing() {
+  local model context
+  mkdir -p "${MLX_CONFIG_DIR}"
+  if [[ -f "${MLX_MODELS_ENV}" ]]; then
+    log_ok "Preserving existing ${MLX_MODELS_ENV}"
+    return 0
+  fi
+  model="${MLX_RECOMMENDED_MODEL:-$(recommended_model_for_tier "${MLX_TIER_ID:-constrained}")}"
+  context="${MLX_RECOMMENDED_CONTEXT:-2048}"
+  if [[ -f "${MLX_MODELS_EXAMPLE}" ]]; then
+    cp "${MLX_MODELS_EXAMPLE}" "${MLX_MODELS_ENV}"
+    upsert_env_assignment "${MLX_MODELS_ENV}" MLX_DEFAULT_MODEL "${model}"
+    upsert_env_assignment "${MLX_MODELS_ENV}" MLX_RECOMMENDED_CONTEXT "${context}"
+    log_ok "Created ${MLX_MODELS_ENV} from composed profile (model=${model} context=${context})"
+    log_info "Rebuild preserves this file. After moving this clone to another Mac, run: make recommend"
+  else
+    cat >"${MLX_MODELS_ENV}" <<EOF
+# Local model preferences (not committed)
+MLX_DEFAULT_MODEL=${model}
+MLX_RECOMMENDED_CONTEXT=${context}
+MLX_SERVER_HOST=127.0.0.1
+MLX_SERVER_PORT=8080
+EOF
+    log_ok "Created ${MLX_MODELS_ENV}"
+  fi
 }
 
 recommended_model_for_tier() {
@@ -385,6 +861,92 @@ recommended_model_for_tier() {
   esac
 }
 
+# RAM is the OOM fence; throughput/thermal never raise a model past unified memory.
+# Unknown throughput → RAM-only (existing tier table).
+recommended_model_for_profile() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  local family="${4:-0}"
+  if [[ "${throughput}" == "unknown" || -z "${throughput}" ]]; then
+    recommended_model_for_tier "${tier}"
+    return
+  fi
+  case "${tier}" in
+    constrained|"")
+      echo "mlx-community/Llama-3.2-3B-Instruct-4bit"
+      ;;
+    standard)
+      if throughput_at_least "${throughput}" fast; then
+        echo "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+      else
+        echo "mlx-community/Llama-3.2-3B-Instruct-4bit"
+      fi
+      ;;
+    high)
+      if throughput_at_least "${throughput}" very_fast; then
+        echo "mlx-community/Qwen2.5-14B-Instruct-4bit"
+      else
+        echo "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+      fi
+      ;;
+    workstation)
+      echo "mlx-community/Qwen2.5-14B-Instruct-4bit"
+      ;;
+    large)
+      echo "mlx-community/Qwen2.5-32B-Instruct-4bit"
+      ;;
+    *)
+      recommended_model_for_tier "${tier}"
+      ;;
+  esac
+}
+
+# Fanless Airs keep the conservative 2k context even on later chips.
+recommended_context_for_profile() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  if [[ "${thermal}" == "fanless" ]]; then
+    echo 2048
+    return
+  fi
+  if [[ "${throughput}" == "unknown" || -z "${throughput}" ]]; then
+    case "${tier}" in
+      constrained) echo 2048 ;;
+      standard|high) echo 4096 ;;
+      workstation|large) echo 8192 ;;
+      *) echo 2048 ;;
+    esac
+    return
+  fi
+  case "${tier}" in
+    constrained)
+      echo 2048
+      ;;
+    standard)
+      if throughput_at_least "${throughput}" fast; then
+        echo 4096
+      else
+        echo 2048
+      fi
+      ;;
+    high)
+      if throughput_at_least "${throughput}" very_fast; then
+        echo 8192
+      else
+        echo 4096
+      fi
+      ;;
+    workstation|large)
+      echo 8192
+      ;;
+    *)
+      echo 2048
+      ;;
+  esac
+}
+
 # Emit: family|model|quantize|steps|width|height|low_ram
 # family selects the mflux CLI; empty model means "package default".
 recommended_image_profile_for_tier() {
@@ -401,6 +963,37 @@ recommended_image_profile_for_tier() {
       ;;
     *)
       echo "flux2|flux2-klein-4b|8|4|768|768|1"
+      ;;
+  esac
+}
+
+# Fanless / slow 8 GB stay on the conservative Air profile (this M1 is the floor).
+recommended_image_profile_for_profile() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  local family="${4:-0}"
+  if [[ "${thermal}" == "fanless" || "${tier}" == "constrained" ]]; then
+    echo "flux2|flux2-klein-4b|4|4|512|512|1"
+    return
+  fi
+  if [[ "${throughput}" == "unknown" || -z "${throughput}" ]]; then
+    recommended_image_profile_for_tier "${tier}"
+    return
+  fi
+  case "${tier}" in
+    standard)
+      if throughput_at_least "${throughput}" fast; then
+        echo "flux2|flux2-klein-4b|8|4|768|768|1"
+      else
+        echo "flux2|flux2-klein-4b|4|4|768|768|1"
+      fi
+      ;;
+    high|workstation|large)
+      echo "z-image-turbo||8|9|1024|1024|0"
+      ;;
+    *)
+      recommended_image_profile_for_tier "${tier}"
       ;;
   esac
 }
@@ -430,6 +1023,63 @@ recommended_video_profile_for_tier() {
       echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
       ;;
   esac
+}
+
+# Never advertise LTX when RAM cannot hold it. Fanless stays on the short Wan clip.
+recommended_video_profile_for_profile() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  local family="${4:-0}"
+  local gpu_cores="${5:-0}"
+  local frames=33
+  [[ "${gpu_cores}" =~ ^[0-9]+$ ]] || gpu_cores=0
+  if [[ "${thermal}" == "fanless" || "${tier}" == "constrained" ]]; then
+    echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+    return
+  fi
+  if [[ "${throughput}" == "unknown" || -z "${throughput}" ]]; then
+    recommended_video_profile_for_tier "${tier}"
+    return
+  fi
+  case "${tier}" in
+    standard)
+      echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+      ;;
+    high)
+      frames=33
+      if { throughput_at_least "${throughput}" very_fast || chip_has_gpu_nax "${family}"; } && (( gpu_cores >= 24 )); then
+        frames=49
+      fi
+      echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|${frames}|10|auto"
+      ;;
+    workstation)
+      echo "ltx2|${MLX_VIDEO_LTX_REPO}|512|512|33||auto"
+      ;;
+    large)
+      echo "ltx2|${MLX_VIDEO_LTX_REPO}|768|512|65||auto"
+      ;;
+    *)
+      recommended_video_profile_for_tier "${tier}"
+      ;;
+  esac
+}
+
+# ≤8 GB always; 16 GB slow/moderate base chips / any fanless Air still need --force (UMT5 ~11 GB).
+video_force_required_for_profile() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  if [[ "${tier}" == "constrained" ]]; then
+    return 0
+  fi
+  if [[ "${thermal}" == "fanless" ]]; then
+    return 0
+  fi
+  if [[ "${tier}" == "standard" ]] && ! throughput_at_least "${throughput}" fast; then
+    return 0
+  fi
+  return 1
 }
 
 default_video_model_for_family() {

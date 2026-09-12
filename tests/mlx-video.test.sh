@@ -50,7 +50,9 @@ expect_contains() {
 unset MLX_VIDEO_FAMILY MLX_VIDEO_MODEL MLX_VIDEO_MODEL_DIR MLX_VIDEO_MODEL_REPO
 unset MLX_VIDEO_WIDTH MLX_VIDEO_HEIGHT MLX_VIDEO_FRAMES MLX_VIDEO_STEPS MLX_VIDEO_TILING MLX_VIDEO_LTX_PIPELINE
 unset MLX_VIDEO_SEED MLX_VIDEO_IMAGE MLX_VIDEO_FORCE
+unset OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
 export OVERRIDE_MEMORY_TIER=constrained
+export OVERRIDE_THERMAL_CLASS=cooled
 export MLX_WORKSPACE="${TMP}/ws"
 export MLX_VENV="${MLX_WORKSPACE}/.venv"
 mkdir -p "${MLX_WORKSPACE}"
@@ -103,12 +105,12 @@ else
   pass "ltx2 plan has no wan21-t2v-1.3b-q4"
 fi
 
-plan_high="$(OVERRIDE_MEMORY_TIER=high "${GENERATE}" --dump-plan --prompt "plan")"
+plan_high="$(OVERRIDE_MEMORY_TIER=high OVERRIDE_THERMAL_CLASS=cooled "${GENERATE}" --dump-plan --prompt "plan")"
 expect_contains "high tier default family is wan21" "family=wan21" "${plan_high}"
 expect_contains "high tier frames is 33" "frames=33" "${plan_high}"
 expect_contains "high tier width is 832" "width=832" "${plan_high}"
 
-plan_ws="$(OVERRIDE_MEMORY_TIER=workstation "${GENERATE}" --dump-plan --prompt "plan")"
+plan_ws="$(OVERRIDE_MEMORY_TIER=workstation OVERRIDE_THERMAL_CLASS=cooled "${GENERATE}" --dump-plan --prompt "plan")"
 expect_contains "workstation default family is ltx2" "family=ltx2" "${plan_ws}"
 expect_contains "workstation default model is distilled" "model=prince-canuma/LTX-2-distilled" "${plan_ws}"
 expect_contains "workstation width is 512" "width=512" "${plan_ws}"
@@ -155,6 +157,35 @@ expect_ok "image under workspace accepted" \
 
 expect_fail "missing image file rejected" \
   "${GENERATE}" --dump-plan --prompt "plan" --image "${MLX_WORKSPACE}/missing.png"
+
+plan_m1="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=1 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=8 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M1 16 GB dump-plan chip family" "chip_family=1" "${plan_m1}"
+expect_contains "M1 16 GB dump-plan slow" "throughput_class=slow" "${plan_m1}"
+expect_contains "M1 16 GB stays wan21" "family=wan21" "${plan_m1}"
+expect_contains "M1 16 GB force_required" "force_required=1" "${plan_m1}"
+if [[ "${plan_m1}" == *"ltx2"* || "${plan_m1}" == *"LTX"* ]]; then
+  fail "M1 16 GB plan advertised LTX"
+else
+  pass "M1 16 GB plan does not advertise LTX"
+fi
+
+plan_m5="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M5 16 GB dump-plan fast" "throughput_class=fast" "${plan_m5}"
+expect_contains "M5 16 GB stays wan21 (RAM too small for LTX)" "family=wan21" "${plan_m5}"
+expect_contains "M5 16 GB does not require force" "force_required=0" "${plan_m5}"
+
+plan_m3="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M3 16 GB dump-plan chip family" "chip_family=3" "${plan_m3}"
+expect_contains "M3 16 GB dump-plan moderate" "throughput_class=moderate" "${plan_m3}"
+expect_contains "M3 16 GB stays wan21" "family=wan21" "${plan_m3}"
+expect_contains "M3 16 GB force_required" "force_required=1" "${plan_m3}"
+
+plan_air="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=fanless OVERRIDE_GPU_CORES=10 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "fanless M5 still force_required" "force_required=1" "${plan_air}"
 
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2

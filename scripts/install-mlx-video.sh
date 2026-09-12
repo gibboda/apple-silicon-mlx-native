@@ -31,7 +31,8 @@ first generate when that family is selected.
 
 Pinned by default to a git SHA via MLX_VIDEO_PACKAGE (not on PyPI).
 On 8–16 GB this is opt-in and swap-heavy; Wan 1.3B still loads an ~11 GB
-UMT5 encoder. Prefer ≥24 GB and stop mlx_lm.server first.
+UMT5 encoder. Prefer ≥24 GB and stop mlx_lm.server first. Fanless and
+16 GB base M1 still refuse generate unless --force.
 EOF
 }
 
@@ -57,6 +58,9 @@ if (( MLX_MEM_GIB <= 8 )); then
   log_warn "8 GB unified memory: text-to-video is not practical (UMT5 encoder ~11 GB). Expect failure or extreme swap."
 elif (( MLX_MEM_GIB < 24 )); then
   log_warn "Under 24 GB unified memory: Wan 1.3B 4-bit may swap. Unload mlx_lm.server and other GPU apps."
+fi
+if [[ "${MLX_THERMAL_CLASS}" == "fanless" || "${MLX_THROUGHPUT_CLASS}" == "slow" ]]; then
+  log_warn "Fanless and/or slow-bandwidth machines: generate refuses text-to-video without --force (UMT5 ~11 GB). Do not advertise LTX here."
 fi
 
 require_cmd git

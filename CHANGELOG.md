@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Chip-aware Apple Silicon defaults: detect family/SKU, GPU cores, thermal class, and look up bandwidth to compose LLM/image/video recommendations with existing RAM tiers (`make detect`, `make recommend`)
+- `MLX_RECOMMENDED_CONTEXT` is a real exported default; bootstrap seeds it into `config/models.env` (rebuild never overwrites that file)
+- Portable chip parser/compose fixtures in `tests/chip-profile.test.sh`
+
+### Changed
+
+- Image/video gates now match LLM: 8-bit image and video without `--force` require `fast` throughput; 16 GB M2/M3/M4 base (`moderate`) stay on 3B / 768² 4-bit / `--force` like 16 GB M1
+- Document throughput bandwidth buckets as half-open ranges (`100 ≤ bw < 150` moderate, `150 ≤ bw < 300` fast) to match `classify_throughput_class`
+- Video generate also refuses on 16 GB slow/moderate base chips and fanless Airs unless `--force` (UMT5 ~11 GB)
+- `make validate` probes `mx.device_info()` and applies wired/memory/cache limits from the Metal recommended working set on constrained machines
+
 ## [0.1.0] - 2026-09-11
 
 ### Added

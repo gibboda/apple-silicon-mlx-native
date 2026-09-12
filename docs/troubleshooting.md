@@ -52,10 +52,11 @@ Expected: `arm64`.
 ## Out-of-memory / heavy swap during generation
 
 - Drop to a smaller 4-bit model (see [models.md](models.md)).
-- Reduce max tokens / context.
+- Reduce max tokens / context (`MLX_RECOMMENDED_CONTEXT`; pass `--max-kv-size` to `mlx_lm.generate`).
 - Run a single persistent `mlx_lm.server` instead of loading models repeatedly.
 - Close browsers and other large apps.
-- On 8 GB, avoid 7B+ models and image/video tooling.
+- On 8 GB / fanless M1, avoid 7B+ models and image/video tooling.
+- Confirm `make detect` working-set is near Metal `max_recommended_working_set_size` (~5.33 GB on 8 GB M1).
 
 ## Model download failures
 

@@ -35,7 +35,7 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 
 - macOS on **Apple Silicon** (`arm64`) only
 - Intel/x86_64 Macs are **rejected** with a clear error
-- Memory tiers drive recommendations (8 GB → large-memory workstation) without hard-blocking overrides
+- Memory tiers drive the **OOM fence** (what fits); chip throughput/thermal class drive the **performance fence** (how hard to push at that RAM). Unknown chips fall back to RAM-only defaults without failing install. Details: [docs/hardware-tiers.md](docs/hardware-tiers.md).
 
 Details: [docs/hardware-tiers.md](docs/hardware-tiers.md).
 
@@ -63,7 +63,7 @@ make install
 # equivalent: scripts/initial-build-mlx-native-media.sh
 ```
 
-The bootstrap script verifies `arm64`, detects chip/memory tier, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv`, installs `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates.
+The bootstrap script verifies `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv`, installs `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
 
 Optional:
 
@@ -83,7 +83,7 @@ make rebuild
 # equivalent: scripts/rebuild-mlx-native-media.sh --force
 ```
 
-Recreates `.venv`, reinstalls packages, validates, and runs a small MLX computation. Preserves `config/models.env` when present.
+Recreates `.venv`, reinstalls packages, validates, and runs a small MLX computation. Preserves `config/models.env` when present (never overwrites it). After moving a clone to another Mac, run `make recommend` and update that file if the composed default model changed.
 
 ## Uninstall / cleanup
 
@@ -121,24 +121,29 @@ Tokens under `HF_HOME` are not deleted by `--huggingface-cache` (hub only).
 make validate
 ```
 
-Checks native arm64 Python, `mlx` / `mlx-lm` imports, versions, basic array compute, and Metal observability. Non-zero on required failures.
+Checks native arm64 Python, `mlx` / `mlx-lm` imports, versions, basic array compute, Metal observability, and `mx.device_info()` working-set / memory-limit probe. Non-zero on required failures.
 
 ## Hardware detection
 
 ```bash
 make detect
+make recommend          # composed LLM/image/video defaults; does not write models.env
 scripts/detect-apple-silicon.sh --json
 scripts/detect-apple-silicon.sh --env
 ```
+
+JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throughput_class`, `thermal_class`, `recommended_context`, and `working_set_bytes` when mlx is importable. RAM is the OOM fence; chip class is the performance fence. Unknown chips warn and use RAM-only defaults.
 
 ## LLM inference
 
 ```bash
 source .venv/bin/activate
+source config/models.env  # if present
 mlx_lm.generate \
-  --model mlx-community/Llama-3.2-3B-Instruct-4bit \
+  --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
   --prompt "Hello from MLX" \
-  --max-tokens 64
+  --max-tokens 64 \
+  --max-kv-size "${MLX_RECOMMENDED_CONTEXT:-2048}"
 ```
 
 Model matrix and memory notes: [docs/models.md](docs/models.md).
@@ -154,6 +159,7 @@ mlx_lm.server \
   --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
   --host 127.0.0.1 \
   --port 8080
+# Add --max-kv-size "${MLX_RECOMMENDED_CONTEXT}" when mlx_lm.server supports that flag.
 ```
 
 OpenAI-compatible example:
@@ -182,15 +188,17 @@ Real requirement:
 weights + KV cache + runtime + macOS ≈ unified memory needed
 ```
 
-On-disk size ≠ RAM use. Defaults by tier (see [docs/models.md](docs/models.md)):
+On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) and **chip class** (how hard to push). See [docs/models.md](docs/models.md) and [docs/hardware-tiers.md](docs/hardware-tiers.md):
 
-| Tier | Default posture |
-| --- | --- |
-| ≤8 GB constrained | 3B–4B 4-bit, short context |
-| ≤16 GB standard | 3B–8B 4-bit |
-| ≤32 GB high | 7B–14B 4-bit |
-| ≤64 GB workstation | 14B–32B 4-bit |
-| >64 GB large | 30B+ quantized |
+| RAM tier | Slow / moderate / fanless (M1, M2/M3/M4 base) | Fast cooled (e.g. M5) |
+| --- | --- | --- |
+| ≤8 GB constrained | 3B 4-bit, context 2048 | still 3B (RAM wins) |
+| ≤16 GB standard | 3B 4-bit, context 2048 | 7B 4-bit, context 4096 |
+| ≤32 GB high | 7B 4-bit | 14B 4-bit on Max (`very_fast`) |
+| ≤64 GB workstation | 14B 4-bit | 14B 4-bit |
+| >64 GB large | 32B 4-bit | 32B 4-bit |
+
+Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`.
 
 ## 8 GB Apple Silicon limitations
 
@@ -208,7 +216,7 @@ make install-image
 make image IMAGE_PROMPT="a red fox in snow"
 ```
 
-On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the memory tier. See [docs/media.md](docs/media.md).
+On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. 16 GB slow/moderate base chips (M1, M2/M3/M4 base) stay conservative (768² 4-bit `--low-ram`); 16 GB M5 may use the 768² 8-bit path. Fanless Airs keep the conservative image profile. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the composed profile. See [docs/media.md](docs/media.md).
 
 ## Video generation
 
@@ -220,7 +228,7 @@ make prepare-video   # Wan2.1 1.3B 4-bit; needs torch to load original .pth file
 make video VIDEO_PROMPT="a red fox running through snow"
 ```
 
-On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB is out of scope and 16 GB will swap. Stop `mlx_lm.server` first. On ≥36 GB the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the memory tier (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
+On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB, 16 GB slow/moderate base chips, and fanless Airs refuse generate unless `--force`. Stop `mlx_lm.server` first. Do not advertise LTX on machines that are RAM-too-small. On ≥36 GB cooled workstations the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the composed profile (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
 
 ## Repository structure
 
@@ -258,7 +266,8 @@ apple-silicon-mlx-native/
 ├── tests/
 │   ├── cleanup-mlx-native.test.sh
 │   ├── mlx-image.test.sh
-│   └── mlx-video.test.sh
+│   ├── mlx-video.test.sh
+│   └── chip-profile.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
@@ -266,14 +275,15 @@ apple-silicon-mlx-native/
 └── README.md
 ```
 
-`scripts/lib/common.sh` holds shared detection/tier helpers (engineering reason for the extra path).
+`scripts/lib/common.sh` holds shared detection, bandwidth lookup, and compose helpers (engineering reason for the extra path).
 
 ## Make targets
 
 | Target | Action |
 | --- | --- |
 | `make help` | Describe commands |
-| `make detect` | Hardware detection |
+| `make detect` | Hardware detection (chip + RAM) |
+| `make recommend` | Print composed defaults (does not write `models.env`) |
 | `make install` | Initial bootstrap |
 | `make rebuild` | Recreate `.venv` |
 | `make validate` | MLX validation |

@@ -18,7 +18,11 @@
 #   MLX_SKIP_MEDIA          If 1, skip selected media packages (mlx-audio)
 #   MLX_INSTALL_IMAGE       If 1, optionally install mflux (Pure MLX image; high memory)
 #   MLX_INSTALL_VIDEO       If 1, optionally install mlx-video (Pure MLX video; high memory)
-#   OVERRIDE_MEMORY_TIER    Force tier id: constrained|standard|high|workstation|large
+#   OVERRIDE_MEMORY_TIER    Force policy tier id: constrained|standard|high|workstation|large
+#   OVERRIDE_CHIP_FAMILY    Force policy chip generation (e.g. 1, 5)
+#   OVERRIDE_CHIP_SKU       Force policy sku: base|pro|max|ultra
+#   OVERRIDE_GPU_CORES      Force policy GPU core count
+#   OVERRIDE_THERMAL_CLASS  Force policy thermal class: fanless|cooled
 
 set -euo pipefail
 
@@ -38,7 +42,7 @@ Usage: initial-build-mlx-native-media.sh [-h|--help]
 Bootstrap MLX-native tooling on a new Apple Silicon Mac.
 
 Steps:
-  1. Verify arm64 / detect hardware & memory tier
+  1. Verify arm64 / detect hardware, chip class, and memory tier
   2. Verify/install Xcode CLT guidance
   3. Detect (or optionally install) Homebrew
   4. Install Homebrew packages (python, git, ffmpeg)
@@ -62,17 +66,16 @@ log_header "Apple Silicon MLX native — initial build"
 assert_apple_silicon
 export_detect_env
 
-if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
-  MLX_TIER_ID="${OVERRIDE_MEMORY_TIER}"
-  log_warn "OVERRIDE_MEMORY_TIER=${OVERRIDE_MEMORY_TIER} (recommendations may differ from physical RAM)"
-fi
-
-log_info "Detected chip: ${MLX_CHIP}"
-log_info "Memory: ${MLX_MEM_GIB} GiB — tier: ${MLX_TIER_LABEL}"
-log_info "Recommendation: ${MLX_TIER_HINT}"
+log_info "Detected chip: ${MLX_CHIP} (family=${MLX_CHIP_FAMILY:-unknown} sku=${MLX_CHIP_SKU:-unknown})"
+log_info "Throughput: ${MLX_THROUGHPUT_CLASS:-unknown} @ ${MLX_BANDWIDTH_GBS:-?} GB/s thermal=${MLX_THERMAL_CLASS:-unknown}"
+log_info "Memory: ${MLX_MEM_GIB} GiB — physical tier: ${MLX_PHYSICAL_TIER_ID} policy tier: ${MLX_TIER_ID}"
+log_info "Composed default: ${MLX_RECOMMENDED_MODEL} context=${MLX_RECOMMENDED_CONTEXT}"
 
 if (( MLX_MEM_GIB <= 8 )); then
   log_warn "8 GB systems: prefer ~3B–4B 4-bit models and conservative context lengths."
+fi
+if [[ "${MLX_THERMAL_CLASS}" == "fanless" ]]; then
+  log_warn "Fanless chassis (MacBook Air): image/video/context stay on the conservative Air profile."
 fi
 
 # --- Prerequisites ---
@@ -142,22 +145,7 @@ log_ok "Using Python: ${BREW_PY} ($("${BREW_PY}" --version))"
 log_header "Workspace"
 mkdir -p "${MLX_WORKSPACE}"
 mkdir -p "${MLX_CONFIG_DIR}"
-if [[ ! -f "${MLX_MODELS_ENV}" ]]; then
-  if [[ -f "${MLX_MODELS_EXAMPLE}" ]]; then
-    cp "${MLX_MODELS_EXAMPLE}" "${MLX_MODELS_ENV}"
-    log_ok "Created ${MLX_MODELS_ENV} from example"
-  else
-    cat >"${MLX_MODELS_ENV}" <<EOF
-# Local model preferences (not committed)
-MLX_DEFAULT_MODEL=$(recommended_model_for_tier "${MLX_TIER_ID}")
-MLX_SERVER_HOST=127.0.0.1
-MLX_SERVER_PORT=8080
-EOF
-    log_ok "Created ${MLX_MODELS_ENV}"
-  fi
-else
-  log_ok "Preserving existing ${MLX_MODELS_ENV}"
-fi
+seed_models_env_if_missing
 
 # --- Virtual environment ---
 log_header "Python virtual environment"
@@ -213,7 +201,12 @@ log_header "Installed versions"
 log_header "Hardware"
 print_hardware_summary
 
-recommended="$(recommended_model_for_tier "${MLX_TIER_ID}")"
+recommended="${MLX_RECOMMENDED_MODEL}"
+context="${MLX_RECOMMENDED_CONTEXT}"
+server_kv=""
+if mlx_lm_help_has_flag mlx_lm.server --max-kv-size; then
+  server_kv=" --max-kv-size ${context}"
+fi
 cat <<EOF
 
 ${COLOR_BOLD}Next commands${COLOR_RESET}
@@ -222,14 +215,15 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
   source ${MLX_VENV}/bin/activate
 
   # One-shot generation (downloads model on first use)
-  mlx_lm.generate --model ${recommended} --prompt "Hello from MLX" --max-tokens 64
+  mlx_lm.generate --model ${recommended} --prompt "Hello from MLX" --max-tokens 64 --max-kv-size ${context}
 
   # Persistent OpenAI-compatible server (preferred for repeated use)
-  mlx_lm.server --model ${recommended} --host 127.0.0.1 --port 8080
+  mlx_lm.server --model ${recommended} --host 127.0.0.1 --port 8080${server_kv}
 
   # Re-validate / rebuild later
   make validate
   make rebuild
+  make recommend   # fresh composed profile; does not rewrite config/models.env
 
   # Opt-in Pure MLX text-to-image (mflux)
   make install-image
@@ -244,6 +238,7 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
   make clean
 
 See README.md and docs/models.md for memory-aware model guidance.
+RAM is the OOM fence; chip class is the performance fence.
 EOF
 
 log_ok "Initial build completed successfully."
