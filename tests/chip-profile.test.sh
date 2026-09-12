@@ -140,7 +140,10 @@ expect_eq "OVERRIDE M3 16 GB context is 2048" "${MLX_RECOMMENDED_CONTEXT}" "2048
 expect_eq "OVERRIDE M3 16 GB image is 4-bit" "${MLX_RECOMMENDED_IMAGE_PROFILE}" "flux2|flux2-klein-4b|4|4|768|768|1"
 expect_eq "OVERRIDE M3 16 GB force video" "${MLX_VIDEO_FORCE_REQUIRED}" "1"
 
-# Fanless derate: later Airs cannot raise image/video/context via throughput_class
+# Fanless derate: later Airs cannot raise model/image/video/context via throughput_class
+expect_eq "fanless 16 GB fast stays 3B" \
+  "$(recommended_model_for_profile standard fast fanless 5)" \
+  "mlx-community/Llama-3.2-3B-Instruct-4bit"
 expect_eq "fanless 16 GB fast still 2048 context" \
   "$(recommended_context_for_profile standard fast fanless)" "2048"
 expect_eq "fanless 24 GB still conservative image" \
@@ -157,6 +160,11 @@ expect_eq "fast constrained still 3B (RAM wins)" \
   "mlx-community/Llama-3.2-3B-Instruct-4bit"
 
 # Max 32 GB / Ultra large
+expect_eq "fast high (not Max) stays 7B" \
+  "$(recommended_model_for_profile high fast cooled 3)" \
+  "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+expect_eq "fast high context stays 4096" \
+  "$(recommended_context_for_profile high fast cooled)" "4096"
 expect_eq "very_fast high is 14B" \
   "$(recommended_model_for_profile high very_fast cooled 4)" \
   "mlx-community/Qwen2.5-14B-Instruct-4bit"
