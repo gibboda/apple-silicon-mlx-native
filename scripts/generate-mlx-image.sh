@@ -182,8 +182,7 @@ fi
 SEED="${SEED:-${MLX_IMAGE_SEED:-}}"
 
 if (( DUMP_PLAN == 0 )); then
-  PY="$(venv_python)"
-  if [[ ! -x "${PY}" ]]; then
+  if [[ ! -x "$(venv_python)" ]]; then
     die "Python venv not found at ${MLX_VENV}. Run: make install && make install-image"
   fi
   assert_apple_silicon
@@ -277,8 +276,6 @@ fi
 if (( MLX_MEM_GIB <= 8 )); then
   log_warn "8 GB: expecting swap. Stop mlx_lm.server and other GPU/memory-heavy apps first."
 fi
-
-apply_mlx_runtime_limits "${PY}" "${MLX_TIER_ID}" >/dev/null || true
 
 cmd=("${cli_bin}" --prompt "${PROMPT}" --width "${WIDTH}" --height "${HEIGHT}" --steps "${STEPS}" --quantize "${QUANTIZE}" --output "${OUTPUT}")
 if [[ -n "${MODEL}" ]]; then

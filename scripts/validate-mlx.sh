@@ -200,7 +200,7 @@ if [[ -n "${limits_out}" ]]; then
     pass "Metal recommended working set ${ws_line} bytes (~$(bytes_to_gib_display "${ws_line}") GiB)"
   fi
   if [[ -n "${wired_line}" ]]; then
-    pass "Applied wired/memory/cache limits from working set (tier=${MLX_TIER_ID})"
+    pass "Probed wired/memory/cache limit APIs from working set (tier=${MLX_TIER_ID})"
   fi
 else
   log_warn "Could not probe mx.device_info() working set"

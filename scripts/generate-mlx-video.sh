@@ -64,7 +64,7 @@ Options:
   --image PATH        Optional first-frame image (I2V; must exist under MLX_WORKSPACE)
   --pipeline NAME     LTX pipeline (default: distilled; or MLX_VIDEO_LTX_PIPELINE)
   --tiling MODE       VAE tiling: auto|none|default|aggressive|conservative|spatial|temporal
-  --force             Allow generate when the composed profile refuses (8 GB, 16 GB base M1, fanless Airs)
+  --force             Allow generate when the composed profile refuses (8 GB, 16 GB slow/moderate base chips (M1–M4), fanless Airs)
   --dump-plan         Print resolved plan and exit
   --                  Extra args passed through to mlx-video
   -h, --help          Show this help
@@ -197,7 +197,7 @@ load_runtime_profile
 
 if (( DUMP_PLAN == 0 )) && (( FORCE == 0 )) && ! is_truthy "${MLX_VIDEO_FORCE:-}"; then
   if [[ "${MLX_VIDEO_FORCE_REQUIRED}" == "1" ]] || { [[ -n "${MLX_MEM_GIB:-}" ]] && (( MLX_MEM_GIB <= 8 )); }; then
-    die "Text-to-video needs more unified memory than this profile allows (UMT5 text encoder ~11 GB). 8 GB, 16 GB base M1, and fanless Airs refuse unless you pass --force or set MLX_VIDEO_FORCE=1 (expect failure or extreme swap)."
+    die "Text-to-video needs more unified memory than this profile allows (UMT5 text encoder ~11 GB). 8 GB, 16 GB slow/moderate base chips (M1–M4), and fanless Airs refuse unless you pass --force or set MLX_VIDEO_FORCE=1 (expect failure or extreme swap)."
   fi
 fi
 
@@ -338,8 +338,6 @@ elif [[ "${MLX_VIDEO_FORCE_REQUIRED}" == "1" ]]; then
 elif [[ -n "${MLX_MEM_GIB:-}" ]] && (( MLX_MEM_GIB < 24 )); then
   log_warn "Under 24 GB: expecting swap. Stop mlx_lm.server and other GPU/memory-heavy apps first."
 fi
-
-apply_mlx_runtime_limits "${PY}" "${MLX_TIER_ID}" >/dev/null || true
 
 cmd=("${PY}" -m "${cli_mod}" --prompt "${PROMPT}" --width "${WIDTH}" --height "${HEIGHT}")
 

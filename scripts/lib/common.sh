@@ -296,9 +296,10 @@ except Exception:
 PY
 }
 
-# Apply mx.set_wired_limit / set_memory_limit / set_cache_limit from the Metal working set.
-# Constrained machines never exceed max_recommended_working_set_size.
-# Prints KEY=value lines. No-op when mlx/Metal is missing.
+# Probe mx.set_wired_limit / set_memory_limit / set_cache_limit from the Metal working set.
+# Limits are process-local: this subprocess cannot enforce them on later CLI processes.
+# Used by validate-mlx.sh as an API/working-set check. Constrained never exceeds
+# max_recommended_working_set_size. Prints KEY=value lines. No-op when mlx/Metal is missing.
 apply_mlx_runtime_limits() {
   local py="${1:-$(venv_python)}"
   local tier="${2:-${MLX_TIER_ID:-}}"
@@ -903,6 +904,7 @@ recommended_model_for_profile() {
 }
 
 # Fanless Airs keep the conservative 2k context even on later chips.
+# Unknown throughput on standard matches slow/moderate (2048), not the fast 4096 path.
 recommended_context_for_profile() {
   local tier="${1:-}"
   local throughput="${2:-unknown}"
@@ -913,8 +915,8 @@ recommended_context_for_profile() {
   fi
   if [[ "${throughput}" == "unknown" || -z "${throughput}" ]]; then
     case "${tier}" in
-      constrained) echo 2048 ;;
-      standard|high) echo 4096 ;;
+      constrained|standard) echo 2048 ;;
+      high) echo 4096 ;;
       workstation|large) echo 8192 ;;
       *) echo 2048 ;;
     esac
@@ -949,6 +951,8 @@ recommended_context_for_profile() {
 
 # Emit: family|model|quantize|steps|width|height|low_ram
 # family selects the mflux CLI; empty model means "package default".
+# RAM-only standard is conservative 4-bit; fast cooled chips upgrade in
+# recommended_image_profile_for_profile.
 recommended_image_profile_for_tier() {
   local tier_id="${1:-}"
   case "${tier_id}" in
@@ -956,13 +960,13 @@ recommended_image_profile_for_tier() {
       echo "flux2|flux2-klein-4b|4|4|512|512|1"
       ;;
     standard)
-      echo "flux2|flux2-klein-4b|8|4|768|768|1"
+      echo "flux2|flux2-klein-4b|4|4|768|768|1"
       ;;
     high|workstation|large)
       echo "z-image-turbo||8|9|1024|1024|0"
       ;;
     *)
-      echo "flux2|flux2-klein-4b|8|4|768|768|1"
+      echo "flux2|flux2-klein-4b|4|4|768|768|1"
       ;;
   esac
 }
