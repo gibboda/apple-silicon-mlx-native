@@ -85,7 +85,7 @@ classify_memory_tier() {
   elif (( mem_gib <= 64 )); then
     echo "workstation|36–64 GB — workstation|14B–32B 4-bit / larger 8-bit"
   else
-    echo "large| >64 GB — large-memory workstation|30B+ quantized / multi-model server"
+    echo "large|>64 GB — large-memory workstation|30B+ quantized / multi-model server"
   fi
 }
 
@@ -904,13 +904,19 @@ recommended_model_for_tier() {
 
 # RAM is the OOM fence; throughput/thermal never raise a model past unified memory.
 # Unknown throughput → RAM-only (existing tier table).
-# family and thermal are unused here; they exist for API symmetry with the
-# image/video profile helpers (callers always pass the composed tuple).
+# Fanless Airs stay on that RAM-only model even when throughput would otherwise
+# raise it (16 GB fast Air stays 3B, not the cooled M5 7B path).
+# family is unused here; it exists for API symmetry with the image/video
+# profile helpers (callers always pass the composed tuple).
 recommended_model_for_profile() {
   local tier="${1:-}"
   local throughput="${2:-unknown}"
   local thermal="${3:-}"
   local family="${4:-0}"
+  if [[ "${thermal}" == "fanless" ]]; then
+    recommended_model_for_tier "${tier}"
+    return
+  fi
   if [[ "${throughput}" == "unknown" || -z "${throughput}" ]]; then
     recommended_model_for_tier "${tier}"
     return

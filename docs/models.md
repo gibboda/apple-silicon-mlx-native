@@ -79,7 +79,7 @@ Figures are **approximate** and intended for planning. Measure on your machine b
 | large (>64 GB) | extreme / RAM-only | `mlx-community/Qwen2.5-32B-Instruct-4bit` | 8192 |
 | unknown chip | RAM-only fallback | Same as that memory tier without a fast+ upgrade (standard = 3B / 2048) | Same as slow/moderate at that RAM |
 
-Fanless Airs keep context at 2048 even when RAM/throughput would otherwise raise it.
+Fanless Airs keep the RAM-only default model and context at 2048 even when RAM/throughput would otherwise raise them.
 
 Print a fresh profile without writing `models.env`:
 

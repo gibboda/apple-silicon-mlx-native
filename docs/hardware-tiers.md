@@ -53,7 +53,7 @@ Class comes from looked-up bandwidth, **not** generation number. M3 Pro (~150 GB
 
 M5+ GPU Neural Accelerators (generation ≥ 5) can be slightly less conservative on **image/video** at the same RAM (prefill / diffusion). They do not help decode, and this stack never routes through ANE — MLX/Metal GPU only.
 
-Fanless (`MacBookAir*`) derates: throughput_class must **not** raise image, video, or context above the conservative Air profile, even on later Airs.
+Fanless (`MacBookAir*`) derates: throughput_class must **not** raise the default model, image, video, or context above the conservative Air profile, even on later Airs.
 
 ## Composed LLM defaults
 
@@ -66,9 +66,9 @@ Fanless (`MacBookAir*`) derates: throughput_class must **not** raise image, vide
 | large | extreme | Qwen2.5 32B Instruct 4-bit | 8192 |
 | unknown chip | RAM-only | Conservative table (standard = 3B / 2048 / 4-bit image, not the M5 path) | Conservative table |
 
-Fanless keeps context at 2048.
+Fanless keeps the RAM-only default model and context at 2048.
 
-`MLX_RECOMMENDED_CONTEXT` is a real exported default (`make detect --json` / `--env`, `config/models.env`). Pass it to `mlx_lm.generate --max-kv-size`. Pass `--max-kv-size` to `mlx_lm.server` when that flag exists (mlx-lm 0.31.3 server does not; generate does).
+`MLX_RECOMMENDED_CONTEXT` is a real exported default (`scripts/detect-apple-silicon.sh --json` / `--env`, `config/models.env`). Pass it to `mlx_lm.generate --max-kv-size`. Pass `--max-kv-size` to `mlx_lm.server` when that flag exists (mlx-lm 0.31.3 server does not; generate does).
 
 ## MLX runtime limits
 

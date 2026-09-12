@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fanless 16 GB machines stay on the RAM-only 3B default model; throughput no longer upgrades them to 7B
+- `classify_memory_tier` no longer emits a leading space on the large-memory (`>64 GB`) label
+- Document JSON/env detect output as `scripts/detect-apple-silicon.sh --json` / `--env` (`make detect` does not forward those flags)
 - `detect-apple-silicon.sh --env` / `--json` keep `MLX_TIER_ID` / `memory_tier_id` as the policy tier and emit physical RAM as `MLX_PHYSICAL_TIER_ID` / `physical_memory_tier_id`, so sourcing `--env` cannot wipe `OVERRIDE_MEMORY_TIER`
 
 ## [0.2.0] - 2026-09-12
