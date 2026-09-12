@@ -175,6 +175,7 @@ lookup_memory_bandwidth_gbs() {
     4:max)
       if (( gpu_cores >= 40 )); then echo 546; else echo 410; fi
       ;;
+    # No 4:ultra row: no published M4 Ultra bandwidth. Empty → unknown → RAM-only.
     5:base) echo 153 ;;
     5:pro) echo 307 ;;
     5:max)
@@ -795,6 +796,45 @@ gpu_arch=${MLX_GPU_ARCH:-}
 EOF
 }
 
+# KEY=value lines for `eval "$(detect-apple-silicon.sh --env)"`.
+# MLX_TIER_ID is the policy tier (honors OVERRIDE_MEMORY_TIER); physical RAM
+# is MLX_PHYSICAL_TIER_ID so sourcing --env cannot wipe a policy override.
+print_detect_env() {
+  local brew_ok="${1:-false}"
+  local brew_prefix="${2:-}"
+  local xcode_ok="${3:-false}"
+  printf 'MLX_ARCH=%q\n' "${MLX_ARCH:-}"
+  printf 'MLX_CHIP=%q\n' "${MLX_CHIP:-}"
+  printf 'MLX_CHIP_FAMILY=%q\n' "${MLX_CHIP_FAMILY:-}"
+  printf 'MLX_CHIP_SKU=%q\n' "${MLX_CHIP_SKU:-}"
+  printf 'MLX_GPU_CORES=%q\n' "${MLX_GPU_CORES:-}"
+  printf 'MLX_P_CORES=%q\n' "${MLX_P_CORES:-}"
+  printf 'MLX_E_CORES=%q\n' "${MLX_E_CORES:-}"
+  printf 'MLX_HW_MODEL=%q\n' "${MLX_HW_MODEL:-}"
+  printf 'MLX_THERMAL_CLASS=%q\n' "${MLX_THERMAL_CLASS:-}"
+  printf 'MLX_BANDWIDTH_GBS=%q\n' "${MLX_BANDWIDTH_GBS:-}"
+  printf 'MLX_THROUGHPUT_CLASS=%q\n' "${MLX_THROUGHPUT_CLASS:-}"
+  printf 'MLX_MEM_BYTES=%q\n' "${MLX_MEM_BYTES:-}"
+  printf 'MLX_MEM_GIB=%q\n' "${MLX_MEM_GIB:-}"
+  printf 'MLX_PHYSICAL_TIER_ID=%q\n' "${MLX_PHYSICAL_TIER_ID:-}"
+  printf 'MLX_PHYSICAL_TIER_LABEL=%q\n' "${MLX_PHYSICAL_TIER_LABEL:-}"
+  printf 'MLX_TIER_ID=%q\n' "${MLX_TIER_ID:-}"
+  printf 'MLX_TIER_LABEL=%q\n' "${MLX_TIER_LABEL:-}"
+  printf 'MLX_TIER_HINT=%q\n' "${MLX_TIER_HINT:-}"
+  printf 'MLX_CPU_CORES=%q\n' "${MLX_CPU_CORES:-}"
+  printf 'MLX_MACOS_VERSION=%q\n' "${MLX_MACOS_VERSION:-}"
+  printf 'MLX_DISK_AVAIL_GIB=%q\n' "${MLX_DISK_AVAIL_GIB:-0}"
+  printf 'MLX_PYTHON_VERSION_DETECTED=%q\n' "$(detect_python_version)"
+  printf 'MLX_HOMEBREW=%q\n' "${brew_ok}"
+  printf 'MLX_HOMEBREW_PREFIX=%q\n' "${brew_prefix}"
+  printf 'MLX_XCODE_CLT=%q\n' "${xcode_ok}"
+  printf 'MLX_RECOMMENDED_MODEL=%q\n' "${MLX_RECOMMENDED_MODEL:-}"
+  printf 'MLX_RECOMMENDED_CONTEXT=%q\n' "${MLX_RECOMMENDED_CONTEXT:-}"
+  printf 'MLX_WORKING_SET_BYTES=%q\n' "${MLX_WORKING_SET_BYTES:-}"
+  printf 'MLX_GPU_ARCH=%q\n' "${MLX_GPU_ARCH:-}"
+  printf 'MLX_WORKSPACE=%q\n' "${MLX_WORKSPACE:-}"
+}
+
 upsert_env_assignment() {
   local file="$1"
   local key="$2"
@@ -864,6 +904,8 @@ recommended_model_for_tier() {
 
 # RAM is the OOM fence; throughput/thermal never raise a model past unified memory.
 # Unknown throughput → RAM-only (existing tier table).
+# family and thermal are unused here; they exist for API symmetry with the
+# image/video profile helpers (callers always pass the composed tuple).
 recommended_model_for_profile() {
   local tier="${1:-}"
   local throughput="${2:-unknown}"

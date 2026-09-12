@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `detect-apple-silicon.sh --env` / `--json` keep `MLX_TIER_ID` / `memory_tier_id` as the policy tier and emit physical RAM as `MLX_PHYSICAL_TIER_ID` / `physical_memory_tier_id`, so sourcing `--env` cannot wipe `OVERRIDE_MEMORY_TIER`
+
 ## [0.2.0] - 2026-09-12
 
 ### Added
