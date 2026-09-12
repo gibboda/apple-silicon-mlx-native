@@ -20,6 +20,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 MLX_SKIP_MEDIA="${MLX_SKIP_MEDIA:-0}"
 MLX_INSTALL_IMAGE="${MLX_INSTALL_IMAGE:-0}"
+MLX_INSTALL_VIDEO="${MLX_INSTALL_VIDEO:-0}"
 
 usage() {
   cat <<'EOF'
@@ -111,6 +112,10 @@ fi
 
 if is_truthy "${MLX_INSTALL_IMAGE}"; then
   "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
+fi
+
+if is_truthy "${MLX_INSTALL_VIDEO}"; then
+  "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
 fi
 
 log_header "Validation"

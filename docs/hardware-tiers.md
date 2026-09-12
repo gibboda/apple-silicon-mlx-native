@@ -19,7 +19,7 @@ Detection is dynamic (`scripts/detect-apple-silicon.sh`). The toolkit does **not
 
 | Physical unified memory | Tier id | Label | Default posture |
 | --- | --- | --- | --- |
-| ≤ 8 GB | `constrained` | 8 GB — constrained | 3B–4B **4-bit** models; short context; avoid image/video |
+| ≤ 8 GB | `constrained` | 8 GB — constrained | 3B–4B **4-bit** models; short context; avoid image/video (video UMT5 ~11 GB) |
 | ≤ 16 GB | `standard` | 16 GB — standard | 3B–8B 4-bit; careful 7B use |
 | ≤ 32 GB | `high` | 24–32 GB — high | 7B–14B 4-bit; selected 8-bit |
 | ≤ 64 GB | `workstation` | 36–64 GB — workstation | 14B–32B 4-bit; heavier media |
@@ -34,7 +34,7 @@ On an 8 GB M1-class system:
 - Prefer ~**3B–4B**, **4-bit** MLX Community models.
 - Keep context conservative (roughly 1k–2k tokens unless measured otherwise).
 - Prefer one persistent `mlx_lm.server` process over loading multiple models.
-- Treat image generation as opt-in (`make install-image`) with the constrained 4B 4-bit profile; expect heavy swap. Video remains out of scope unless you accept even more risk.
+- Treat image generation as opt-in (`make install-image`) with the constrained 4B 4-bit profile; expect heavy swap. Treat video as opt-in (`make install-video`) only if you accept even more risk: Wan 1.3B still needs ~11 GB for UMT5.
 - Close memory-heavy apps (browsers with many tabs, IDEs with large indexes) before loading models.
 
 ## Overrides

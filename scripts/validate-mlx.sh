@@ -101,6 +101,19 @@ else
   log_info "mflux not installed (opt-in text-to-image; make install-image)"
 fi
 
+# Optional Pure MLX video package (info only if absent)
+if "${python_bin}" -c 'import mlx_video' 2>/dev/null; then
+  mlx_video_ver="$("${python_bin}" -c 'import importlib.metadata as m
+try:
+    print(m.version("mlx-video"))
+except m.PackageNotFoundError:
+    import mlx_video
+    print(getattr(mlx_video, "__version__", "unknown"))')"
+  pass "mlx-video importable (version ${mlx_video_ver})"
+else
+  log_info "mlx-video not installed (opt-in text-to-video; make install-video)"
+fi
+
 # Basic MLX array creation + computation
 if "${python_bin}" - <<'PY'
 import mlx.core as mx

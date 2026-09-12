@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Conservative uninstall/cleanup for toolkit-owned state (`scripts/cleanup-mlx-native.sh`, `make clean` / `make uninstall`) with `--dry-run`, `--keep-venv`, `--purge`, leftover reporting, and an opt-in Hugging Face hub cache removal; Homebrew and Xcode CLT are never uninstalled
 - Portable cleanup self-test (`tests/cleanup-mlx-native.test.sh`, `make test`)
 - Opt-in Pure MLX text-to-image via `mflux` (`make install-image`, `make image IMAGE_PROMPT=...`) with memory-tier defaults (8 GB: FLUX.2 Klein 4B 4-bit 512² `--low-ram`). `mflux` currently pulls `torch` for safetensors weight loading; denoising remains MLX.
+- Opt-in Pure MLX text-to-video via `mlx-video` (`make install-video`, `make video VIDEO_PROMPT=...`) with memory-tier defaults (≤32 GB: Wan2.1 T2V 1.3B 4-bit 832×480; ≥36 GB: LTX-2 distilled). Pinned to git SHA `87db56a51758fefb748a359b90a5283bb8ba4837`. Wan conversion (`scripts/prepare-mlx-video-wan.sh`) needs `torch` to load original `.pth` files; generation remains MLX.
 
 ### Changed
 

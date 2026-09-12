@@ -76,7 +76,7 @@ Figures are **approximate** and intended for planning. Measure on your machine b
 - Prefer **3B–4B 4-bit** unless your own measurements support something larger.
 - A 7B 4-bit weight footprint alone can leave almost no room for KV cache + macOS.
 - Avoid concurrent large apps, multiple loaded models, or long contexts.
-- Image/video generation is generally impractical; see [media.md](media.md).
+- Image/video generation is generally impractical; see [media.md](media.md). Video’s UMT5 encoder is ~11 GB even for Wan 1.3B 4-bit.
 
 ## Updating local defaults
 

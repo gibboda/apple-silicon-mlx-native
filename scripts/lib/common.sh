@@ -22,6 +22,11 @@ MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
 MLX_CORE_PACKAGES=(mlx mlx-lm)
 MLX_MEDIA_PACKAGES=(mlx-audio)
 MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
+# Pin mlx-video to a git SHA (not published on PyPI). Override with MLX_VIDEO_PACKAGE.
+MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837}"
+MLX_VIDEO_WAN_SOURCE_REPO="${MLX_VIDEO_WAN_SOURCE_REPO:-Wan-AI/Wan2.1-T2V-1.3B}"
+MLX_VIDEO_WAN_MODEL_NAME="${MLX_VIDEO_WAN_MODEL_NAME:-wan21-t2v-1.3b-q4}"
+MLX_VIDEO_LTX_REPO="${MLX_VIDEO_LTX_REPO:-prince-canuma/LTX-2-distilled}"
 MLX_HOMEBREW_PACKAGES=(python@"${MLX_PYTHON_VERSION}" git ffmpeg)
 
 readonly COLOR_RED=$'\033[0;31m'
@@ -392,4 +397,111 @@ recommended_image_profile_for_tier() {
       echo "flux2|flux2-klein-4b|8|4|768|768|1"
       ;;
   esac
+}
+
+# Emit: family|model|width|height|frames|steps|tiling
+# family selects the mlx-video CLI; wan21 model is a local converted dir name;
+# ltx2 model is a Hugging Face repo. Empty steps means "pipeline default".
+recommended_video_profile_for_tier() {
+  local tier_id="${1:-}"
+  case "${tier_id}" in
+    constrained)
+      echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+      ;;
+    standard)
+      echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+      ;;
+    high)
+      echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|33|10|auto"
+      ;;
+    workstation)
+      echo "ltx2|${MLX_VIDEO_LTX_REPO}|512|512|33||auto"
+      ;;
+    large)
+      echo "ltx2|${MLX_VIDEO_LTX_REPO}|768|512|65||auto"
+      ;;
+    *)
+      echo "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+      ;;
+  esac
+}
+
+default_video_model_for_family() {
+  case "$1" in
+    wan21) echo "${MLX_VIDEO_WAN_MODEL_NAME}" ;;
+    ltx2) echo "${MLX_VIDEO_LTX_REPO}" ;;
+    *) echo "" ;;
+  esac
+}
+
+video_cli_module_for_family() {
+  case "$1" in
+    wan21) echo "mlx_video.models.wan_2.generate" ;;
+    ltx2) echo "mlx_video.models.ltx_2.generate" ;;
+    *) return 1 ;;
+  esac
+}
+
+# True when model is a known alias of a different family (do not pass it through).
+video_model_conflicts_with_family() {
+  local family="$1"
+  local model="${2:-}"
+  local lower
+  [[ -n "${model}" ]] || return 1
+  lower="$(printf '%s' "${model}" | tr '[:upper:]' '[:lower:]')"
+  case "${family}" in
+    ltx2)
+      case "${lower}" in
+        wan21*|wan2.1*|wan-ai/*) return 0 ;;
+      esac
+      ;;
+    wan21)
+      case "${lower}" in
+        *ltx*|*lightricks*) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+# Round frames down to 4n+1 (Wan) or 8n+1 (LTX). Minimum one period + 1.
+video_align_frames() {
+  local family="$1"
+  local frames="$2"
+  local period=4
+  [[ "${family}" == "ltx2" ]] && period=8
+  if (( frames < 1 )); then
+    echo $((period + 1))
+    return
+  fi
+  if (( (frames - 1) % period == 0 )); then
+    echo "${frames}"
+    return
+  fi
+  local n=$(( (frames - 1) / period ))
+  if (( n < 1 )); then
+    echo $((period + 1))
+    return
+  fi
+  echo $((n * period + 1))
+}
+
+video_align_dim() {
+  local value="$1"
+  local multiple="$2"
+  if (( value < multiple )); then
+    echo "${multiple}"
+    return
+  fi
+  echo $(( (value / multiple) * multiple ))
+}
+
+default_wan_model_dir() {
+  echo "${MLX_WORKSPACE}/models/video/${MLX_VIDEO_WAN_MODEL_NAME}"
+}
+
+wan_model_dir_ready() {
+  local dir="${1:-}"
+  [[ -n "${dir}" && -d "${dir}" ]] || return 1
+  [[ -f "${dir}/config.json" && -f "${dir}/model.safetensors" && -f "${dir}/t5_encoder.safetensors" && -f "${dir}/vae.safetensors" ]]
 }

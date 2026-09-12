@@ -6,7 +6,7 @@ This repository installs **only deliberately selected** media dependencies. Gaps
 
 | Class | Meaning |
 | --- | --- |
-| **PURE MLX** | Implemented on MLX; no PyTorch/MPS generation backend (opt-in `mflux` may pull `torch` for weight loading) |
+| **PURE MLX** | Implemented on MLX; no PyTorch/MPS generation backend (opt-in `mflux` / Wan convert may pull `torch` for weight loading) |
 | **MLX-FIRST / APPLE-SILICON NATIVE** | Targets Apple Silicon / Metal with MLX as primary path; verify transitive deps |
 | **FALLBACK / NON-MLX** | Other stacks (PyTorch, CUDA ports, cloud APIs). **Not installed** by this toolkit |
 
@@ -90,11 +90,63 @@ Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current
 
 | Path | Class | Status in this toolkit | Memory notes |
 | --- | --- | --- | --- |
-| Community MLX video ports (e.g. Wan-oriented MLX forks such as mlx-gen) | **MLX-FIRST / APPLE-SILICON NATIVE** | **Documented only — not installed** | Typically workstation-class RAM (often 32 GB+); verify each project’s deps |
+| [`mlx-video`](https://github.com/Blaizzy/mlx-video) (Blaizzy / Prince Canuma) | **PURE MLX** generate path | **Opt-in** (`make install-video`) | Wan2.1 **1.3B 4-bit** is the first profile (UMT5 encoder ~11 GB). Practical from ~24 GB+; 8 GB is out of scope. LTX-2 distilled is the ≥36 GB quality path |
+| [`mlx-gen`](https://github.com/lpalbou/mlx-gen) (mflux fork, Wan2.2) | MLX-FIRST / APPLE-SILICON NATIVE | Documented specialist — **not installed** | Hard `torch` dep; collides with pinned `mflux`. Use a **separate** venv only |
+| [`ltx-2-mlx`](https://github.com/dgrauet/ltx-2-mlx) | **PURE MLX**, LTX-only | Documented specialist — **not installed** | 32 GB+ recommended; not a small-model on-ramp |
 | PyTorch video Diffusers | FALLBACK / NON-MLX | Not installed | Not in scope |
 | Cloud video APIs | FALLBACK / NON-MLX | Not installed | N/A |
 
-There is **no** default video package in this toolkit today. If you evaluate an MLX-first video project, install it in a **separate** venv first, confirm it does not pull PyTorch as a required runtime, and treat 8–16 GB machines as unsuitable.
+Why not default-install `mlx-video`?
+
+- Peak unified-memory use dwarfs 3B–4B LLM workloads. Wan 1.3B still loads **UMT5-XXL** (~11 GB) plus VAE and diffusion scratch.
+- Git-only package (pinned SHA); pulls `mlx-vlm`, `transformers`, OpenCV, librosa.
+- Wan weights are **not** preconverted on Hugging Face in mlx-video layout. `scripts/prepare-mlx-video-wan.sh` converts `Wan-AI/Wan2.1-T2V-1.3B` and needs `torch` to load original `.pth` T5/VAE files. Denoising remains MLX.
+- Unsafe default on 8–16 GB machines (swap thrash).
+
+Install into an existing `.venv` (does not rebuild). **`mlx-video` is pinned** to git SHA `87db56a51758fefb748a359b90a5283bb8ba4837` by default (`MLX_VIDEO_PACKAGE` in `scripts/lib/common.sh`).
+
+```bash
+make install-video
+scripts/prepare-mlx-video-wan.sh   # Wan 1.3B 4-bit; once; needs torch in the venv
+```
+
+Or at bootstrap/rebuild time:
+
+```bash
+MLX_INSTALL_VIDEO=1 make install
+# or
+MLX_INSTALL_VIDEO=1 make rebuild
+```
+
+`MLX_INSTALL_VIDEO=1` installs the package only; it does **not** download or convert Wan weights.
+
+Generate (defaults follow memory tier):
+
+```bash
+make video VIDEO_PROMPT="a red fox running through snow"
+# equivalent: scripts/generate-mlx-video.sh --prompt "a red fox running through snow"
+```
+
+| Tier | Default family / model | Size / frames | Notes |
+| --- | --- | --- | --- |
+| ≤8 GB constrained | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Not practical; UMT5 ~11 GB. Expect failure or extreme swap |
+| ≤16 GB standard | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Swap-heavy; stop `mlx_lm.server` |
+| ≤32 GB high | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 33 frames, 10 steps | First practical Wan profile |
+| ≤64 GB workstation | `ltx2` / `prince-canuma/LTX-2-distilled` | 512², 33 frames | HF download on first generate; no Wan convert |
+| >64 GB large | `ltx2` / `prince-canuma/LTX-2-distilled` | 768×512, 65 frames | Quality path |
+
+Override with `--family`, `--model`, `--model-dir`, `--model-repo`, `--width`, `--height`, `--frames`, `--steps`, `--seed`, or `MLX_VIDEO_*` / `MLX_VIDEO_SEED` in `config/models.env`. **`--family` selects the mlx-video module and default checkpoint only**; width, height, frames, steps, and tiling still follow the memory-tier profile unless you set those flags or `MLX_VIDEO_*`. Dimensions/frames are then aligned to the family (Wan: 4n+1 frames; LTX: 8n+1 frames and 64px). So `--family ltx2` on 8 GB still starts from 832×480 / 17 frames: 832 is already 64-aligned, height snaps to 448, and 17 frames is already 8n+1 — not the workstation 512² / 33-frame profile.
+
+Inspect the resolved plan without generating:
+
+```bash
+scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through snow"
+OVERRIDE_MEMORY_TIER=high scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through snow"
+```
+
+`--dump-plan` uses detected RAM when `sysctl` works, honors `OVERRIDE_MEMORY_TIER` when set, and falls back to constrained when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). Custom `--output` paths must resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
+
+Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.19.1`).
 
 ---
 
@@ -104,13 +156,14 @@ There is **no** default video package in this toolkit today. If you evaluate an 
 | --- | --- |
 | Speech (small models) | Possible with care; unload LLMs first |
 | Image | Opt-in `mflux` only; constrained default is 4B 4-bit 512² with `--low-ram`. Expect swap. |
-| Video | Not recommended |
+| Video | Not recommended (UMT5 encoder ~11 GB even for Wan 1.3B) |
 
 ---
 
 ## Policy
 
-1. Scripts never install PyTorch as the LLM or image **generation** backend.
+1. Scripts never install PyTorch as the LLM, image, or video **generation** backend.
 2. Opt-in `mflux` currently pulls `torch` because its weight loader uses `safetensors.torch`. Denoising still runs on MLX. Do not add Diffusers+MPS stacks.
-3. README and docs must label Pure MLX vs MLX-first vs fallback clearly.
-4. New media dependencies require an explicit rationale in the PR template checklist.
+3. Opt-in `mlx-video` generation is MLX. Optional Wan conversion (`scripts/prepare-mlx-video-wan.sh`) needs `torch` to load original `.pth` T5/VAE files. Do not add `mlx-gen` to this venv.
+4. README and docs must label Pure MLX vs MLX-first vs fallback clearly.
+5. New media dependencies require an explicit rationale in the PR template checklist.

@@ -17,6 +17,7 @@
 #   MLX_INSTALL_HOMEBREW    If 1, install Homebrew non-interactively when missing
 #   MLX_SKIP_MEDIA          If 1, skip selected media packages (mlx-audio)
 #   MLX_INSTALL_IMAGE       If 1, optionally install mflux (Pure MLX image; high memory)
+#   MLX_INSTALL_VIDEO       If 1, optionally install mlx-video (Pure MLX video; high memory)
 #   OVERRIDE_MEMORY_TIER    Force tier id: constrained|standard|high|workstation|large
 
 set -euo pipefail
@@ -28,6 +29,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 MLX_INSTALL_HOMEBREW="${MLX_INSTALL_HOMEBREW:-0}"
 MLX_SKIP_MEDIA="${MLX_SKIP_MEDIA:-0}"
 MLX_INSTALL_IMAGE="${MLX_INSTALL_IMAGE:-0}"
+MLX_INSTALL_VIDEO="${MLX_INSTALL_VIDEO:-0}"
 
 usage() {
   cat <<'EOF'
@@ -189,7 +191,16 @@ if is_truthy "${MLX_INSTALL_IMAGE}"; then
   "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
 else
   log_info "Image tooling (${MLX_IMAGE_PACKAGE}) not installed by default. Run: make install-image"
-  log_info "Video tooling is documented in docs/media.md and is not installed by default."
+fi
+
+if is_truthy "${MLX_INSTALL_VIDEO}"; then
+  if (( MLX_MEM_GIB < 24 )); then
+    log_warn "Video generation (mlx-video) typically needs ≥24 GB unified memory; proceeding due to MLX_INSTALL_VIDEO=1"
+  fi
+  log_info "Installing Pure MLX video tooling: ${MLX_VIDEO_PACKAGE} (opt-in)"
+  "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
+else
+  log_info "Video tooling (mlx-video) is not installed by default. Run: make install-video"
 fi
 
 # --- Validate ---
@@ -223,6 +234,11 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
   # Opt-in Pure MLX text-to-image (mflux)
   make install-image
   make image IMAGE_PROMPT="a red fox in snow"
+
+  # Opt-in Pure MLX text-to-video (mlx-video)
+  make install-video
+  scripts/prepare-mlx-video-wan.sh   # Wan 1.3B 4-bit; needs torch for .pth conversion
+  make video VIDEO_PROMPT="a red fox running through snow"
 
   # Remove toolkit-owned .venv (does not uninstall Homebrew)
   make clean
