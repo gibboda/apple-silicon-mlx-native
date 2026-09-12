@@ -674,7 +674,7 @@ collect_hardware_facts() {
     MLX_WORKING_SET_BYTES=""
     MLX_GPU_ARCH=""
   else
-    ws_line="$(probe_mlx_device_info)"
+    ws_line="$(probe_mlx_device_info "$(venv_python)")"
     IFS='|' read -r MLX_WORKING_SET_BYTES MLX_GPU_ARCH <<<"${ws_line}"
   fi
 }
