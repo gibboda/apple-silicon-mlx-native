@@ -51,7 +51,13 @@ die() {
 
 require_cmd() {
   local cmd="$1"
-  command -v "${cmd}" >/dev/null 2>&1 || die "Required command not found: ${cmd}"
+  local hint="${2:-}"
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    if [[ -n "${hint}" ]]; then
+      die "Required command not found: ${cmd}. ${hint}"
+    fi
+    die "Required command not found: ${cmd}"
+  fi
 }
 
 is_truthy() {

@@ -215,7 +215,7 @@ On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect 
 
 ```bash
 make install-video
-scripts/prepare-mlx-video-wan.sh   # Wan2.1 1.3B 4-bit; needs torch to load original .pth files
+make prepare-video   # Wan2.1 1.3B 4-bit; needs torch to load original .pth files
 make video VIDEO_PROMPT="a red fox running through snow"
 ```
 
@@ -279,6 +279,7 @@ apple-silicon-mlx-native/
 | `make install-image` | Install `mflux` into `.venv` |
 | `make image` | Generate a PNG (`IMAGE_PROMPT=...`) |
 | `make install-video` | Install `mlx-video` into `.venv` |
+| `make prepare-video` | Download and convert Wan2.1 T2V 1.3B for mlx-video |
 | `make video` | Generate an MP4 (`VIDEO_PROMPT=...`) |
 | `make clean` / `make uninstall` | Remove `.venv`; report leftover system tools |
 | `make audit` | Conventional Commits audit |

@@ -162,9 +162,11 @@ make validate
 Wan2.1 1.3B (default on ≤32 GB) also needs a converted MLX directory:
 
 ```bash
-# Conversion loads original .pth T5/VAE with torch (not a generation backend)
-.venv/bin/pip install torch
-scripts/prepare-mlx-video-wan.sh
+huggingface-cli login   # accept Wan-AI/Wan2.1-T2V-1.3B license on Hugging Face first
+# Conversion loads original .pth T5/VAE with torch (not a generation backend).
+# Reuse torch from make install-image when present; otherwise:
+.venv/bin/pip install 'torch==2.14.0'
+make prepare-video
 ```
 
 Then:
@@ -173,16 +175,18 @@ Then:
 make video VIDEO_PROMPT="a red fox running through snow"
 ```
 
-On 8 GB this will not fit (UMT5 ~11 GB). On 16 GB, stop `mlx_lm.server`, close browsers, and keep the short 17-frame 832×480 plan. Check the plan first:
+On 8 GB, generate is refused unless you pass `--force` or `MLX_VIDEO_FORCE=1` (UMT5 ~11 GB). On 16 GB, stop `mlx_lm.server`, close browsers, and keep the short 17-frame 832×480 plan. Check the plan first:
 
 ```bash
 scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through snow"
 ```
 
-If generate fails with `Wan MLX model directory is not ready`, run `scripts/prepare-mlx-video-wan.sh`. `--family` does not switch to the workstation LTX size/frames. On 8 GB, `--family ltx2` still starts from the constrained 832×480 / 17-frame profile (height snaps to 448).
+If generate fails with `Wan MLX model directory is not ready`, run `make prepare-video`. `--family` does not switch to the workstation LTX size/frames. On 8 GB, `--family ltx2` still starts from the constrained 832×480 / 17-frame profile (height snaps to 448).
 
 Do not pass `--model wan21-t2v-1.3b-q4` with `--family ltx2`.
 
 Do not `pip install mlx-gen` into this venv; it is an mflux fork and collides with pinned `mflux`.
+
+`make clean` removes `.venv` only. Converted Wan weights under `models/video/` are kept. Remove with `rm -rf models/video` or `scripts/cleanup-mlx-native.sh --workspace-caches --force`.
 
 `mlx-video` is not a default bootstrap package. See [media.md](media.md).

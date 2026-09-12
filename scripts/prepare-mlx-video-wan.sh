@@ -28,8 +28,9 @@ Download Wan-AI/Wan2.1-T2V-1.3B and convert it to an MLX 4-bit directory
 for scripts/generate-mlx-video.sh (family wan21).
 
 Requires `make install-video`. Conversion of the original T5/VAE .pth
-files needs torch in the venv (pip install torch). mlx-video does not
-use torch as the generation backend.
+files needs torch in the venv (not installed automatically). Reuse
+torch from `make install-image` when present, or install manually.
+mlx-video does not use torch as the generation backend.
 
   --force   Re-download/convert even if the converted directory exists
   -h        Show this help
@@ -64,7 +65,7 @@ if ! "${PY}" -c "import mlx_video" >/dev/null 2>&1; then
 fi
 
 if ! "${PY}" -c "import torch" >/dev/null 2>&1; then
-  die "torch is required to load Wan .pth T5/VAE weights (conversion only, not a generation backend). Install into the venv: ${MLX_VENV}/bin/pip install torch"
+  die "torch is required to load Wan .pth T5/VAE weights (conversion only, not a generation backend). Reuse torch from make install-image if already present, otherwise install into the venv: ${MLX_VENV}/bin/pip install 'torch==2.14.0'"
 fi
 
 src_dir="${MLX_WORKSPACE}/models/video/src/Wan2.1-T2V-1.3B"
@@ -79,12 +80,16 @@ fi
 mkdir -p "$(dirname "${src_dir}")" "$(dirname "${out_dir}")"
 
 log_info "Downloading ${MLX_VIDEO_WAN_SOURCE_REPO} → ${src_dir}"
-"${PY}" - <<PY
+export MLX_VIDEO_WAN_SOURCE_REPO
+export MLX_VIDEO_WAN_PREPARE_SRC_DIR="${src_dir}"
+"${PY}" - <<'PY'
+import os
+
 from huggingface_hub import snapshot_download
 
 snapshot_download(
-    repo_id="${MLX_VIDEO_WAN_SOURCE_REPO}",
-    local_dir="${src_dir}",
+    repo_id=os.environ["MLX_VIDEO_WAN_SOURCE_REPO"],
+    local_dir=os.environ["MLX_VIDEO_WAN_PREPARE_SRC_DIR"],
 )
 print("download_ok")
 PY

@@ -8,7 +8,7 @@ SHELL := /bin/bash
 SCRIPTS := scripts
 .DEFAULT_GOAL := help
 
-.PHONY: help detect install rebuild validate clean uninstall audit lint test install-image image install-video video
+.PHONY: help detect install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video
 
 help: ## Show available targets
 	@printf '%s\n' \
@@ -20,6 +20,7 @@ help: ## Show available targets
 		'make install-image — install Pure MLX text-to-image (mflux) into .venv' \
 		'make image     — generate an image (IMAGE_PROMPT="...")' \
 		'make install-video — install Pure MLX text-to-video (mlx-video) into .venv' \
+		'make prepare-video — download and convert Wan2.1 T2V 1.3B for mlx-video' \
 		'make video     — generate a video (VIDEO_PROMPT="...")' \
 		'make clean     — remove .venv (toolkit-owned environment); reports leftovers' \
 		'make uninstall — same as make clean' \
@@ -48,6 +49,9 @@ image: ## Generate a PNG with mflux (IMAGE_PROMPT required)
 
 install-video: ## Install mlx-video into the existing venv (does not recreate .venv)
 	@$(SCRIPTS)/install-mlx-video.sh
+
+prepare-video: ## Download and convert Wan2.1 T2V 1.3B (needs torch in .venv)
+	@$(SCRIPTS)/prepare-mlx-video-wan.sh
 
 video: ## Generate an MP4 with mlx-video (VIDEO_PROMPT required)
 	@test -n "$(VIDEO_PROMPT)" || { echo 'Set VIDEO_PROMPT=... e.g. make video VIDEO_PROMPT="a red fox running through snow"'; exit 1; }

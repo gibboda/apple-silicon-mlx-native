@@ -107,8 +107,10 @@ Install into an existing `.venv` (does not rebuild). **`mlx-video` is pinned** t
 
 ```bash
 make install-video
-scripts/prepare-mlx-video-wan.sh   # Wan 1.3B 4-bit; once; needs torch in the venv
+make prepare-video   # Wan 1.3B 4-bit; once; needs torch in the venv
 ```
+
+Before `make prepare-video`, run `huggingface-cli login` and accept the [Wan-AI/Wan2.1-T2V-1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) license on Hugging Face. Reuse `torch` from `make install-image` when present; otherwise install manually (see [troubleshooting.md](troubleshooting.md)).
 
 Or at bootstrap/rebuild time:
 
@@ -135,7 +137,9 @@ make video VIDEO_PROMPT="a red fox running through snow"
 | ≤64 GB workstation | `ltx2` / `prince-canuma/LTX-2-distilled` | 512², 33 frames | HF download on first generate; no Wan convert |
 | >64 GB large | `ltx2` / `prince-canuma/LTX-2-distilled` | 768×512, 65 frames | Quality path |
 
-Override with `--family`, `--model`, `--model-dir`, `--model-repo`, `--width`, `--height`, `--frames`, `--steps`, `--seed`, or `MLX_VIDEO_*` / `MLX_VIDEO_SEED` in `config/models.env`. **`--family` selects the mlx-video module and default checkpoint only**; width, height, frames, steps, and tiling still follow the memory-tier profile unless you set those flags or `MLX_VIDEO_*`. Dimensions/frames are then aligned to the family (Wan: 4n+1 frames; LTX: 8n+1 frames and 64px). So `--family ltx2` on 8 GB still starts from 832×480 / 17 frames: 832 is already 64-aligned, height snaps to 448, and 17 frames is already 8n+1 — not the workstation 512² / 33-frame profile.
+Override with `--family`, `--model`, `--model-dir`, `--model-repo`, `--width`, `--height`, `--frames`, `--steps`, `--seed`, `--pipeline`, or `MLX_VIDEO_*` / `MLX_VIDEO_SEED` in `config/models.env`. **`--family` selects the mlx-video module and default checkpoint only**; width, height, frames, steps, and tiling still follow the memory-tier profile unless you set those flags or `MLX_VIDEO_*`. LTX pipeline defaults to `distilled` (`MLX_VIDEO_LTX_PIPELINE` or `--pipeline`). Dimensions/frames are then aligned to the family (Wan: 4n+1 frames; LTX: 8n+1 frames and 64px). So `--family ltx2` on 8 GB still starts from 832×480 / 17 frames: 832 is already 64-aligned, height snaps to 448, and 17 frames is already 8n+1 — not the workstation 512² / 33-frame profile.
+
+On ≤8 GB machines, `scripts/generate-mlx-video.sh` refuses to generate unless you pass `--force` or set `MLX_VIDEO_FORCE=1` (UMT5 ~11 GB). `--dump-plan` always works for inspecting defaults without generating.
 
 Inspect the resolved plan without generating:
 
@@ -144,9 +148,11 @@ scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through sn
 OVERRIDE_MEMORY_TIER=high scripts/generate-mlx-video.sh --dump-plan --prompt "a red fox running through snow"
 ```
 
-`--dump-plan` uses detected RAM when `sysctl` works, honors `OVERRIDE_MEMORY_TIER` when set, and falls back to constrained when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). Custom `--output` paths must resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
+`--dump-plan` uses detected RAM when `sysctl` works, honors `OVERRIDE_MEMORY_TIER` when set, and falls back to constrained when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). Custom `--output` and `--image` paths must exist (for `--image`) and resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
 
 Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.19.1`).
+
+`make clean` removes only `.venv`. Converted Wan weights under `models/video/` survive cleanup. To remove them: `rm -rf models/video` or `scripts/cleanup-mlx-native.sh --workspace-caches --force` (also drops other workspace caches such as `outputs/`).
 
 ---
 
@@ -156,7 +162,7 @@ Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`
 | --- | --- |
 | Speech (small models) | Possible with care; unload LLMs first |
 | Image | Opt-in `mflux` only; constrained default is 4B 4-bit 512² with `--low-ram`. Expect swap. |
-| Video | Not recommended (UMT5 encoder ~11 GB even for Wan 1.3B) |
+| Video | Refused by default (generate wrapper exits unless `--force` / `MLX_VIDEO_FORCE=1`; UMT5 ~11 GB) |
 
 ---
 

@@ -28,6 +28,7 @@ TILING=""
 IMAGE=""
 CUSTOM_OUTPUT=0
 DUMP_PLAN=0
+FORCE=0
 PASSTHRU=()
 CLI_FAMILY=""
 CLI_MODEL=""
@@ -38,6 +39,8 @@ CLI_HEIGHT=""
 CLI_FRAMES=""
 CLI_STEPS=""
 CLI_TILING=""
+CLI_PIPELINE=""
+PIPELINE=""
 
 usage() {
   cat <<'EOF'
@@ -58,8 +61,10 @@ Options:
   --steps N           Diffusion steps (Wan; LTX distilled ignores this)
   --seed N            RNG seed
   --output PATH       Output MP4 (default: outputs/videos/mlx-<timestamp>.mp4)
-  --image PATH        Optional first-frame image (I2V)
+  --image PATH        Optional first-frame image (I2V; must exist under MLX_WORKSPACE)
+  --pipeline NAME     LTX pipeline (default: distilled; or MLX_VIDEO_LTX_PIPELINE)
   --tiling MODE       VAE tiling: auto|none|default|aggressive|conservative|spatial|temporal
+  --force             Allow generate on ≤8 GB (not recommended; UMT5 ~11 GB)
   --dump-plan         Print resolved plan and exit
   --                  Extra args passed through to mlx-video
   -h, --help          Show this help
@@ -148,6 +153,12 @@ while [[ $# -gt 0 ]]; do
       TILING="$2"
       shift 2
       ;;
+    --pipeline)
+      [[ $# -ge 2 ]] || die "--pipeline requires NAME"
+      CLI_PIPELINE="$2"
+      shift 2
+      ;;
+    --force) FORCE=1; shift ;;
     --dump-plan) DUMP_PLAN=1; shift ;;
     --)
       shift
@@ -187,6 +198,10 @@ if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
   MLX_TIER_ID="${OVERRIDE_MEMORY_TIER}"
 fi
 
+if (( DUMP_PLAN == 0 )) && (( MLX_MEM_GIB <= 8 )) && (( FORCE == 0 )) && ! is_truthy "${MLX_VIDEO_FORCE:-}"; then
+  die "8 GB unified memory is too small for text-to-video (UMT5 text encoder ~11 GB). Set MLX_VIDEO_FORCE=1 or pass --force to override (expect failure or extreme swap)."
+fi
+
 profile="$(recommended_video_profile_for_tier "${MLX_TIER_ID}")"
 IFS='|' read -r def_family def_model def_width def_height def_frames def_steps def_tiling <<<"${profile}"
 
@@ -202,6 +217,7 @@ else
   STEPS="${def_steps}"
 fi
 TILING="${CLI_TILING:-${MLX_VIDEO_TILING:-${def_tiling}}}"
+PIPELINE="${CLI_PIPELINE:-${MLX_VIDEO_LTX_PIPELINE:-distilled}}"
 
 if [[ -n "${CLI_MODEL}" ]]; then
   MODEL="${CLI_MODEL}"
@@ -273,12 +289,24 @@ if (( CUSTOM_OUTPUT )); then
   OUTPUT="${resolved_output}"
 fi
 
+if [[ -n "${IMAGE}" ]]; then
+  assert_workspace_safe
+  ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+  [[ -f "${IMAGE}" ]] || die "Image file not found: ${IMAGE}"
+  resolved_image="$(canonical_path "${IMAGE}")" || die "Cannot resolve image path: ${IMAGE}"
+  path_is_within "${resolved_image}" "${ws}" \
+    || die "Image path must be under MLX_WORKSPACE (${ws}): ${IMAGE}"
+  IMAGE="${resolved_image}"
+fi
+
 STEPS_PLAN="${STEPS:-default}"
 if (( DUMP_PLAN == 1 )); then
-  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nwidth=%s\nheight=%s\nframes=%s\nsteps=%s\ntiling=%s\nmodel_dir=%s\nmodel_repo=%s\n' \
-    "${FAMILY}" "${MODEL}" "${cli_mod}" "${MLX_TIER_ID}" "${WIDTH}" "${HEIGHT}" "${FRAMES}" "${STEPS_PLAN}" "${TILING}" "${MODEL_DIR}" "${MODEL_REPO}"
+  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nwidth=%s\nheight=%s\nframes=%s\nsteps=%s\ntiling=%s\npipeline=%s\nmodel_dir=%s\nmodel_repo=%s\n' \
+    "${FAMILY}" "${MODEL}" "${cli_mod}" "${MLX_TIER_ID}" "${WIDTH}" "${HEIGHT}" "${FRAMES}" "${STEPS_PLAN}" "${TILING}" "${PIPELINE}" "${MODEL_DIR}" "${MODEL_REPO}"
   exit 0
 fi
+
+require_cmd ffmpeg "Install with: brew install ffmpeg"
 
 if ! "${PY}" -c "import mlx_video" >/dev/null 2>&1; then
   die "mlx-video is not importable. Run: make install-video"
@@ -311,7 +339,10 @@ if [[ "${FAMILY}" == "wan21" ]]; then
     cmd+=(--steps "${STEPS}")
   fi
 else
-  cmd+=(--model-repo "${MODEL_REPO}" --num-frames "${FRAMES}" --output-path "${OUTPUT}" --tiling "${TILING}" --pipeline distilled)
+  cmd+=(--model-repo "${MODEL_REPO}" --num-frames "${FRAMES}" --output-path "${OUTPUT}" --tiling "${TILING}")
+  if [[ -n "${PIPELINE}" ]]; then
+    cmd+=(--pipeline "${PIPELINE}")
+  fi
   if [[ -n "${STEPS}" ]]; then
     cmd+=(--steps "${STEPS}")
   fi

@@ -237,7 +237,7 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
 
   # Opt-in Pure MLX text-to-video (mlx-video)
   make install-video
-  scripts/prepare-mlx-video-wan.sh   # Wan 1.3B 4-bit; needs torch for .pth conversion
+  make prepare-video   # Wan 1.3B 4-bit; needs torch for .pth conversion
   make video VIDEO_PROMPT="a red fox running through snow"
 
   # Remove toolkit-owned .venv (does not uninstall Homebrew)
