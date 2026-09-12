@@ -169,7 +169,9 @@ expect_eq "unknown chip uses RAM-only high default" \
   "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
 expect_eq "unknown chip uses RAM-only standard image" \
   "$(recommended_image_profile_for_profile standard unknown cooled 7)" \
-  "flux2|flux2-klein-4b|8|4|768|768|1"
+  "flux2|flux2-klein-4b|4|4|768|768|1"
+expect_eq "unknown chip uses RAM-only standard context" \
+  "$(recommended_context_for_profile standard unknown cooled)" "2048"
 expect_eq "unknown chip uses RAM-only workstation LTX" \
   "$(recommended_video_profile_for_profile workstation unknown cooled 7 0)" \
   "ltx2|${MLX_VIDEO_LTX_REPO}|512|512|33||auto"
@@ -198,6 +200,8 @@ MLX_THERMAL_CLASS=""
 MLX_PHYSICAL_TIER_ID="standard"
 compose_chip_policy
 expect_eq "unknown chip policy stays RAM-only 3B on standard" "${MLX_RECOMMENDED_MODEL}" "mlx-community/Llama-3.2-3B-Instruct-4bit"
+expect_eq "unknown chip policy stays RAM-only 2048 context on standard" "${MLX_RECOMMENDED_CONTEXT}" "2048"
+expect_eq "unknown chip policy stays RAM-only 4-bit image on standard" "${MLX_RECOMMENDED_IMAGE_PROFILE}" "flux2|flux2-klein-4b|4|4|768|768|1"
 
 # --- seed_models_env_if_missing: create once, preserve on rebuild path ---
 

@@ -69,6 +69,10 @@ expect_contains "generate help mentions wan21" "wan21" "${help_out}"
 expect_contains "generate help mentions ltx2" "ltx2" "${help_out}"
 expect_contains "generate help mentions --force" "--force" "${help_out}"
 expect_contains "generate help mentions --pipeline" "--pipeline" "${help_out}"
+expect_contains "generate help --force names moderate chips" "slow/moderate" "${help_out}"
+
+install_help="$("${INSTALL}" --help)"
+expect_contains "install help names moderate chips" "slow/moderate" "${install_help}"
 
 expect_fail "generate without prompt" "${GENERATE}"
 expect_fail "install without venv" "${INSTALL}"

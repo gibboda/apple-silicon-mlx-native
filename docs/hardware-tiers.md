@@ -64,7 +64,7 @@ Fanless (`MacBookAir*`) derates: throughput_class must **not** raise image, vide
 | standard | fast+, cooled (16 GB M5) | Mistral 7B Instruct 4-bit | 4096 |
 | high | very_fast (Max 32 GB) | Qwen2.5 14B Instruct 4-bit | 8192 |
 | large | extreme | Qwen2.5 32B Instruct 4-bit | 8192 |
-| unknown chip | RAM-only | Existing memory-tier table | Existing table |
+| unknown chip | RAM-only | Conservative table (standard = 3B / 2048 / 4-bit image, not the M5 path) | Conservative table |
 
 Fanless keeps context at 2048.
 
@@ -72,7 +72,7 @@ Fanless keeps context at 2048.
 
 ## MLX runtime limits
 
-On constrained machines, `make validate` (and generate wrappers) set `mx.set_wired_limit` / `set_memory_limit` / `set_cache_limit` from `max_recommended_working_set_size` and do **not** exceed that Metal recommended working set (this M1: ~5.33 GB). `make detect` prints the working set when mlx is importable.
+On constrained machines, `make validate` probes `mx.set_wired_limit` / `set_memory_limit` / `set_cache_limit` from `max_recommended_working_set_size` and does **not** exceed that Metal recommended working set in the probe process (this M1: ~5.33 GB). Those limits are process-local and are **not** inherited by generate wrappers (`mflux-generate`, `mlx-video`). `make detect` prints the working set when mlx is importable.
 
 ## 8 GB guidance (minimum target)
 

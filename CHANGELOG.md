@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image/video gates now match LLM: 8-bit image and video without `--force` require `fast` throughput; 16 GB M2/M3/M4 base (`moderate`) stay on 3B / 768² 4-bit / `--force` like 16 GB M1
 - Document throughput bandwidth buckets as half-open ranges (`100 ≤ bw < 150` moderate, `150 ≤ bw < 300` fast) to match `classify_throughput_class`
 - Video generate also refuses on 16 GB slow/moderate base chips and fanless Airs unless `--force` (UMT5 ~11 GB)
-- `make validate` probes `mx.device_info()` and applies wired/memory/cache limits from the Metal recommended working set on constrained machines
+- `make validate` probes `mx.device_info()` and the wired/memory/cache limit APIs from the Metal recommended working set; generate wrappers do not inherit those process-local limits
+- Unknown 16 GB chips use the conservative RAM-only path (3B, context 2048, 4-bit image), not the fast 8-bit / 4096 defaults
+- Video install warning and generate `--force` copy cover 16 GB slow/moderate base chips (M1–M4), not only M1
 
 ## [0.1.0] - 2026-09-11
 
