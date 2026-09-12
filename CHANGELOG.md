@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-12
+
 ### Added
 
 - Chip-aware Apple Silicon defaults: detect family/SKU, GPU cores, thermal class, and look up bandwidth to compose LLM/image/video recommendations with existing RAM tiers (`make detect`, `make recommend`)
@@ -19,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document throughput bandwidth buckets as half-open ranges (`100 ≤ bw < 150` moderate, `150 ≤ bw < 300` fast) to match `classify_throughput_class`
 - Video generate also refuses on 16 GB slow/moderate base chips and fanless Airs unless `--force` (UMT5 ~11 GB)
 - `make validate` probes `mx.device_info()` and the wired/memory/cache limit APIs from the Metal recommended working set; generate wrappers do not inherit those process-local limits
+
+### Fixed
+
 - Unknown 16 GB chips use the conservative RAM-only path (3B, context 2048, 4-bit image), not the fast 8-bit / 4096 defaults
 - Video install warning and generate `--force` copy cover 16 GB slow/moderate base chips (M1–M4), not only M1
 
@@ -67,5 +72,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gibboda/apple-silicon-mlx-native/releases/tag/v0.1.0
