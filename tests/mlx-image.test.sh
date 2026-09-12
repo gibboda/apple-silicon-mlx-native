@@ -136,6 +136,14 @@ expect_contains "M5 16 GB dump-plan fast" "throughput_class=fast" "${plan_m5}"
 expect_contains "M5 16 GB may use 8-bit" "quantize=8" "${plan_m5}"
 expect_contains "M5 16 GB width 768" "width=768" "${plan_m5}"
 
+plan_m3="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M3 16 GB dump-plan chip family" "chip_family=3" "${plan_m3}"
+expect_contains "M3 16 GB dump-plan moderate" "throughput_class=moderate" "${plan_m3}"
+expect_contains "M3 16 GB stays 4-bit" "quantize=4" "${plan_m3}"
+expect_contains "M3 16 GB stays low_ram" "low_ram=1" "${plan_m3}"
+expect_contains "M3 16 GB width 768" "width=768" "${plan_m3}"
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1

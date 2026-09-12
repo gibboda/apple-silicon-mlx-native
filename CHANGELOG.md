@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Image/video generate wrappers compose defaults from RAM + throughput + thermal class; 16 GB M1 stays conservative while 16 GB M5 may use 7B / 768² 8-bit
-- Video generate also refuses on 16 GB base M1 and fanless Airs unless `--force` (UMT5 ~11 GB)
+- Image/video gates now match LLM: 8-bit image and video without `--force` require `fast` throughput; 16 GB M2/M3/M4 base (`moderate`) stay on 3B / 768² 4-bit / `--force` like 16 GB M1
+- Document throughput bandwidth buckets as half-open ranges (`100 ≤ bw < 150` moderate, `150 ≤ bw < 300` fast) to match `classify_throughput_class`
+- Video generate also refuses on 16 GB slow/moderate base chips and fanless Airs unless `--force` (UMT5 ~11 GB)
 - `make validate` probes `mx.device_info()` and applies wired/memory/cache limits from the Metal recommended working set on constrained machines
 
 ## [0.1.0] - 2026-09-11

@@ -176,6 +176,13 @@ expect_contains "M5 16 GB dump-plan fast" "throughput_class=fast" "${plan_m5}"
 expect_contains "M5 16 GB stays wan21 (RAM too small for LTX)" "family=wan21" "${plan_m5}"
 expect_contains "M5 16 GB does not require force" "force_required=0" "${plan_m5}"
 
+plan_m3="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "M3 16 GB dump-plan chip family" "chip_family=3" "${plan_m3}"
+expect_contains "M3 16 GB dump-plan moderate" "throughput_class=moderate" "${plan_m3}"
+expect_contains "M3 16 GB stays wan21" "family=wan21" "${plan_m3}"
+expect_contains "M3 16 GB force_required" "force_required=1" "${plan_m3}"
+
 plan_air="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=fanless OVERRIDE_GPU_CORES=10 \
   "${GENERATE}" --dump-plan --prompt "plan")"
 expect_contains "fanless M5 still force_required" "force_required=1" "${plan_air}"

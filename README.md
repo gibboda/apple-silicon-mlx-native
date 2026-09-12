@@ -190,7 +190,7 @@ weights + KV cache + runtime + macOS ≈ unified memory needed
 
 On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) and **chip class** (how hard to push). See [docs/models.md](docs/models.md) and [docs/hardware-tiers.md](docs/hardware-tiers.md):
 
-| RAM tier | Slow / fanless (this M1) | Fast cooled (e.g. M5) |
+| RAM tier | Slow / moderate / fanless (M1, M2/M3/M4 base) | Fast cooled (e.g. M5) |
 | --- | --- | --- |
 | ≤8 GB constrained | 3B 4-bit, context 2048 | still 3B (RAM wins) |
 | ≤16 GB standard | 3B 4-bit, context 2048 | 7B 4-bit, context 4096 |
@@ -216,7 +216,7 @@ make install-image
 make image IMAGE_PROMPT="a red fox in snow"
 ```
 
-On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. 16 GB base M1 stays conservative (768² 4-bit `--low-ram`); 16 GB M5 may use the 768² 8-bit path. Fanless Airs keep the conservative image profile. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the composed profile. See [docs/media.md](docs/media.md).
+On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. 16 GB slow/moderate base chips (M1, M2/M3/M4 base) stay conservative (768² 4-bit `--low-ram`); 16 GB M5 may use the 768² 8-bit path. Fanless Airs keep the conservative image profile. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the composed profile. See [docs/media.md](docs/media.md).
 
 ## Video generation
 
@@ -228,7 +228,7 @@ make prepare-video   # Wan2.1 1.3B 4-bit; needs torch to load original .pth file
 make video VIDEO_PROMPT="a red fox running through snow"
 ```
 
-On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB, 16 GB base M1, and fanless Airs refuse generate unless `--force`. Stop `mlx_lm.server` first. Do not advertise LTX on machines that are RAM-too-small. On ≥36 GB cooled workstations the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the composed profile (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
+On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB, 16 GB slow/moderate base chips, and fanless Airs refuse generate unless `--force`. Stop `mlx_lm.server` first. Do not advertise LTX on machines that are RAM-too-small. On ≥36 GB cooled workstations the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the composed profile (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
 
 ## Repository structure
 

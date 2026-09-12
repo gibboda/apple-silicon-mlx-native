@@ -44,6 +44,17 @@ expect_fail() {
   fi
 }
 
+expect_contains() {
+  local label="$1"
+  local needle="$2"
+  local haystack="$3"
+  if [[ "${haystack}" == *"${needle}"* ]]; then
+    pass "${label}"
+  else
+    fail "${label} (missing ${needle})"
+  fi
+}
+
 unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
 
 # --- Brand parser (longest-match regex, not substring "M1") ---
@@ -108,6 +119,26 @@ expect_eq "M5 16 GB image may use 768 8-bit" \
 expect_ok "M1 16 GB video still requires --force" video_force_required_for_profile standard slow cooled
 expect_fail "M5 16 GB cooled video does not require --force" video_force_required_for_profile standard fast cooled
 
+# 16 GB M2/M3/M4 base (moderate) matches slow/M1 for LLM/image/video force
+expect_eq "M3 base bandwidth is moderate bucket" "$(classify_throughput_class "$(lookup_memory_bandwidth_gbs 3 base)")" "moderate"
+expect_eq "M3 16 GB default stays 3B" \
+  "$(recommended_model_for_profile standard moderate cooled 3)" \
+  "mlx-community/Llama-3.2-3B-Instruct-4bit"
+expect_eq "M3 16 GB context stays 2048" \
+  "$(recommended_context_for_profile standard moderate cooled)" "2048"
+expect_eq "M3 16 GB image stays conservative 4-bit" \
+  "$(recommended_image_profile_for_profile standard moderate cooled 3)" \
+  "flux2|flux2-klein-4b|4|4|768|768|1"
+expect_ok "M3 16 GB video still requires --force" video_force_required_for_profile standard moderate cooled
+expect_eq "M4 base is moderate" "$(classify_throughput_class "$(lookup_memory_bandwidth_gbs 4 base)")" "moderate"
+
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  compose_chip_policy
+expect_eq "OVERRIDE M3 16 GB model is 3B" "${MLX_RECOMMENDED_MODEL}" "mlx-community/Llama-3.2-3B-Instruct-4bit"
+expect_eq "OVERRIDE M3 16 GB context is 2048" "${MLX_RECOMMENDED_CONTEXT}" "2048"
+expect_eq "OVERRIDE M3 16 GB image is 4-bit" "${MLX_RECOMMENDED_IMAGE_PROFILE}" "flux2|flux2-klein-4b|4|4|768|768|1"
+expect_eq "OVERRIDE M3 16 GB force video" "${MLX_VIDEO_FORCE_REQUIRED}" "1"
+
 # Fanless derate: later Airs cannot raise image/video/context via throughput_class
 expect_eq "fanless 16 GB fast still 2048 context" \
   "$(recommended_context_for_profile standard fast fanless)" "2048"
@@ -167,6 +198,39 @@ MLX_THERMAL_CLASS=""
 MLX_PHYSICAL_TIER_ID="standard"
 compose_chip_policy
 expect_eq "unknown chip policy stays RAM-only 3B on standard" "${MLX_RECOMMENDED_MODEL}" "mlx-community/Llama-3.2-3B-Instruct-4bit"
+
+# --- seed_models_env_if_missing: create once, preserve on rebuild path ---
+
+SEED_TMP="$(mktemp -d)"
+trap 'rm -rf "${SEED_TMP}"' EXIT
+SEED_WS="${SEED_TMP}/ws"
+SEED_CFG="${SEED_WS}/config"
+SEED_ENV="${SEED_CFG}/models.env"
+export MLX_WORKSPACE="${SEED_WS}"
+export MLX_CONFIG_DIR="${SEED_CFG}"
+export MLX_MODELS_ENV="${SEED_ENV}"
+export MLX_MODELS_EXAMPLE="${ROOT}/config/models.example.env"
+mkdir -p "${SEED_CFG}"
+unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
+  compose_chip_policy
+
+seed_log="$(seed_models_env_if_missing 2>&1)"
+expect_ok "seed creates models.env on first call" test -f "${SEED_ENV}"
+expect_contains "seed first call logs created" "Created ${SEED_ENV}" "${seed_log}"
+expect_contains "seed first call uses composed model" "MLX_DEFAULT_MODEL=${MLX_RECOMMENDED_MODEL}" "$(cat "${SEED_ENV}")"
+expect_contains "seed first call uses composed context" "MLX_RECOMMENDED_CONTEXT=${MLX_RECOMMENDED_CONTEXT}" "$(cat "${SEED_ENV}")"
+
+SEED_FIRST="$(cat "${SEED_ENV}")"
+MLX_RECOMMENDED_MODEL="mlx-community/SHOULD-NOT-OVERWRITE"
+MLX_RECOMMENDED_CONTEXT=99999
+preserve_log="$(seed_models_env_if_missing 2>&1)"
+expect_eq "seed second call preserves file content" "$(cat "${SEED_ENV}")" "${SEED_FIRST}"
+expect_contains "seed second call logs preserve" "Preserving existing ${SEED_ENV}" "${preserve_log}"
+
+rebuild_log="$(seed_models_env_if_missing 2>&1)"
+expect_eq "seed rebuild path still preserves file" "$(cat "${SEED_ENV}")" "${SEED_FIRST}"
+expect_contains "seed rebuild path logs preserve" "Preserving existing ${SEED_ENV}" "${rebuild_log}"
 
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2

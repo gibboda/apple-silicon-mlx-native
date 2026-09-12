@@ -46,8 +46,8 @@ Class comes from looked-up bandwidth, **not** generation number. M3 Pro (~150 GB
 | Class | Bandwidth | Typical chips |
 | --- | --- | --- |
 | `slow` | < 100 GB/s | Base M1 (~68) |
-| `moderate` | 100–150 GB/s | Base M2 / M3 / M4 |
-| `fast` | 150–300 GB/s | Base M5, most Pro |
+| `moderate` | 100 ≤ bw < 150 GB/s | Base M2 / M3 / M4 |
+| `fast` | 150 ≤ bw < 300 GB/s | Base M5, M3 Pro (~150), most Pro |
 | `very_fast` | 300–600 GB/s | Max |
 | `extreme` | > 600 GB/s | Ultra |
 
@@ -60,7 +60,7 @@ Fanless (`MacBookAir*`) derates: throughput_class must **not** raise image, vide
 | Memory tier | Throughput / thermal | Default model | Context |
 | --- | --- | --- | --- |
 | constrained | any (this 8 GB M1) | Llama 3.2 3B Instruct 4-bit | 2048 |
-| standard | slow (16 GB M1) | Llama 3.2 3B Instruct 4-bit | 2048 |
+| standard | slow / moderate (16 GB M1, M2/M3/M4 base) | Llama 3.2 3B Instruct 4-bit | 2048 |
 | standard | fast+, cooled (16 GB M5) | Mistral 7B Instruct 4-bit | 4096 |
 | high | very_fast (Max 32 GB) | Qwen2.5 14B Instruct 4-bit | 8192 |
 | large | extreme | Qwen2.5 32B Instruct 4-bit | 8192 |

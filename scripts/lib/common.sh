@@ -983,10 +983,10 @@ recommended_image_profile_for_profile() {
   fi
   case "${tier}" in
     standard)
-      if [[ "${throughput}" == "slow" ]]; then
-        echo "flux2|flux2-klein-4b|4|4|768|768|1"
-      else
+      if throughput_at_least "${throughput}" fast; then
         echo "flux2|flux2-klein-4b|8|4|768|768|1"
+      else
+        echo "flux2|flux2-klein-4b|4|4|768|768|1"
       fi
       ;;
     high|workstation|large)
@@ -1065,7 +1065,7 @@ recommended_video_profile_for_profile() {
   esac
 }
 
-# ≤8 GB always; 16 GB base M1 / any fanless Air still need --force (UMT5 ~11 GB).
+# ≤8 GB always; 16 GB slow/moderate base chips / any fanless Air still need --force (UMT5 ~11 GB).
 video_force_required_for_profile() {
   local tier="${1:-}"
   local throughput="${2:-unknown}"
@@ -1076,7 +1076,7 @@ video_force_required_for_profile() {
   if [[ "${thermal}" == "fanless" ]]; then
     return 0
   fi
-  if [[ "${tier}" == "standard" && "${throughput}" == "slow" ]]; then
+  if [[ "${tier}" == "standard" ]] && ! throughput_at_least "${throughput}" fast; then
     return 0
   fi
   return 1
