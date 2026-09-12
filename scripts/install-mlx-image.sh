@@ -29,7 +29,8 @@ Requires a prior `make install` (or equivalent). Does not uninstall or
 recreate .venv. Image model weights download on first generate.
 
 On 8 GB machines this is opt-in and swap-heavy; the generate wrapper
-defaults to FLUX.2 Klein 4B, 4-bit, 512², and --low-ram.
+defaults to FLUX.2 Klein 4B, 4-bit, 512², and --low-ram. Fanless + slow
+chips keep that conservative Air profile even at higher RAM.
 EOF
 }
 
@@ -55,6 +56,11 @@ if (( MLX_MEM_GIB <= 8 )); then
   log_warn "8 GB unified memory: text-to-image will likely swap. Close other apps, unload mlx_lm.server, and use the constrained defaults (FLUX.2 Klein 4B, 4-bit, 512px, --low-ram)."
 elif (( MLX_MEM_GIB < 16 )); then
   log_warn "Under 16 GB unified memory: prefer quantized 4B models and modest resolution."
+fi
+if [[ "${MLX_THERMAL_CLASS}" == "fanless" && "${MLX_THROUGHPUT_CLASS}" == "slow" ]]; then
+  log_warn "Fanless + slow bandwidth (this is the conservative Air profile): keep 512² 4-bit --low-ram. Later Airs still do not raise image defaults via chip class."
+elif [[ "${MLX_THERMAL_CLASS}" == "fanless" ]]; then
+  log_warn "Fanless chassis: image/video/context stay on the conservative Air profile even if RAM is larger."
 fi
 
 log_info "Installing ${MLX_IMAGE_PACKAGE} into ${MLX_VENV}"

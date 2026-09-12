@@ -31,6 +31,10 @@ Rebuild the Python .venv for the MLX workspace.
   --force   Skip interactive confirmation when removing .venv
   -h        Show this help
 
+Uses the same detect/compose path as install (OVERRIDE_MEMORY_TIER and
+OVERRIDE_CHIP_* apply to recommendations). Never overwrites an existing
+config/models.env — run `make recommend` for a fresh composed profile.
+
 Fails safely if Apple Silicon, Homebrew, or the workspace cannot be validated.
 EOF
 }
@@ -49,6 +53,9 @@ log_header "Apple Silicon MLX native — rebuild"
 assert_apple_silicon
 export_detect_env
 
+log_info "Detected chip: ${MLX_CHIP} (family=${MLX_CHIP_FAMILY:-unknown} sku=${MLX_CHIP_SKU:-unknown})"
+log_info "Throughput: ${MLX_THROUGHPUT_CLASS:-unknown} thermal=${MLX_THERMAL_CLASS:-unknown} policy_tier=${MLX_TIER_ID}"
+
 ensure_homebrew_in_path
 [[ -n "$(homebrew_prefix)" ]] || die "Homebrew not found. Run the initial build script first."
 require_cmd brew
@@ -63,14 +70,9 @@ assert_venv_under_workspace
 
 log_ok "Workspace validated: ${MLX_WORKSPACE}"
 
-# Preserve configuration
+# Preserve configuration (never clobber an existing models.env)
 mkdir -p "${MLX_CONFIG_DIR}"
-if [[ -f "${MLX_MODELS_ENV}" ]]; then
-  log_ok "Preserving ${MLX_MODELS_ENV}"
-elif [[ -f "${MLX_MODELS_EXAMPLE}" ]]; then
-  cp "${MLX_MODELS_EXAMPLE}" "${MLX_MODELS_ENV}"
-  log_ok "Restored ${MLX_MODELS_ENV} from example"
-fi
+seed_models_env_if_missing
 
 BREW_PY="$(homebrew_prefix)/opt/python@${MLX_PYTHON_VERSION}/bin/python${MLX_PYTHON_VERSION}"
 if [[ ! -x "${BREW_PY}" ]]; then

@@ -8,12 +8,13 @@ SHELL := /bin/bash
 SCRIPTS := scripts
 .DEFAULT_GOAL := help
 
-.PHONY: help detect install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video
+.PHONY: help detect recommend install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video
 
 help: ## Show available targets
 	@printf '%s\n' \
 		'make help      — show this help' \
-		'make detect    — detect Apple Silicon hardware and memory tier' \
+		'make detect    — detect Apple Silicon hardware, chip class, and memory tier' \
+		'make recommend — print composed LLM/image/video defaults (does not write models.env)' \
 		'make install   — initial MLX-native bootstrap (Homebrew + venv + packages)' \
 		'make rebuild   — recreate .venv and reinstall MLX packages' \
 		'make validate  — validate mlx / mlx-lm and run a fast computation check' \
@@ -30,6 +31,9 @@ help: ## Show available targets
 
 detect: ## Detect Apple Silicon hardware
 	@$(SCRIPTS)/detect-apple-silicon.sh
+
+recommend: ## Print composed defaults for this Mac (does not write models.env)
+	@$(SCRIPTS)/detect-apple-silicon.sh --recommend
 
 install: ## Bootstrap MLX-native environment
 	@$(SCRIPTS)/initial-build-mlx-native-media.sh

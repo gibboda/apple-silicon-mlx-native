@@ -49,14 +49,15 @@ Options:
   --output PATH     Output PNG (default: outputs/images/mlx-<timestamp>.png)
   --low-ram         Force mflux --low-ram
   --no-low-ram      Disable --low-ram even on constrained machines
-  --dump-plan       Print resolved plan (family/model/CLI/tier/size/steps) and exit
+  --dump-plan       Print resolved plan (family/model/CLI/tier/chip/size/steps) and exit
   --                Extra args passed through to the mflux CLI
   -h, --help        Show this help
 
-Defaults come from memory tier (or OVERRIDE_MEMORY_TIER), then config/models.env
-(MLX_IMAGE_*). --family changes the mflux CLI and default checkpoint only;
-width/height/steps/quantize/--low-ram still follow the memory-tier profile
-unless you set those flags or MLX_IMAGE_*.
+Defaults come from the composed profile (memory tier + throughput class +
+thermal class, or OVERRIDE_MEMORY_TIER / OVERRIDE_CHIP_* / OVERRIDE_THERMAL_CLASS),
+then config/models.env (MLX_IMAGE_*). --family changes the mflux CLI and default
+checkpoint only; width/height/steps/quantize/--low-ram still follow the composed
+profile unless you set those flags or MLX_IMAGE_*.
 EOF
 }
 
@@ -186,19 +187,13 @@ if (( DUMP_PLAN == 0 )); then
     die "Python venv not found at ${MLX_VENV}. Run: make install && make install-image"
   fi
   assert_apple_silicon
-  export_detect_env
-elif detect_memory_bytes >/dev/null 2>&1; then
-  # Match generate defaults when sysctl RAM detection works (macOS).
-  export_detect_env
-else
-  # Linux CI / missing sysctl: keep a portable constrained fallback.
-  MLX_TIER_ID="constrained"
 fi
-if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
-  MLX_TIER_ID="${OVERRIDE_MEMORY_TIER}"
+if (( DUMP_PLAN == 1 )); then
+  MLX_SKIP_DEVICE_PROBE=1
 fi
+load_runtime_profile
 
-profile="$(recommended_image_profile_for_tier "${MLX_TIER_ID}")"
+profile="${MLX_RECOMMENDED_IMAGE_PROFILE:-$(recommended_image_profile_for_tier "${MLX_TIER_ID}")}"
 IFS='|' read -r def_family def_model def_quant def_steps def_width def_height def_low_ram <<<"${profile}"
 
 FAMILY="${CLI_FAMILY:-${MLX_IMAGE_FAMILY:-${def_family}}}"
@@ -242,7 +237,7 @@ passthru_has_flag() {
 VAE_TILING=0
 if passthru_has_flag "--vae-tiling"; then
   VAE_TILING=1
-elif [[ "${MLX_TIER_ID}" == "constrained" || "${MLX_TIER_ID}" == "standard" ]]; then
+elif [[ "${MLX_TIER_ID}" == "constrained" || "${MLX_TIER_ID}" == "standard" || "${MLX_POLICY_THERMAL_CLASS:-}" == "fanless" ]]; then
   VAE_TILING=1
 fi
 
@@ -256,8 +251,14 @@ if (( CUSTOM_OUTPUT )); then
 fi
 
 if (( DUMP_PLAN == 1 )); then
-  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nquantize=%s\nsteps=%s\nwidth=%s\nheight=%s\nlow_ram=%s\nvae_tiling=%s\n' \
-    "${FAMILY}" "${MODEL}" "${cli_name}" "${MLX_TIER_ID}" "${QUANTIZE}" "${STEPS}" "${WIDTH}" "${HEIGHT}" "${LOW_RAM}" "${VAE_TILING}"
+  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nthroughput_class=%s\nthermal_class=%s\nchip_family=%s\nchip_sku=%s\ngpu_cores=%s\nquantize=%s\nsteps=%s\nwidth=%s\nheight=%s\nlow_ram=%s\nvae_tiling=%s\n' \
+    "${FAMILY}" "${MODEL}" "${cli_name}" "${MLX_TIER_ID}" \
+    "${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-}}" \
+    "${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}" \
+    "${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-}}" \
+    "${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-}}" \
+    "${MLX_POLICY_GPU_CORES:-${MLX_GPU_CORES:-}}" \
+    "${QUANTIZE}" "${STEPS}" "${WIDTH}" "${HEIGHT}" "${LOW_RAM}" "${VAE_TILING}"
   exit 0
 fi
 
@@ -276,6 +277,8 @@ fi
 if (( MLX_MEM_GIB <= 8 )); then
   log_warn "8 GB: expecting swap. Stop mlx_lm.server and other GPU/memory-heavy apps first."
 fi
+
+apply_mlx_runtime_limits "${PY}" "${MLX_TIER_ID}" >/dev/null || true
 
 cmd=("${cli_bin}" --prompt "${PROMPT}" --width "${WIDTH}" --height "${HEIGHT}" --steps "${STEPS}" --quantize "${QUANTIZE}" --output "${OUTPUT}")
 if [[ -n "${MODEL}" ]]; then

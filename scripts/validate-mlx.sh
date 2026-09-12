@@ -20,7 +20,8 @@ usage() {
   cat <<'EOF'
 Usage: validate-mlx.sh [--venv PATH] [-h|--help]
 
-Validate Python arm64 execution, mlx, mlx-lm, basic array ops, and Metal observability.
+Validate Python arm64 execution, mlx, mlx-lm, basic array ops, Metal observability,
+and mx.device_info() working-set / memory-limit probe.
 
   --venv PATH   Virtual environment to validate (default: $MLX_VENV)
   -h            Show this help
@@ -187,6 +188,23 @@ case "${metal_state}" in
     log_warn "Metal status inconclusive (${metal_detail}); continuing"
     ;;
 esac
+
+log_header "MLX working set"
+load_runtime_profile
+limits_out="$(apply_mlx_runtime_limits "$(venv_python)" "${MLX_TIER_ID}")"
+if [[ -n "${limits_out}" ]]; then
+  printf '%s\n' "${limits_out}"
+  ws_line="$(printf '%s\n' "${limits_out}" | awk -F= '/^working_set_bytes=/{print $2; exit}')"
+  wired_line="$(printf '%s\n' "${limits_out}" | awk -F= '/^wired_limit_bytes=/{print $2; exit}')"
+  if [[ -n "${ws_line}" ]]; then
+    pass "Metal recommended working set ${ws_line} bytes (~$(bytes_to_gib_display "${ws_line}") GiB)"
+  fi
+  if [[ -n "${wired_line}" ]]; then
+    pass "Applied wired/memory/cache limits from working set (tier=${MLX_TIER_ID})"
+  fi
+else
+  log_warn "Could not probe mx.device_info() working set"
+fi
 
 log_header "Package versions"
 "${python_bin}" -m pip show mlx mlx-lm 2>/dev/null | awk '
