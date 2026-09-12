@@ -23,11 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Conservative uninstall/cleanup for toolkit-owned state (`scripts/cleanup-mlx-native.sh`, `make clean` / `make uninstall`) with `--dry-run`, `--keep-venv`, `--purge`, leftover reporting, and an opt-in Hugging Face hub cache removal; Homebrew and Xcode CLT are never uninstalled
 - Portable cleanup self-test (`tests/cleanup-mlx-native.test.sh`, `make test`)
 - Opt-in Pure MLX text-to-image via `mflux` (`make install-image`, `make image IMAGE_PROMPT=...`) with memory-tier defaults (8 GB: FLUX.2 Klein 4B 4-bit 512² `--low-ram`). `mflux` currently pulls `torch` for safetensors weight loading; denoising remains MLX.
+- Opt-in Pure MLX text-to-video via `mlx-video` (`make install-video`, `make video VIDEO_PROMPT=...`) with memory-tier defaults (≤32 GB: Wan2.1 T2V 1.3B 4-bit 832×480; ≥36 GB: LTX-2 distilled). Pinned to git SHA `87db56a51758fefb748a359b90a5283bb8ba4837`. Wan conversion (`scripts/prepare-mlx-video-wan.sh`) needs `torch` to load original `.pth` files; generation remains MLX.
 
 ### Changed
 
 - Relicensed from MIT to [GNU General Public License v3.0](LICENSE) (`SPDX-License-Identifier: GPL-3.0-only`)
 - Pin opt-in `mflux` to `0.19.1` by default (`MLX_IMAGE_PACKAGE` in `scripts/lib/common.sh`; override with env)
+- LTX text-to-video pipeline is configurable via `MLX_VIDEO_LTX_PIPELINE` / `--pipeline` (default `distilled`) instead of hardcoded in the generate wrapper
 
 ### Deprecated
 
@@ -39,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refuse mlx-video generate on ≤8 GB unless `--force` or `MLX_VIDEO_FORCE=1`; require `ffmpeg`, validate `--image` under `MLX_WORKSPACE`, and add `make prepare-video`
 - Conventional Commits CI no longer fails on GitHub Actions PR merge commits (`Merge <sha> into <sha>`); audit range uses `AUDIT_HEAD_SHA` instead of reserved `GITHUB_SHA`
 - Quote `detect-apple-silicon.sh --env` values for safe sourcing
 - Use two-dot commit ranges for PR/base audits so base-only commits are not included

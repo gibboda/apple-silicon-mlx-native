@@ -8,7 +8,7 @@ Apple Silicon exposes a unified memory architecture and a Metal GPU. [MLX](https
 
 Priorities for this toolkit:
 
-1. Prefer **Pure MLX** packages (`mlx`, `mlx-lm`, selected `mlx-audio`, optional `mflux`).
+1. Prefer **Pure MLX** packages (`mlx`, `mlx-lm`, selected `mlx-audio`, optional `mflux` / `mlx-video`).
 2. Prefer models published by [`mlx-community`](https://huggingface.co/mlx-community).
 3. Prefer a **persistent** `mlx_lm.server` process over repeatedly loading weights.
 4. Reject Intel/x86_64 Macs and Rosetta-only package paths on the normal install flow.
@@ -50,7 +50,7 @@ By default the workspace is the repository root:
 apple-silicon-mlx-native/
   .venv/                 # Python environment (gitignored; removed by cleanup)
   config/models.env      # local overrides (gitignored; kept unless --config/--purge)
-  scripts/               # bootstrap, rebuild, cleanup, image, detect, validate, audit
+  scripts/               # bootstrap, rebuild, cleanup, image, video, detect, validate, audit
   docs/                  # deep documentation
 ```
 
@@ -67,6 +67,9 @@ Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** st
 | `rebuild-mlx-native-media.sh` | Recreate `.venv` safely |
 | `install-mlx-image.sh` | Opt-in `mflux` into the existing venv |
 | `generate-mlx-image.sh` | Text-to-image via mflux with memory-tier defaults |
+| `install-mlx-video.sh` | Opt-in `mlx-video` into the existing venv |
+| `prepare-mlx-video-wan.sh` | Download + convert Wan2.1 1.3B to MLX 4-bit (torch for .pth load only) |
+| `generate-mlx-video.sh` | Text-to-video via mlx-video with memory-tier defaults |
 | `cleanup-mlx-native.sh` | Remove `.venv` and optional caches; never Homebrew |
 | `validate-mlx.sh` | Fast correctness checks |
 | `conventional-commits-audit.sh` | Commit subject policy |

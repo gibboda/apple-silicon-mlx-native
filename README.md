@@ -14,7 +14,7 @@ Bootstrap a workstation that prioritizes:
 4. `mlx_lm.server`
 5. MLX-native speech/audio where appropriate (`mlx-audio`)
 6. MLX image tooling where practical (opt-in `mflux`: `make install-image`)
-7. MLX video tooling where practical (**documented**, not default-installed)
+7. MLX video tooling where practical (opt-in `mlx-video`: `make install-video`)
 
 **Not in scope:** Ollama, `llama.cpp`, or PyTorch/MPS as a core dependency.
 
@@ -26,8 +26,8 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 
 | Class | Meaning | This repo |
 | --- | --- | --- |
-| **Pure MLX** | MLX runtime for inference; no PyTorch/MPS generation backend | `mlx`, `mlx-lm`, `mlx-audio`; optional `mflux` (transitive `torch` for weight loading only) |
-| **MLX-first / Apple Silicon native** | Primary path is MLX/Metal; verify deps | Video community ports — **documented only** |
+| **Pure MLX** | MLX runtime for inference; no PyTorch/MPS generation backend | `mlx`, `mlx-lm`, `mlx-audio`; optional `mflux` / `mlx-video` (`torch` for weight loading or Wan `.pth` conversion only) |
+| **MLX-first / Apple Silicon native** | Primary path is MLX/Metal; verify deps | Documented specialists (`mlx-gen`, `ltx-2-mlx`) — **not installed** |
 | **Fallback / non-MLX** | Other runtimes | **Not advertised as native; not installed** |
 
 ## Supported hardware
@@ -71,6 +71,8 @@ MLX_INSTALL_HOMEBREW=1 make install   # install Homebrew if missing
 MLX_SKIP_MEDIA=1 make install         # skip mlx-audio
 MLX_INSTALL_IMAGE=1 make install      # also install mflux during bootstrap
 make install-image                    # install mflux into an existing .venv
+MLX_INSTALL_VIDEO=1 make install      # also install mlx-video during bootstrap
+make install-video                    # install mlx-video into an existing .venv
 ```
 
 ## Environment rebuild
@@ -209,7 +211,15 @@ On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect 
 
 ## Video generation
 
-No default install. Community **MLX-first** video ports exist but need separate evaluation (memory + dependencies). Documented in [docs/media.md](docs/media.md); not silently installed.
+**Pure MLX:** [`mlx-video`](https://github.com/Blaizzy/mlx-video). Not installed by default (`make install` does not pull it).
+
+```bash
+make install-video
+make prepare-video   # Wan2.1 1.3B 4-bit; needs torch to load original .pth files
+make video VIDEO_PROMPT="a red fox running through snow"
+```
+
+On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB is out of scope and 16 GB will swap. Stop `mlx_lm.server` first. On ≥36 GB the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the memory tier (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
 
 ## Repository structure
 
@@ -236,6 +246,9 @@ apple-silicon-mlx-native/
 │   ├── rebuild-mlx-native-media.sh
 │   ├── install-mlx-image.sh
 │   ├── generate-mlx-image.sh
+│   ├── install-mlx-video.sh
+│   ├── prepare-mlx-video-wan.sh
+│   ├── generate-mlx-video.sh
 │   ├── cleanup-mlx-native.sh
 │   ├── detect-apple-silicon.sh
 │   ├── validate-mlx.sh
@@ -243,7 +256,8 @@ apple-silicon-mlx-native/
 │   └── delete-merged-pr-branch.sh
 ├── tests/
 │   ├── cleanup-mlx-native.test.sh
-│   └── mlx-image.test.sh
+│   ├── mlx-image.test.sh
+│   └── mlx-video.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
@@ -264,6 +278,9 @@ apple-silicon-mlx-native/
 | `make validate` | MLX validation |
 | `make install-image` | Install `mflux` into `.venv` |
 | `make image` | Generate a PNG (`IMAGE_PROMPT=...`) |
+| `make install-video` | Install `mlx-video` into `.venv` |
+| `make prepare-video` | Download and convert Wan2.1 T2V 1.3B for mlx-video |
+| `make video` | Generate an MP4 (`VIDEO_PROMPT=...`) |
 | `make clean` / `make uninstall` | Remove `.venv`; report leftover system tools |
 | `make audit` | Conventional Commits audit |
 | `make lint` | ShellCheck |
@@ -323,7 +340,7 @@ See [docs/troubleshooting.md](docs/troubleshooting.md).
 - Never commit `.venv`, model weights, HF tokens, or `config/models.env`
 - `mlx_lm.server` is a local development server with basic checks — bind to `127.0.0.1` unless you intentionally expose it
 - Do not use `sudo pip`
-- Review new dependencies for PyTorch or unexpected native code before adding them. Opt-in `mflux` currently requires `torch` for weight loading only; do not add PyTorch/MPS as a generation backend.
+- Review new dependencies for PyTorch or unexpected native code before adding them. Opt-in `mflux` currently requires `torch` for weight loading only; opt-in Wan conversion requires `torch` to load `.pth` files. Do not add PyTorch/MPS as a generation backend.
 - Generated model outputs can be wrong or unsafe; treat local models like any other untrusted software capability
 
 ## License

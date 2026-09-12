@@ -12,7 +12,7 @@
 - [ ] `CHANGELOG.md` `[Unreleased]` updated for user-visible changes
 - [ ] Apple Silicon (`arm64`) compatibility considered; no Rosetta-only/x86 deps on the normal path
 - [ ] Memory implications documented (weights ≠ total unified-memory use)
-- [ ] New dependencies are necessary and MLX-native when possible. Do not add PyTorch/MPS or Diffusers+MPS as an LLM/image **generation** backend; documented transitive deps (e.g. opt-in `mflux` → `torch` for weight loading) are OK
+- [ ] New dependencies are necessary and MLX-native when possible. Do not add PyTorch/MPS or Diffusers+MPS as an LLM/image/video **generation** backend; documented transitive deps (e.g. opt-in `mflux` → `torch` for weight loading, opt-in Wan convert → `torch` for `.pth` load) are OK
 
 ## Memory / hardware notes
 
