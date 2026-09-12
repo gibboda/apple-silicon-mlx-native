@@ -29,6 +29,7 @@ Detect Apple Silicon hardware characteristics for MLX workstation defaults.
   --human       Human-readable summary (default)
   --json        Machine-consumable JSON (physical facts + composed defaults)
   --env         KEY=value lines suitable for eval/sourcing
+                (MLX_TIER_ID is policy; MLX_PHYSICAL_TIER_ID is detected RAM)
   --recommend   Print a fresh composed profile only (does not write models.env)
   --quiet       Exit 0 if arm64 Apple Silicon, else exit 1 (no output)
   -h            Show this help
@@ -101,8 +102,10 @@ case "${MODE}" in
     DETECT_THROUGHPUT="${MLX_THROUGHPUT_CLASS:-}" \
     DETECT_MEM_BYTES="${MLX_MEM_BYTES}" \
     DETECT_MEM_GIB="${MLX_MEM_GIB}" \
-    DETECT_TIER_ID="${MLX_PHYSICAL_TIER_ID}" \
-    DETECT_TIER_LABEL="${MLX_PHYSICAL_TIER_LABEL:-${MLX_TIER_LABEL}}" \
+    DETECT_TIER_ID="${MLX_TIER_ID}" \
+    DETECT_TIER_LABEL="${MLX_TIER_LABEL}" \
+    DETECT_PHYSICAL_TIER_ID="${MLX_PHYSICAL_TIER_ID}" \
+    DETECT_PHYSICAL_TIER_LABEL="${MLX_PHYSICAL_TIER_LABEL:-}" \
     DETECT_TIER_HINT="${MLX_TIER_HINT}" \
     DETECT_CORES="${MLX_CPU_CORES}" \
     DETECT_MACOS="${MLX_MACOS_VERSION}" \
@@ -151,6 +154,8 @@ payload = {
   "memory_gib": int(os.environ["DETECT_MEM_GIB"]),
   "memory_tier_id": os.environ["DETECT_TIER_ID"],
   "memory_tier_label": os.environ["DETECT_TIER_LABEL"],
+  "physical_memory_tier_id": maybe_str("DETECT_PHYSICAL_TIER_ID"),
+  "physical_memory_tier_label": maybe_str("DETECT_PHYSICAL_TIER_LABEL"),
   "memory_tier_hint": os.environ["DETECT_TIER_HINT"],
   "cpu_cores": int(os.environ["DETECT_CORES"]),
   "macos_version": os.environ["DETECT_MACOS"],
@@ -177,33 +182,6 @@ PY
     ;;
   env)
     # Quote values so `eval "$(... --env)"` / sourcing is safe with spaces.
-    printf 'MLX_ARCH=%q\n' "${MLX_ARCH}"
-    printf 'MLX_CHIP=%q\n' "${MLX_CHIP}"
-    printf 'MLX_CHIP_FAMILY=%q\n' "${MLX_CHIP_FAMILY:-}"
-    printf 'MLX_CHIP_SKU=%q\n' "${MLX_CHIP_SKU:-}"
-    printf 'MLX_GPU_CORES=%q\n' "${MLX_GPU_CORES:-}"
-    printf 'MLX_P_CORES=%q\n' "${MLX_P_CORES:-}"
-    printf 'MLX_E_CORES=%q\n' "${MLX_E_CORES:-}"
-    printf 'MLX_HW_MODEL=%q\n' "${MLX_HW_MODEL:-}"
-    printf 'MLX_THERMAL_CLASS=%q\n' "${MLX_THERMAL_CLASS:-}"
-    printf 'MLX_BANDWIDTH_GBS=%q\n' "${MLX_BANDWIDTH_GBS:-}"
-    printf 'MLX_THROUGHPUT_CLASS=%q\n' "${MLX_THROUGHPUT_CLASS:-}"
-    printf 'MLX_MEM_BYTES=%q\n' "${MLX_MEM_BYTES}"
-    printf 'MLX_MEM_GIB=%q\n' "${MLX_MEM_GIB}"
-    printf 'MLX_TIER_ID=%q\n' "${MLX_PHYSICAL_TIER_ID}"
-    printf 'MLX_TIER_LABEL=%q\n' "${MLX_PHYSICAL_TIER_LABEL:-${MLX_TIER_LABEL}}"
-    printf 'MLX_TIER_HINT=%q\n' "${MLX_TIER_HINT}"
-    printf 'MLX_CPU_CORES=%q\n' "${MLX_CPU_CORES}"
-    printf 'MLX_MACOS_VERSION=%q\n' "${MLX_MACOS_VERSION}"
-    printf 'MLX_DISK_AVAIL_GIB=%q\n' "${MLX_DISK_AVAIL_GIB:-0}"
-    printf 'MLX_PYTHON_VERSION_DETECTED=%q\n' "$(detect_python_version)"
-    printf 'MLX_HOMEBREW=%q\n' "${brew_ok}"
-    printf 'MLX_HOMEBREW_PREFIX=%q\n' "${brew_prefix}"
-    printf 'MLX_XCODE_CLT=%q\n' "${xcode_ok}"
-    printf 'MLX_RECOMMENDED_MODEL=%q\n' "${MLX_RECOMMENDED_MODEL}"
-    printf 'MLX_RECOMMENDED_CONTEXT=%q\n' "${MLX_RECOMMENDED_CONTEXT}"
-    printf 'MLX_WORKING_SET_BYTES=%q\n' "${MLX_WORKING_SET_BYTES:-}"
-    printf 'MLX_GPU_ARCH=%q\n' "${MLX_GPU_ARCH:-}"
-    printf 'MLX_WORKSPACE=%q\n' "${MLX_WORKSPACE}"
+    print_detect_env "${brew_ok}" "${brew_prefix}" "${xcode_ok}"
     ;;
 esac

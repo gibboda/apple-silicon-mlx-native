@@ -86,6 +86,7 @@ expect_eq "M5 base is fast" "$(classify_throughput_class 153)" "fast"
 expect_ok "M5 has GPU NAX hint" chip_has_gpu_nax 5
 expect_fail "M1 does not have GPU NAX hint" chip_has_gpu_nax 1
 expect_eq "M10 unknown bandwidth is empty" "$(lookup_memory_bandwidth_gbs 10 base)" ""
+expect_eq "M4 Ultra has no guessed bandwidth row" "$(lookup_memory_bandwidth_gbs 4 ultra)" ""
 expect_eq "empty bandwidth is unknown class" "$(classify_throughput_class '')" "unknown"
 expect_eq "M3 Max 30-core conservative bin" "$(lookup_memory_bandwidth_gbs 3 max 30)" "300"
 expect_eq "M3 Max 40-core bin" "$(lookup_memory_bandwidth_gbs 3 max 40)" "400"
@@ -185,6 +186,11 @@ OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=1 OVERRIDE_CHIP_SKU=base OVER
 expect_eq "OVERRIDE M1 16 GB model is 3B" "${MLX_RECOMMENDED_MODEL}" "mlx-community/Llama-3.2-3B-Instruct-4bit"
 expect_eq "OVERRIDE M1 16 GB context is 2048" "${MLX_RECOMMENDED_CONTEXT}" "2048"
 expect_eq "OVERRIDE M1 16 GB force video" "${MLX_VIDEO_FORCE_REQUIRED}" "1"
+env_out="$(print_detect_env false "" false)"
+expect_eq "print_detect_env policy MLX_TIER_ID is standard" \
+  "$(printf '%s\n' "${env_out}" | awk -F= '/^MLX_TIER_ID=/{print $2; exit}')" "standard"
+expect_eq "print_detect_env physical MLX_PHYSICAL_TIER_ID stays constrained" \
+  "$(printf '%s\n' "${env_out}" | awk -F= '/^MLX_PHYSICAL_TIER_ID=/{print $2; exit}')" "constrained"
 
 OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
   compose_chip_policy
