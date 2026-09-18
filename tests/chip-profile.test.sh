@@ -120,6 +120,53 @@ expect_eq "M5 16 GB image may use 768 8-bit" \
 expect_ok "M1 16 GB video still requires --force" video_force_required_for_profile standard slow cooled
 expect_fail "M5 16 GB cooled video does not require --force" video_force_required_for_profile standard fast cooled
 
+# 18 GB SKUs (e.g. M3 Pro) must stay standard; high starts at 24 GB
+expect_eq "8 GB is constrained" "$(classify_memory_tier 8 | awk -F'|' '{print $1}')" "constrained"
+expect_eq "16 GB is standard" "$(classify_memory_tier 16 | awk -F'|' '{print $1}')" "standard"
+expect_eq "18 GB is standard not high" "$(classify_memory_tier 18 | awk -F'|' '{print $1}')" "standard"
+expect_eq "23 GB stays standard" "$(classify_memory_tier 23 | awk -F'|' '{print $1}')" "standard"
+expect_eq "24 GB is high" "$(classify_memory_tier 24 | awk -F'|' '{print $1}')" "high"
+expect_eq "32 GB is high" "$(classify_memory_tier 32 | awk -F'|' '{print $1}')" "high"
+expect_eq "18 GB label is 16-18 GB standard" "$(classify_memory_tier 18 | awk -F'|' '{print $2}')" "16–18 GB — standard"
+
+# 18 GB M3 Pro: 7B LLM is fine; image/video stay on the 16 GB conservative profile
+expect_eq "18 GB M3 Pro LLM is 7B" \
+  "$(recommended_model_for_profile standard fast cooled 3)" \
+  "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+expect_eq "18 GB M3 Pro context is 4096" \
+  "$(recommended_context_for_profile standard fast cooled)" "4096"
+expect_eq "18 GB M3 Pro image stays 768 8-bit not 1024 turbo" \
+  "$(recommended_image_profile_for_profile standard fast cooled 3)" \
+  "flux2|flux2-klein-4b|8|4|768|768|1"
+expect_eq "18 GB M3 Pro video stays 17 frames" \
+  "$(recommended_video_profile_for_profile standard fast cooled 3 18)" \
+  "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+expect_fail "18 GB M3 Pro video does not require --force" video_force_required_for_profile standard fast cooled
+
+expect_eq "24 GB M3 Pro image is z-image-turbo 1024" \
+  "$(recommended_image_profile_for_profile high fast cooled 3)" \
+  "z-image-turbo||8|9|1024|1024|0"
+expect_eq "24 GB M3 Pro video is 33 frames" \
+  "$(recommended_video_profile_for_profile high fast cooled 3 18)" \
+  "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|33|10|auto"
+expect_fail "24 GB M3 Pro video does not require --force" video_force_required_for_profile high fast cooled
+
+unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  compose_chip_policy
+expect_eq "OVERRIDE 18 GB M3 Pro model is 7B" "${MLX_RECOMMENDED_MODEL}" "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+expect_eq "OVERRIDE 18 GB M3 Pro image is 768 8-bit" "${MLX_RECOMMENDED_IMAGE_PROFILE}" "flux2|flux2-klein-4b|8|4|768|768|1"
+expect_eq "OVERRIDE 18 GB M3 Pro video is 17 frames" "${MLX_RECOMMENDED_VIDEO_PROFILE}" "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+expect_eq "OVERRIDE 18 GB M3 Pro no video force" "${MLX_VIDEO_FORCE_REQUIRED}" "0"
+
+OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  compose_chip_policy
+expect_eq "OVERRIDE 24 GB M3 Pro model is 7B" "${MLX_RECOMMENDED_MODEL}" "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+expect_eq "OVERRIDE 24 GB M3 Pro image is z-image-turbo 1024" "${MLX_RECOMMENDED_IMAGE_PROFILE}" "z-image-turbo||8|9|1024|1024|0"
+expect_eq "OVERRIDE 24 GB M3 Pro video is 33 frames" "${MLX_RECOMMENDED_VIDEO_PROFILE}" "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|33|10|auto"
+expect_eq "OVERRIDE 24 GB M3 Pro no video force" "${MLX_VIDEO_FORCE_REQUIRED}" "0"
+unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
+
 # 16 GB M2/M3/M4 base (moderate) matches slow/M1 for LLM/image/video force
 expect_eq "M3 base bandwidth is moderate bucket" "$(classify_throughput_class "$(lookup_memory_bandwidth_gbs 3 base)")" "moderate"
 expect_eq "M3 16 GB default stays 3B" \

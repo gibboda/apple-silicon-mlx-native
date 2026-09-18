@@ -34,8 +34,8 @@ Bandwidth is **not** measurable via sysctl. The toolkit looks it up from family+
 | Physical unified memory | Tier id | Label | Default posture |
 | --- | --- | --- | --- |
 | ≤ 8 GB | `constrained` | 8 GB — constrained | 3B–4B **4-bit** models; short context; avoid image/video (video UMT5 ~11 GB) |
-| ≤ 16 GB | `standard` | 16 GB — standard | 3B default on slow chips; 7B–8B 4-bit on fast cooled chips |
-| ≤ 32 GB | `high` | 24–32 GB — high | 7B–14B 4-bit; selected 8-bit |
+| ≤ 18 GB (`< 24` GB) | `standard` | 16–18 GB — standard | 3B default on slow chips; 7B–8B 4-bit on fast cooled chips. 18 GB Pro SKUs stay here so image/video do not use the 24 GB profile |
+| 24–32 GB | `high` | 24–32 GB — high | 7B–14B 4-bit; selected 8-bit |
 | ≤ 64 GB | `workstation` | 36–64 GB — workstation | 14B–32B 4-bit; heavier media |
 | > 64 GB | `large` | large-memory workstation | 30B+ quantized; multi-workload |
 
@@ -61,7 +61,7 @@ Fanless (`MacBookAir*`) derates: throughput_class must **not** raise the default
 | --- | --- | --- | --- |
 | constrained | any (this 8 GB M1) | Llama 3.2 3B Instruct 4-bit | 2048 |
 | standard | slow / moderate (16 GB M1, M2/M3/M4 base) | Llama 3.2 3B Instruct 4-bit | 2048 |
-| standard | fast+, cooled (16 GB M5) | Mistral 7B Instruct 4-bit | 4096 |
+| standard | fast+, cooled (16 GB M5, 18 GB Pro) | Mistral 7B Instruct 4-bit | 4096 |
 | high | very_fast (Max 32 GB) | Qwen2.5 14B Instruct 4-bit | 8192 |
 | large | extreme | Qwen2.5 32B Instruct 4-bit | 8192 |
 | unknown chip | RAM-only | Conservative table (standard = 3B / 2048 / 4-bit image, not the M5 path) | Conservative table |

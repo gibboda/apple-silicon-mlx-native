@@ -75,11 +75,14 @@ bytes_to_gib() {
 
 classify_memory_tier() {
   # Emit: tier_id|tier_label|default_model_hint
+  # high starts at 24 GB so 18 GB SKUs stay on the 16 GB conservative
+  # image/video profile (OOM fence). Apple has no 19–23 GB SKUs; the
+  # bound is < 24 so the documented 24–32 GB high label stays true.
   local mem_gib="$1"
   if (( mem_gib <= 8 )); then
     echo "constrained|8 GB — constrained|3B–4B 4-bit models, short context"
-  elif (( mem_gib <= 16 )); then
-    echo "standard|16 GB — standard|3B–8B 4-bit models"
+  elif (( mem_gib < 24 )); then
+    echo "standard|16–18 GB — standard|3B–8B 4-bit models"
   elif (( mem_gib <= 32 )); then
     echo "high|24–32 GB — high|7B–14B 4-bit / selected 8-bit"
   elif (( mem_gib <= 64 )); then
