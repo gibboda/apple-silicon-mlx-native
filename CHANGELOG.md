@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-17
+
 ### Fixed
 
 - 18 GB Macs stay on the `standard` (16 GB conservative) memory tier; `high` now starts at 24 GB so image/video do not recommend the 24 GB profile on 18 GB unified memory
@@ -80,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gibboda/apple-silicon-mlx-native/releases/tag/v0.1.0
