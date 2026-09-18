@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- 18 GB Macs stay on the `standard` (16 GB conservative) memory tier; `high` now starts at 24 GB so image/video do not recommend the 24 GB profile on 18 GB unified memory
 - Fanless 16 GB machines stay on the RAM-only 3B default model; throughput no longer upgrades them to 7B
 - `classify_memory_tier` no longer emits a leading space on the large-memory (`>64 GB`) label
 - Document JSON/env detect output as `scripts/detect-apple-silicon.sh --json` / `--env` (`make detect` does not forward those flags)

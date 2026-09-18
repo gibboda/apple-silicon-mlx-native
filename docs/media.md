@@ -69,7 +69,7 @@ make image IMAGE_PROMPT="a red fox in snow"
 | --- | --- | --- | --- |
 | constrained, or fanless Air | `flux2` / `flux2-klein-4b` | 4-bit, 512², 4 steps, `--low-ram` | This M1 is the floor; later Airs stay here for image |
 | standard + slow / moderate (16 GB M1, M2/M3/M4 base) | `flux2` / `flux2-klein-4b` | 4-bit, 768², `--low-ram` | Same gate as LLM: needs `fast` throughput for 8-bit |
-| standard + fast+ cooled (16 GB M5) | `flux2` / `flux2-klein-4b` | 8-bit, 768² | Current 16 GB 8-bit path is OK here |
+| standard + fast+ cooled (16 GB M5, 18 GB Pro) | `flux2` / `flux2-klein-4b` | 8-bit, 768² | 18 GB SKUs stay here; not the 24 GB `z-image-turbo` 1024² profile |
 | high+ cooled (≥24 GB) | `z-image-turbo` | 8-bit, 1024², 9 steps | Higher quality default |
 
 Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. **`--family` selects the mflux CLI and default checkpoint only**; width, height, steps, quantize, and `--low-ram` still follow the composed profile unless you set those flags or `MLX_IMAGE_*`. So `--family z-image-turbo` on 8 GB still uses 512² / 4 steps / 4-bit, not the ≥24 GB 1024² / 9-step profile.
@@ -139,8 +139,8 @@ make video VIDEO_PROMPT="a red fox running through snow"
 | Memory / chip | Default family / model | Size / frames | Notes |
 | --- | --- | --- | --- |
 | constrained, 16 GB slow/moderate base chips, or fanless | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Generate refuses unless `--force` (UMT5 ~11 GB). Do not advertise LTX |
-| standard + fast cooled (16 GB M5) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Swap-heavy; stop `mlx_lm.server`. RAM still too small for LTX |
-| high cooled (≤32 GB) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 33–49 frames | First practical Wan profile; frames may scale with GPU cores + throughput |
+| standard + fast cooled (16 GB M5, 18 GB Pro) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Swap-heavy; stop `mlx_lm.server`. 18 GB stays on 17 frames, not the 24 GB 33-frame profile. RAM still too small for LTX |
+| high cooled (24–32 GB) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 33–49 frames | First practical Wan profile; frames may scale with GPU cores + throughput |
 | workstation cooled (≤64 GB) | `ltx2` / `prince-canuma/LTX-2-distilled` | 512², 33 frames | HF download on first generate; no Wan convert |
 | large | `ltx2` / `prince-canuma/LTX-2-distilled` | 768×512, 65 frames | Quality path |
 

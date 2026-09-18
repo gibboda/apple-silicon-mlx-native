@@ -71,10 +71,10 @@ Figures are **approximate** and intended for planning. Measure on your machine b
 | Memory tier | Chip class | Default model | `MLX_RECOMMENDED_CONTEXT` |
 | --- | --- | --- | --- |
 | constrained (≤8 GB) | any, including this M1 | `mlx-community/Llama-3.2-3B-Instruct-4bit` | 2048 |
-| standard (≤16 GB) | slow / moderate (16 GB M1, M2/M3/M4 base) | `mlx-community/Llama-3.2-3B-Instruct-4bit` | 2048 |
-| standard (≤16 GB) | fast+ cooled (16 GB M5) | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4096 |
-| high (≤32 GB) | not very_fast | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4096 |
-| high (≤32 GB) | very_fast (Max) | `mlx-community/Qwen2.5-14B-Instruct-4bit` | 8192 |
+| standard (≤18 GB) | slow / moderate (16 GB M1, M2/M3/M4 base) | `mlx-community/Llama-3.2-3B-Instruct-4bit` | 2048 |
+| standard (≤18 GB) | fast+ cooled (16 GB M5, 18 GB Pro) | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4096 |
+| high (24–32 GB) | not very_fast | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4096 |
+| high (24–32 GB) | very_fast (Max) | `mlx-community/Qwen2.5-14B-Instruct-4bit` | 8192 |
 | workstation (≤64 GB) | any | `mlx-community/Qwen2.5-14B-Instruct-4bit` | 8192 |
 | large (>64 GB) | extreme / RAM-only | `mlx-community/Qwen2.5-32B-Instruct-4bit` | 8192 |
 | unknown chip | RAM-only fallback | Same as that memory tier without a fast+ upgrade (standard = 3B / 2048) | Same as slow/moderate at that RAM |

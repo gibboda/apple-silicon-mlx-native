@@ -193,8 +193,8 @@ On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) an
 | RAM tier | Slow / moderate / fanless (M1, M2/M3/M4 base) | Fast cooled (e.g. M5) |
 | --- | --- | --- |
 | ≤8 GB constrained | 3B 4-bit, context 2048 | still 3B (RAM wins) |
-| ≤16 GB standard | 3B 4-bit, context 2048 | 7B 4-bit, context 4096 |
-| ≤32 GB high | 7B 4-bit | 14B 4-bit on Max (`very_fast`) |
+| ≤18 GB standard | 3B 4-bit, context 2048 | 7B 4-bit, context 4096 |
+| 24–32 GB high | 7B 4-bit | 14B 4-bit on Max (`very_fast`) |
 | ≤64 GB workstation | 14B 4-bit | 14B 4-bit |
 | >64 GB large | 32B 4-bit | 32B 4-bit |
 
@@ -216,7 +216,7 @@ make install-image
 make image IMAGE_PROMPT="a red fox in snow"
 ```
 
-On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. 16 GB slow/moderate base chips (M1, M2/M3/M4 base) stay conservative (768² 4-bit `--low-ram`); 16 GB M5 may use the 768² 8-bit path. Fanless Airs keep the conservative image profile. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the composed profile. See [docs/media.md](docs/media.md).
+On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. 16 GB slow/moderate base chips (M1, M2/M3/M4 base) stay conservative (768² 4-bit `--low-ram`); 16 GB M5 and 18 GB Pro SKUs may use the 768² 8-bit path, not the 24 GB `z-image-turbo` 1024² profile. Fanless Airs keep the conservative image profile. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the composed profile. See [docs/media.md](docs/media.md).
 
 ## Video generation
 
