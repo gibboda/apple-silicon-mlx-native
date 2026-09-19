@@ -336,6 +336,8 @@ make release VERSION=0.2.2 RELEASE_ARGS=--dry-run
 make release VERSION=0.2.2 RELEASE_ARGS=--push
 ```
 
+`scripts/release.sh` is bash. Prefer `make release` or `scripts/release.sh --dry-run VERSION` (`python3 scripts/release.sh` re-execs bash).
+
 `scripts/release.sh` moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z`, and creates annotated tag `vx.y.z` (git hooks still run). `--push` then `git push`es the commit and tag and runs `gh release create`. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
 
 ## CODEOWNERS

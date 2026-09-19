@@ -131,6 +131,20 @@ path_without() {
 
 expect_ok "help" "${RELEASE}" --help
 expect_fail "missing version" "${RELEASE}"
+if command -v python3 >/dev/null 2>&1; then
+  py_help=""
+  if py_help="$(python3 "${RELEASE}" --help 2>&1)"; then
+    pass "python3 invocation re-execs bash --help"
+  else
+    fail "python3 invocation re-execs bash --help"
+    printf '%s\n' "${py_help}" >&2
+  fi
+  expect_contains "python3 --help is bash usage" "Usage: release.sh" "${py_help}"
+  expect_missing "python3 invocation is not a SyntaxError" "SyntaxError" "${py_help}"
+  expect_missing "python3 invocation is not a SyntaxWarning" "SyntaxWarning" "${py_help}"
+else
+  pass "python3 not installed; skip interpreter-mismatch fixture"
+fi
 expect_fail "invalid semver 1.2" "${RELEASE}" 1.2
 expect_fail "leading v is rejected" "${RELEASE}" v0.2.0
 expect_fail "empty prerelease identifier is rejected" "${RELEASE}" 1.0.0-rc..1

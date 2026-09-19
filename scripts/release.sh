@@ -14,8 +14,9 @@
 # Does not bump pinned mlx/mflux versions. Does not force-push tags.
 # Does not skip git hooks (--no-verify is never passed).
 #
+# This is a bash script. `python3 scripts/release.sh` re-execs bash.
 # shellcheck source=scripts/lib/common.sh
-
+''':'
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +31,8 @@ usage() {
   cat <<'EOF'
 Usage: release.sh [--dry-run] [--push] VERSION
 
-Cut a SemVer release from CHANGELOG.md [Unreleased].
+Cut a SemVer release from CHANGELOG.md [Unreleased]. This is a bash script.
+`python3 scripts/release.sh` re-execs bash.
 
   VERSION       MAJOR.MINOR.PATCH with optional pre-release (e.g. 0.2.2, 1.0.0-rc.1)
   --dry-run     Validate and print the planned changelog; write nothing, do not tag
@@ -79,7 +81,7 @@ is_prerelease() {
 is_semver() {
   local v="$1"
   local major minor patch pre
-  if [[ ! "${v}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z.-]+))?$ ]]; then
+  if [[ ! "${v}" =~ ^([0-9]+)[.]([0-9]+)[.]([0-9]+)(-([0-9A-Za-z.-]+))?$ ]]; then
     return 1
   fi
   major="${BASH_REMATCH[1]}"
@@ -100,7 +102,7 @@ github_https_from_remote() {
   local owner repo
   raw="${raw%.git}"
   raw="${raw%/}"
-  if [[ "${raw}" =~ github\.com[:/]+([^/]+)/([^/]+) ]]; then
+  if [[ "${raw}" =~ github[.]com[:/]+([^/]+)/([^/]+) ]]; then
     owner="${BASH_REMATCH[1]}"
     repo="${BASH_REMATCH[2]}"
     repo="${repo%.git}"
@@ -113,8 +115,8 @@ github_https_from_remote() {
 extract_unreleased_body() {
   local file="$1"
   awk '
-    /^## \[Unreleased\][[:space:]]*$/ { grab=1; next }
-    grab && /^## \[/ { exit }
+    /^## [[]Unreleased][[:space:]]*$/ { grab=1; next }
+    grab && /^## [[]/ { exit }
     grab { print }
   ' "${file}"
 }
@@ -135,9 +137,9 @@ trim_blank_lines() {
 previous_changelog_version() {
   local file="$1"
   awk '
-    /^## \[[0-9]/ {
-      if (match($0, /\[[^]]+\]/)) {
-        print substr($0, RSTART+1, RLENGTH-2)
+    /^## [[][0-9]/ {
+      if (match($0, /[[][^]]+/)) {
+        print substr($0, RSTART+1, RLENGTH-1)
         exit
       }
     }
@@ -161,17 +163,17 @@ build_footer() {
     printf '[%s]: %s/releases/tag/v%s\n' "${version}" "${repo_url}" "${version}"
   fi
   awk -v skip="${version}" '
-    /^\[Unreleased\]:/ { in_footer=1; next }
-    /^\[[0-9][^]]+\]:/ {
+    /^[[]Unreleased]:/ { in_footer=1; next }
+    /^[[][0-9][^]]+]:/ {
       in_footer=1
       name=$0
-      sub(/^\[/, "", name)
+      sub(/^[[]/, "", name)
       sub(/].*/, "", name)
       if (name == skip) next
       print
       next
     }
-    in_footer && /^\[[^]]+\]:/ { print }
+    in_footer && /^[[][^]]+]:/ { print }
   ' "${changelog}"
 }
 
@@ -183,14 +185,14 @@ build_new_changelog() {
   local repo_url="$5"
   local prev="$6"
 
-  awk '/^## \[Unreleased\][[:space:]]*$/ { print; exit } { print }' "${changelog}"
+  awk '/^## [[]Unreleased][[:space:]]*$/ { print; exit } { print }' "${changelog}"
   printf '\n## [%s] - %s\n\n%s\n\n' "${version}" "${rel_date}" "${body}"
   awk '
-    /^## \[Unreleased\][[:space:]]*$/ { skip=1; next }
-    skip && /^## \[/ { skip=0 }
+    /^## [[]Unreleased][[:space:]]*$/ { skip=1; next }
+    skip && /^## [[]/ { skip=0 }
     skip { next }
-    /^\[Unreleased\]:/ { exit }
-    /^\[[0-9][^]]+\]:/ { exit }
+    /^[[]Unreleased]:/ { exit }
+    /^[[][0-9][^]]+]:/ { exit }
     { print }
   ' "${changelog}"
   build_footer "${repo_url}" "${version}" "${prev}" "${changelog}"
@@ -254,7 +256,7 @@ if grep -qF "## [${VERSION}]" "${CHANGELOG}"; then
   die "CHANGELOG.md already has a '${VERSION}' section"
 fi
 
-grep -qE '^## \[Unreleased\][[:space:]]*$' "${CHANGELOG}" \
+grep -qE '^## [[]Unreleased][[:space:]]*$' "${CHANGELOG}" \
   || die "CHANGELOG.md has no '## [Unreleased]' heading"
 
 UNRELEASED_BODY="$(extract_unreleased_body "${CHANGELOG}" | trim_blank_lines)"
@@ -312,3 +314,11 @@ else
   log_info "Push skipped (default). To publish this tag:"
   log_info "  git push && git push origin v${VERSION} && gh release create v${VERSION} --notes-from-tag"
 fi
+
+# python3 $0 swallows the bash body in a string, then re-execs bash.
+: <<'ENDPYTHON'
+'''
+import os
+import sys
+os.execvp("bash", ["bash"] + sys.argv)
+ENDPYTHON
