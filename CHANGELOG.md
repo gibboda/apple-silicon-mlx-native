@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-19
+
 ### Added
 
 - `scripts/release.sh` / `make release` cuts SemVer from `[Unreleased]` by patch-bumping the latest CHANGELOG heading (optional `VERSION=` / `--minor` / `--major`; annotated tag; no push by default; `--push` requires `gh` up front)
@@ -23,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README and models tables describe the `standard` memory tier as ≤18 GB (`< 24` GB), matching `classify_memory_tier`
 - Disable markdownlint MD024 on Keep a Changelog repeated `Added`/`Changed`/`Fixed` headings
 - `python3 scripts/release.sh` re-execs bash instead of raising a SyntaxError
+
+# Changelog
+
+<!-- markdownlint-disable MD024 -->
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.2.1] - 2026-09-17
 
@@ -99,7 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gibboda/apple-silicon-mlx-native/releases/tag/v0.1.0
