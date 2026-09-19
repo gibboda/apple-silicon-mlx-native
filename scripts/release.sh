@@ -4,10 +4,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # Usage:
+#   scripts/release.sh
 #   scripts/release.sh --dry-run
 #   scripts/release.sh --minor
-#   scripts/release.sh --push
-#   scripts/release.sh 0.3.0
+#   scripts/release.sh --no-push
 #
 # Environment:
 #   RELEASE_DATE      Override YYYY-MM-DD (tests / reproducible cuts)
@@ -16,6 +16,9 @@
 # Does not skip git hooks (--no-verify is never passed).
 #
 # This is a bash script. `python3 scripts/release.sh` re-execs bash.
+# Polyglot: Python opens a ''' string (the trailing :' is string body).
+# Bash concatenates '' with ':' and runs : (no-op). Do not change to ''' —
+# that would start a single-quoted string and swallow the script.
 # shellcheck source=scripts/lib/common.sh
 ''':'
 set -euo pipefail
@@ -25,33 +28,50 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 DRY_RUN=0
-DO_PUSH=0
+DO_PUSH=1
+PUSH_OPT=""
 VERSION=""
 BUMP=""
 
 usage() {
   cat <<'EOF'
-Usage: release.sh [--dry-run] [--push] [--patch|--minor|--major] [VERSION]
+Usage: release.sh [--dry-run] [--no-push|--push] [--patch|--minor|--major] [VERSION]
 
-Cut a SemVer release from CHANGELOG.md [Unreleased]. This is a bash script.
-`python3 scripts/release.sh` re-execs bash.
+Cut and publish a SemVer release from CHANGELOG.md [Unreleased]. This is a bash
+script. `python3 scripts/release.sh` re-execs bash.
 
-  VERSION       Optional explicit MAJOR.MINOR.PATCH (e.g. 0.2.2, 1.0.0-rc.1)
-                If omitted, bump the latest ## [x.y.z] heading in CHANGELOG.md
+  VERSION       Optional override (pre-releases / unusual jumps). Default: patch-bump
+                the latest ## [x.y.z] heading in CHANGELOG.md
   --patch       Next x.y.(z+1) (default when VERSION is omitted)
   --minor       Next x.(y+1).0
   --major       Next (x+1).0.0
   --dry-run     Validate and print the planned changelog; write nothing, do not tag
-  --push        After commit+tag, git push and gh release create (off by default)
+  --push        After commit+tag, git push and gh release create (default)
+  --no-push     Commit and tag only; do not push or create a GitHub Release
   -h, --help    Show this help
 
-Requires a clean work tree and a non-empty [Unreleased] section. Creates commit
+Requires a clean work tree on the default branch, a non-empty [Unreleased]
+section, and gh (unless --dry-run or --no-push). Creates commit
   chore(release): cut VERSION
-and annotated tag vVERSION. Never passes --no-verify or force-pushes tags.
+and annotated tag vVERSION, then publishes. Never passes --no-verify or
+force-pushes tags.
 
 Environment:
   RELEASE_DATE  Override the changelog date (YYYY-MM-DD). Default: today.
 EOF
+}
+
+set_push_opt() {
+  local kind="$1"
+  if [[ -n "${PUSH_OPT}" && "${PUSH_OPT}" != "${kind}" ]]; then
+    die "Cannot combine --push and --no-push"
+  fi
+  PUSH_OPT="${kind}"
+  if [[ "${kind}" == "push" ]]; then
+    DO_PUSH=1
+  else
+    DO_PUSH=0
+  fi
 }
 
 is_numeric_identifier() {
@@ -221,6 +241,7 @@ build_new_changelog() {
   awk '/^## [[]Unreleased][[:space:]]*$/ { print; exit } { print }' "${changelog}"
   printf '\n## [%s] - %s\n\n%s\n\n' "${version}" "${rel_date}" "${body}"
   awk '
+    BEGIN { skip=1 }
     /^## [[]Unreleased][[:space:]]*$/ { skip=1; next }
     skip && /^## [[]/ { skip=0 }
     skip { next }
@@ -234,7 +255,8 @@ build_new_changelog() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
-    --push) DO_PUSH=1; shift ;;
+    --push) set_push_opt push; shift ;;
+    --no-push) set_push_opt no-push; shift ;;
     --patch) set_bump patch; shift ;;
     --minor) set_bump minor; shift ;;
     --major) set_bump major; shift ;;
@@ -260,7 +282,7 @@ if [[ $# -gt 0 ]]; then
   [[ $# -eq 0 ]] || die "Unexpected extra argument: $1"
 fi
 
-[[ "${DRY_RUN}" -eq 1 && "${DO_PUSH}" -eq 1 ]] && die "Cannot combine --dry-run and --push"
+[[ "${DRY_RUN}" -eq 1 && "${PUSH_OPT}" == "push" ]] && die "Cannot combine --dry-run and --push"
 if [[ -n "${VERSION}" && -n "${BUMP}" ]]; then
   die "Cannot combine explicit VERSION with --patch/--minor/--major"
 fi
@@ -277,8 +299,8 @@ if [[ -n "${VERSION}" ]]; then
   git check-ref-format "refs/tags/v${VERSION}" \
     || die "VERSION is not a valid git tag name: v${VERSION}"
 fi
-if [[ "${DO_PUSH}" -eq 1 ]]; then
-  require_cmd gh "Install GitHub CLI (gh) or omit --push."
+if [[ "${DRY_RUN}" -eq 0 && "${DO_PUSH}" -eq 1 ]]; then
+  require_cmd gh "Install GitHub CLI (gh) or pass --dry-run / --no-push."
 fi
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not inside a git work tree"
 
@@ -288,6 +310,17 @@ CHANGELOG="${GIT_ROOT}/CHANGELOG.md"
 
 if [[ -n "$(git -C "${GIT_ROOT}" status --porcelain)" ]]; then
   die "Working tree is not clean. Commit or stash changes before cutting a release."
+fi
+
+CURRENT_BRANCH="$(git -C "${GIT_ROOT}" rev-parse --abbrev-ref HEAD)"
+if [[ "${DRY_RUN}" -eq 0 ]]; then
+  [[ "${CURRENT_BRANCH}" != "HEAD" ]] || die "Cannot cut a release in detached HEAD"
+  DEFAULT_BRANCH="$(git -C "${GIT_ROOT}" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  DEFAULT_BRANCH="${DEFAULT_BRANCH#origin/}"
+  [[ -n "${DEFAULT_BRANCH}" ]] || DEFAULT_BRANCH="main"
+  if [[ "${CURRENT_BRANCH}" != "${DEFAULT_BRANCH}" ]]; then
+    die "Cut releases on ${DEFAULT_BRANCH} (currently on ${CURRENT_BRANCH})"
+  fi
 fi
 
 grep -qE '^## [[]Unreleased][[:space:]]*$' "${CHANGELOG}" \
@@ -336,7 +369,7 @@ NEW_CHANGELOG="$(build_new_changelog "${CHANGELOG}" "${VERSION}" "${REL_DATE}" "
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   log_info "Dry-run: CHANGELOG.md would become:"
   printf '%s\n' "${NEW_CHANGELOG}"
-  log_info "Dry-run: would commit 'chore(release): cut ${VERSION}' and annotated tag v${VERSION}"
+  log_info "Dry-run: would commit 'chore(release): cut ${VERSION}', annotated tag v${VERSION}, git push, and gh release create"
   log_ok "Dry-run complete (no write, no tag, no push)"
   exit 0
 fi
@@ -368,8 +401,7 @@ if [[ "${DO_PUSH}" -eq 1 ]]; then
   gh release create "v${VERSION}" --title "v${VERSION}" --notes-file "${BODY_FILE}"
   log_ok "Pushed v${VERSION} and created GitHub Release"
 else
-  log_info "Push skipped (default). To publish this tag:"
-  log_info "  git push && git push origin v${VERSION} && gh release create v${VERSION} --notes-from-tag"
+  log_info "Publish skipped (--no-push)"
 fi
 
 # python3 $0 swallows the bash body in a string, then re-execs bash.

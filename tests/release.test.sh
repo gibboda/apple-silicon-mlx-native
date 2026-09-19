@@ -87,7 +87,7 @@ EOF
 init_repo() {
   local repo="$1"
   mkdir -p "${repo}"
-  git -C "${repo}" init -q --template=
+  git -C "${repo}" init -q --template= -b main
   git -C "${repo}" config user.email "release-test@example.com"
   git -C "${repo}" config user.name "Release Test"
   git -C "${repo}" remote add origin "https://github.com/example/apple-silicon-mlx-native.git"
@@ -153,6 +153,7 @@ expect_fail "numeric leading zero is rejected" "${RELEASE}" 01.0.0
 expect_fail "git-ref-illegal prerelease is rejected" "${RELEASE}" 1.0.0-rc.lock
 expect_fail "dry-run plus push rejected" "${RELEASE}" --dry-run --push 0.2.0
 expect_fail "explicit VERSION cannot combine with --minor" "${RELEASE}" --minor 0.2.0
+expect_fail "push and no-push rejected" "${RELEASE}" --push --no-push
 
 REPO="${TMP}/cut"
 init_repo "${REPO}"
@@ -234,21 +235,21 @@ cat >"${empty}/CHANGELOG.md" <<'EOF'
 EOF
 git -C "${empty}" add CHANGELOG.md
 git -C "${empty}" commit -q -m "chore: empty unreleased"
-expect_fail "empty Unreleased is rejected" run_release "${empty}" 0.2.0
+expect_fail "empty Unreleased is rejected" run_release "${empty}" --no-push 0.2.0
 
 dup="${TMP}/dup-section"
 init_repo "${dup}"
-expect_fail "duplicate changelog version is rejected" run_release "${dup}" 0.1.0
+expect_fail "duplicate changelog version is rejected" run_release "${dup}" --no-push 0.1.0
 
 tagged="${TMP}/existing-tag"
 init_repo "${tagged}"
 git -C "${tagged}" tag -a v0.2.0 -m "already"
-expect_fail "existing tag is rejected" run_release "${tagged}" 0.2.0
+expect_fail "existing tag is rejected" run_release "${tagged}" --no-push 0.2.0
 
 dirty="${TMP}/dirty"
 init_repo "${dirty}"
 printf 'dirty\n' >"${dirty}/extra.txt"
-expect_fail "dirty work tree is rejected" run_release "${dirty}" 0.2.0
+expect_fail "dirty work tree is rejected" run_release "${dirty}" --no-push 0.2.0
 
 nogh="${TMP}/push-no-gh"
 init_repo "${nogh}"
@@ -258,28 +259,28 @@ push_without_gh() {
   (
     cd "${nogh}"
     PATH="${nogh_path}"
-    RELEASE_DATE=2026-01-02 "${RELEASE}" --push 0.2.0
+    RELEASE_DATE=2026-01-02 "${RELEASE}"
   )
 }
-expect_fail "push without gh is rejected before commit" push_without_gh
+expect_fail "publish without gh is rejected before commit" push_without_gh
 if [[ "$(git -C "${nogh}" rev-parse HEAD)" == "${nogh_seed}" ]]; then
-  pass "push without gh does not create a commit"
+  pass "publish without gh does not create a commit"
 else
-  fail "push without gh created a commit"
+  fail "publish without gh created a commit"
 fi
 if git -C "${nogh}" rev-parse -q --verify refs/tags/v0.2.0 >/dev/null; then
-  fail "push without gh created tag v0.2.0"
+  fail "publish without gh created tag v0.2.0"
 else
-  pass "push without gh does not create a tag"
+  pass "publish without gh does not create a tag"
 fi
-expect_missing "push without gh does not rewrite CHANGELOG" "## [0.2.0]" "$(cat "${nogh}/CHANGELOG.md")"
+expect_missing "publish without gh does not rewrite CHANGELOG" "## [0.1.1]" "$(cat "${nogh}/CHANGELOG.md")"
 
 hookrepo="${TMP}/hooks"
 init_repo "${hookrepo}"
 mkdir -p "${hookrepo}/.git/hooks"
 printf '#!/bin/sh\nexit 1\n' >"${hookrepo}/.git/hooks/commit-msg"
 chmod +x "${hookrepo}/.git/hooks/commit-msg"
-expect_fail "does not skip commit-msg hook" run_release "${hookrepo}" 0.2.0
+expect_fail "does not skip commit-msg hook" run_release "${hookrepo}" --no-push 0.2.0
 if git -C "${hookrepo}" rev-parse -q --verify refs/tags/v0.2.0 >/dev/null; then
   fail "failed hook still created tag v0.2.0"
 else
@@ -289,19 +290,30 @@ fi
 cut="${TMP}/real-cut"
 init_repo "${cut}"
 cut_out=""
-if cut_out="$(run_release "${cut}" 0.2.0 2>&1)"; then
+if cut_out="$(run_release "${cut}" --no-push 0.2.0 2>&1)"; then
   pass "real cut succeeds"
 else
   fail "real cut succeeds"
   printf '%s\n' "${cut_out}" >&2
 fi
-expect_contains "non-push hint uses git push origin tag" "git push origin v0.2.0" "${cut_out}"
-expect_contains "non-push hint uses gh --notes-from-tag" "gh release create v0.2.0 --notes-from-tag" "${cut_out}"
-expect_missing "non-push does not suggest re-running --push" "release.sh --push" "${cut_out}"
+expect_contains "no-push logs publish skipped" "Publish skipped (--no-push)" "${cut_out}"
+expect_missing "no-push does not print git push commands" "git push origin v0.2.0" "${cut_out}"
+expect_missing "no-push does not print gh release create" "gh release create" "${cut_out}"
 cut_log="$(cat "${cut}/CHANGELOG.md")"
 expect_contains "cut writes version heading" "## [0.2.0] - 2026-01-02" "${cut_log}"
 expect_contains "cut keeps Unreleased stub" "## [Unreleased]" "${cut_log}"
 expect_contains "cut moves the note under the version" "- a notable fix" "${cut_log}"
+title_count="$(printf '%s\n' "${cut_log}" | grep -c '^# Changelog' || true)"
+if [[ "${title_count}" == "1" ]]; then
+  pass "cut changelog has a single title"
+else
+  fail "cut changelog title count is ${title_count}, want 1"
+fi
+if printf '%s\n' "${cut_log}" | grep -n '^# Changelog' | grep -qv '^1:'; then
+  fail "cut changelog reprinted the file preamble"
+else
+  pass "cut changelog does not reprint the preamble"
+fi
 expect_contains "cut Unreleased compare uses new tag" \
   "[Unreleased]: https://github.com/example/apple-silicon-mlx-native/compare/v0.2.0...HEAD" "${cut_log}"
 expect_contains "cut new version compare uses previous tag" \
@@ -332,9 +344,36 @@ fi
 tag_body="$(git -C "${cut}" for-each-ref --format='%(contents)' refs/tags/v0.2.0)"
 expect_contains "annotated tag includes release notes" "- a notable fix" "${tag_body}"
 
+auto_cut="${TMP}/auto-cut"
+init_repo "${auto_cut}"
+auto_cut_out=""
+if auto_cut_out="$(run_release "${auto_cut}" --no-push 2>&1)"; then
+  pass "cut without VERSION or bump flag"
+else
+  fail "cut without VERSION or bump flag"
+  printf '%s\n' "${auto_cut_out}" >&2
+fi
+expect_contains "auto cut logs CHANGELOG source" "patch bump of 0.1.0 from CHANGELOG.md" "${auto_cut_out}"
+expect_contains "auto cut writes patch heading" "## [0.1.1] - 2026-01-02" "$(cat "${auto_cut}/CHANGELOG.md")"
+if git -C "${auto_cut}" rev-parse -q --verify refs/tags/v0.1.1 >/dev/null; then
+  pass "auto cut creates tag v0.1.1"
+else
+  fail "auto cut did not create tag v0.1.1"
+fi
+
+offmain="${TMP}/off-main"
+init_repo "${offmain}"
+git -C "${offmain}" checkout -q -b feature
+if run_release "${offmain}" --dry-run >/dev/null 2>&1; then
+  pass "dry-run allowed off main"
+else
+  fail "dry-run allowed off main"
+fi
+expect_fail "refuses to cut off main" run_release "${offmain}" --no-push
+
 first="${TMP}/first-release"
 mkdir -p "${first}"
-git -C "${first}" init -q --template=
+git -C "${first}" init -q --template= -b main
 git -C "${first}" config user.email "release-test@example.com"
 git -C "${first}" config user.name "Release Test"
 git -C "${first}" remote add origin "git@github.com:example/apple-silicon-mlx-native.git"
@@ -357,7 +396,7 @@ else
   printf '%s\n' "${first_auto}" >&2
 fi
 expect_contains "first auto heading is 0.1.0" "## [0.1.0] - 2026-01-02" "${first_auto}"
-expect_ok "first release succeeds" run_release "${first}" 0.1.0
+expect_ok "first release succeeds" run_release "${first}" --no-push
 first_log="$(cat "${first}/CHANGELOG.md")"
 expect_contains "first release uses tag URL not compare" \
   "[0.1.0]: https://github.com/example/apple-silicon-mlx-native/releases/tag/v0.1.0" "${first_log}"
@@ -366,7 +405,7 @@ expect_contains "ssh origin becomes https footer" \
 
 prerelease="${TMP}/rc"
 init_repo "${prerelease}"
-expect_ok "pre-release version succeeds" run_release "${prerelease}" 1.0.0-rc.1
+expect_ok "pre-release version succeeds" run_release "${prerelease}" --no-push 1.0.0-rc.1
 pre_log="$(cat "${prerelease}/CHANGELOG.md")"
 expect_contains "pre-release heading" "## [1.0.0-rc.1] - 2026-01-02" "${pre_log}"
 expect_contains "pre-release compare URL" \
