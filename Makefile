@@ -8,7 +8,7 @@ SHELL := /bin/bash
 SCRIPTS := scripts
 .DEFAULT_GOAL := help
 
-.PHONY: help detect recommend install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video
+.PHONY: help detect recommend install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video release
 
 help: ## Show available targets
 	@printf '%s\n' \
@@ -27,7 +27,8 @@ help: ## Show available targets
 		'make uninstall — same as make clean' \
 		'make audit     — audit commit subjects for Conventional Commits' \
 		'make lint      — run ShellCheck on repository shell scripts' \
-		'make test      — run portable shell self-tests'
+		'make test      — run portable shell self-tests' \
+		'make release   — cut SemVer from CHANGELOG Unreleased (VERSION=x.y.z)'
 
 detect: ## Detect Apple Silicon hardware
 	@$(SCRIPTS)/detect-apple-silicon.sh
@@ -66,6 +67,10 @@ clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew
 
 audit: ## Conventional Commits audit
 	@$(SCRIPTS)/conventional-commits-audit.sh
+
+release: ## Cut SemVer from CHANGELOG Unreleased (VERSION=x.y.z; RELEASE_ARGS=--dry-run|--push)
+	@test -n "$(VERSION)" || { echo 'Set VERSION=x.y.z e.g. make release VERSION=0.2.2'; exit 1; }
+	@$(SCRIPTS)/release.sh $(RELEASE_ARGS) "$(VERSION)"
 
 lint: ## ShellCheck all scripts
 	@command -v shellcheck >/dev/null 2>&1 || { \

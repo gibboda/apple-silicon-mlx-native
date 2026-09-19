@@ -326,9 +326,17 @@ GitHub Actions runs the same script on pull requests. GitHub-generated merge com
 ## CHANGELOG / release policy
 
 - Follow [Keep a Changelog](https://keepachangelog.com/) in `CHANGELOG.md`
-- Use Semantic Versioning for tagged releases
+- Use Semantic Versioning for tagged releases (`v0.1.0`, `v0.2.0`, …)
 - Record user-visible work under `[Unreleased]` during development
-- On release: move `[Unreleased]` notes into a versioned section and tag
+- Cut a release from a clean tree:
+
+```bash
+make release VERSION=0.2.2                 # commit + annotated tag, no push
+make release VERSION=0.2.2 RELEASE_ARGS=--dry-run
+make release VERSION=0.2.2 RELEASE_ARGS=--push
+```
+
+`scripts/release.sh` moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z`, and creates annotated tag `vx.y.z` (git hooks still run). `--push` then `git push`es the commit and tag and runs `gh release create`. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
 
 ## CODEOWNERS
 
