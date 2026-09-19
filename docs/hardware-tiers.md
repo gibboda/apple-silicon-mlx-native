@@ -51,7 +51,7 @@ Class comes from looked-up bandwidth, **not** generation number. M3 Pro (~150 GB
 | `very_fast` | 300–600 GB/s | Max |
 | `extreme` | > 600 GB/s | Ultra |
 
-M5+ GPU Neural Accelerators (generation ≥ 5) can be slightly less conservative on **image/video** at the same RAM (prefill / diffusion). They do not help decode, and this stack never routes through ANE — MLX/Metal GPU only.
+M5+ GPU Neural Accelerators (generation ≥ 5) do **not** change image defaults (those follow `fast` throughput on cooled RAM). They only affect video: on the `high` tier, Wan frames go from 33 to 49 when GPU cores ≥ 24 **and** throughput is `very_fast` **or** the chip has NAX. They do not help decode, and this stack never routes through ANE — MLX/Metal GPU only.
 
 Fanless (`MacBookAir*`) derates: throughput_class must **not** raise the default model, image, video, or context above the conservative Air profile, even on later Airs.
 
