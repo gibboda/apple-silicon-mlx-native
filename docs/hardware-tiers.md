@@ -100,6 +100,6 @@ OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base \
 cp config/models.example.env config/models.env
 ```
 
-Also: `OVERRIDE_CHIP_FAMILY`, `OVERRIDE_CHIP_SKU`, `OVERRIDE_GPU_CORES`, `OVERRIDE_THERMAL_CLASS`.
+Also: `OVERRIDE_CHIP_FAMILY`, `OVERRIDE_CHIP_SKU`, `OVERRIDE_GPU_CORES`, `OVERRIDE_THERMAL_CLASS`. Unknown `OVERRIDE_MEMORY_TIER` / `OVERRIDE_CHIP_SKU` / `OVERRIDE_THERMAL_CLASS` values, or a non-numeric `OVERRIDE_CHIP_FAMILY`, fail instead of silently mapping to the 8 GB path.
 
 `config/models.env` is created once from the composed profile and **preserved on rebuild**. After moving a clone to another Mac, run `make recommend` and update `MLX_DEFAULT_MODEL` / `MLX_RECOMMENDED_CONTEXT` if the composed profile changed — rebuild will not refresh a stale file.

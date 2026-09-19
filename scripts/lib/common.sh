@@ -586,9 +586,41 @@ warn_unknown_chip_policy() {
   fi
 }
 
+# Fail closed on typos: unknown OVERRIDE_* used to look like 8 GB / unknown-chip.
+validate_policy_overrides() {
+  if [[ -n "${OVERRIDE_MEMORY_TIER:-}" ]]; then
+    case "${OVERRIDE_MEMORY_TIER}" in
+      constrained|standard|high|workstation|large) ;;
+      *)
+        die "OVERRIDE_MEMORY_TIER must be constrained|standard|high|workstation|large (got '${OVERRIDE_MEMORY_TIER}')"
+        ;;
+    esac
+  fi
+  if [[ -n "${OVERRIDE_CHIP_SKU:-}" ]]; then
+    case "${OVERRIDE_CHIP_SKU}" in
+      base|pro|max|ultra) ;;
+      *)
+        die "OVERRIDE_CHIP_SKU must be base|pro|max|ultra (got '${OVERRIDE_CHIP_SKU}')"
+        ;;
+    esac
+  fi
+  if [[ -n "${OVERRIDE_THERMAL_CLASS:-}" ]]; then
+    case "${OVERRIDE_THERMAL_CLASS}" in
+      fanless|cooled) ;;
+      *)
+        die "OVERRIDE_THERMAL_CLASS must be fanless|cooled (got '${OVERRIDE_THERMAL_CLASS}')"
+        ;;
+    esac
+  fi
+  if [[ -n "${OVERRIDE_CHIP_FAMILY:-}" && ! "${OVERRIDE_CHIP_FAMILY}" =~ ^[0-9]+$ ]]; then
+    die "OVERRIDE_CHIP_FAMILY must be a generation number (got '${OVERRIDE_CHIP_FAMILY}')"
+  fi
+}
+
 # Policy only: OVERRIDE_* change recommendations, never reported hardware facts.
 compose_chip_policy() {
   local policy_family policy_sku policy_gpu policy_thermal policy_tier policy_bw policy_tp tier_line
+  validate_policy_overrides
   if [[ -n "${OVERRIDE_CHIP_FAMILY:-}" ]]; then
     policy_family="${OVERRIDE_CHIP_FAMILY}"
     policy_sku="${OVERRIDE_CHIP_SKU:-base}"
@@ -711,6 +743,12 @@ load_runtime_profile() {
     export_detect_env
     return
   fi
+  load_runtime_profile_without_sysctl
+}
+
+# Linux CI / no-sysctl path. Physical RAM is always the constrained floor;
+# OVERRIDE_* may rewrite policy labels after this, not physical facts.
+load_runtime_profile_without_sysctl() {
   MLX_ARCH="$(detect_architecture)"
   MLX_CHIP=""
   MLX_MEM_BYTES=""
@@ -720,6 +758,7 @@ load_runtime_profile() {
   MLX_DISK_AVAIL_GIB=""
   MLX_PHYSICAL_TIER_ID="constrained"
   MLX_TIER_LABEL="8 GB — constrained"
+  MLX_PHYSICAL_TIER_LABEL="${MLX_TIER_LABEL}"
   MLX_TIER_HINT="3B–4B 4-bit models, short context"
   MLX_CHIP_FAMILY=""
   MLX_CHIP_SKU=""

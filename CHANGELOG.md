@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Linux/no-sysctl detect keeps `MLX_PHYSICAL_TIER_LABEL` as physical RAM, so an `OVERRIDE_MEMORY_TIER` no longer looks like installed memory
+- Unknown `OVERRIDE_MEMORY_TIER`, `OVERRIDE_CHIP_SKU`, `OVERRIDE_THERMAL_CLASS`, or non-numeric `OVERRIDE_CHIP_FAMILY` values fail instead of silently mapping to the 8 GB path
+- mlx-video self-test outside-workspace image fixture uses a per-run temp path instead of a shared `/tmp` file
 - README no longer repeats the hardware-tiers details line
 - Document GPU NAX only as a `high`-tier Wan frame bump (33→49 when GPU cores ≥ 24), not as an image-default upgrade
 - README and models tables describe the `standard` memory tier as ≤18 GB (`< 24` GB), matching `classify_memory_tier`

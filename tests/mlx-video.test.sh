@@ -148,12 +148,12 @@ expect_fail "output via .. outside workspace rejected" \
 expect_ok "custom output under workspace accepted" \
   "${GENERATE}" --dump-plan --prompt "plan" --output "${MLX_WORKSPACE}/outputs/videos/ok.mp4"
 
-touch /tmp/mlx-video-frame.png
+OUTSIDE_IMG="${TMP}/outside-frame.png"
+touch "${OUTSIDE_IMG}"
 expect_fail "image outside workspace rejected" \
-  "${GENERATE}" --dump-plan --prompt "plan" --image /tmp/mlx-video-frame.png
-out_img_escape="$("${GENERATE}" --dump-plan --prompt "plan" --image /tmp/mlx-video-frame.png 2>&1 || true)"
+  "${GENERATE}" --dump-plan --prompt "plan" --image "${OUTSIDE_IMG}"
+out_img_escape="$("${GENERATE}" --dump-plan --prompt "plan" --image "${OUTSIDE_IMG}" 2>&1 || true)"
 expect_contains "outside image mentions MLX_WORKSPACE" "MLX_WORKSPACE" "${out_img_escape}"
-rm -f /tmp/mlx-video-frame.png
 
 touch "${MLX_WORKSPACE}/frame.png"
 expect_ok "image under workspace accepted" \
