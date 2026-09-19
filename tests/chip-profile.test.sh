@@ -247,6 +247,56 @@ expect_eq "print_detect_env policy MLX_TIER_ID is standard" \
 expect_eq "print_detect_env physical MLX_PHYSICAL_TIER_ID stays constrained" \
   "$(printf '%s\n' "${env_out}" | awk -F= '/^MLX_PHYSICAL_TIER_ID=/{print $2; exit}')" "constrained"
 
+# Linux / no-sysctl fallback must keep physical label stable when OVERRIDE rewrites policy.
+unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
+unset MLX_CHIP_FAMILY MLX_CHIP_SKU MLX_GPU_CORES MLX_THERMAL_CLASS MLX_THROUGHPUT_CLASS MLX_BANDWIDTH_GBS
+OVERRIDE_MEMORY_TIER=high
+load_runtime_profile_without_sysctl
+expect_eq "Linux fallback physical id stays constrained under OVERRIDE" "${MLX_PHYSICAL_TIER_ID}" "constrained"
+expect_eq "Linux fallback physical label stays 8 GB" "${MLX_PHYSICAL_TIER_LABEL}" "8 GB — constrained"
+expect_eq "Linux fallback policy tier honors OVERRIDE high" "${MLX_TIER_ID}" "high"
+expect_eq "Linux fallback policy label is 24-32 GB high" "${MLX_TIER_LABEL}" "24–32 GB — high"
+eval "$(print_detect_env false "" false)"
+expect_eq "sourced fallback env physical id stays constrained" "${MLX_PHYSICAL_TIER_ID}" "constrained"
+expect_eq "sourced fallback env physical label stays 8 GB" "${MLX_PHYSICAL_TIER_LABEL}" "8 GB — constrained"
+expect_eq "sourced fallback env policy id is high" "${MLX_TIER_ID}" "high"
+expect_eq "sourced fallback env policy label is 24-32 GB high" "${MLX_TIER_LABEL}" "24–32 GB — high"
+unset OVERRIDE_MEMORY_TIER
+
+# Unknown OVERRIDE_* must die instead of mapping to 8 GB / unknown-chip.
+unknown_tier_out=""
+if unknown_tier_out="$(OVERRIDE_MEMORY_TIER=hgih compose_chip_policy 2>&1)"; then
+  fail "unknown OVERRIDE_MEMORY_TIER dies"
+else
+  pass "unknown OVERRIDE_MEMORY_TIER dies"
+fi
+expect_contains "unknown OVERRIDE_MEMORY_TIER names the id" "hgih" "${unknown_tier_out}"
+expect_contains "unknown OVERRIDE_MEMORY_TIER lists valid ids" "constrained|standard|high|workstation|large" "${unknown_tier_out}"
+
+unknown_sku_out=""
+if unknown_sku_out="$(OVERRIDE_CHIP_SKU=proo compose_chip_policy 2>&1)"; then
+  fail "unknown OVERRIDE_CHIP_SKU dies"
+else
+  pass "unknown OVERRIDE_CHIP_SKU dies"
+fi
+expect_contains "unknown OVERRIDE_CHIP_SKU names the id" "proo" "${unknown_sku_out}"
+
+unknown_thermal_out=""
+if unknown_thermal_out="$(OVERRIDE_THERMAL_CLASS=hot compose_chip_policy 2>&1)"; then
+  fail "unknown OVERRIDE_THERMAL_CLASS dies"
+else
+  pass "unknown OVERRIDE_THERMAL_CLASS dies"
+fi
+expect_contains "unknown OVERRIDE_THERMAL_CLASS names the id" "hot" "${unknown_thermal_out}"
+
+unknown_family_out=""
+if unknown_family_out="$(OVERRIDE_CHIP_FAMILY=M3 compose_chip_policy 2>&1)"; then
+  fail "non-numeric OVERRIDE_CHIP_FAMILY dies"
+else
+  pass "non-numeric OVERRIDE_CHIP_FAMILY dies"
+fi
+expect_contains "non-numeric OVERRIDE_CHIP_FAMILY names the id" "M3" "${unknown_family_out}"
+
 OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
   compose_chip_policy
 expect_eq "OVERRIDE M5 16 GB model is 7B" "${MLX_RECOMMENDED_MODEL}" "mlx-community/Mistral-7B-Instruct-v0.3-4bit"

@@ -36,11 +36,13 @@ Detect Apple Silicon hardware characteristics for MLX workstation defaults.
 
 Environment:
   MLX_WORKSPACE            Workspace path used for disk availability (default: repo root)
-  OVERRIDE_MEMORY_TIER     Policy-only RAM tier (facts still report physical RAM)
+  OVERRIDE_MEMORY_TIER     Policy-only RAM tier: constrained|standard|high|workstation|large
   OVERRIDE_CHIP_FAMILY     Policy-only chip generation (e.g. 1, 5)
   OVERRIDE_CHIP_SKU        Policy-only sku: base|pro|max|ultra
   OVERRIDE_GPU_CORES       Policy-only GPU core count
   OVERRIDE_THERMAL_CLASS   Policy-only thermal class: fanless|cooled
+
+Unknown override ids fail (they do not silently map to 8 GB / unknown-chip).
 
 Physical detect output stays truthful when overrides are set. After moving a
 cloned config/models.env to another Mac, run --recommend and update that file
