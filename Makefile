@@ -28,7 +28,7 @@ help: ## Show available targets
 		'make audit     — audit commit subjects for Conventional Commits' \
 		'make lint      — run ShellCheck on repository shell scripts' \
 		'make test      — run portable shell self-tests' \
-		'make release   — cut SemVer from CHANGELOG Unreleased (VERSION=x.y.z)'
+		'make release   — cut next SemVer from CHANGELOG Unreleased (optional VERSION= / --minor/--major)'
 
 detect: ## Detect Apple Silicon hardware
 	@$(SCRIPTS)/detect-apple-silicon.sh
@@ -68,9 +68,8 @@ clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew
 audit: ## Conventional Commits audit
 	@$(SCRIPTS)/conventional-commits-audit.sh
 
-release: ## Cut SemVer from CHANGELOG Unreleased (VERSION=x.y.z; RELEASE_ARGS=--dry-run|--push)
-	@test -n "$(VERSION)" || { echo 'Set VERSION=x.y.z e.g. make release VERSION=0.2.2'; exit 1; }
-	@$(SCRIPTS)/release.sh $(RELEASE_ARGS) "$(VERSION)"
+release: ## Cut next SemVer from CHANGELOG Unreleased (VERSION optional; RELEASE_ARGS=--dry-run|--push|--minor|--major)
+	@$(SCRIPTS)/release.sh $(RELEASE_ARGS) $(VERSION)
 
 lint: ## ShellCheck all scripts
 	@command -v shellcheck >/dev/null 2>&1 || { \

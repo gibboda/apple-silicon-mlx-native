@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `scripts/release.sh` / `make release VERSION=x.y.z` cuts SemVer from `[Unreleased]` (annotated tag, no push by default; `--push` requires `gh` up front)
+- `scripts/release.sh` / `make release` cuts SemVer from `[Unreleased]` by patch-bumping the latest CHANGELOG heading (optional `VERSION=` / `--minor` / `--major`; annotated tag; no push by default; `--push` requires `gh` up front)
 
 ### Fixed
 
@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document GPU NAX only as a `high`-tier Wan frame bump (33→49 when GPU cores ≥ 24), not as an image-default upgrade
 - README and models tables describe the `standard` memory tier as ≤18 GB (`< 24` GB), matching `classify_memory_tier`
 - Disable markdownlint MD024 on Keep a Changelog repeated `Added`/`Changed`/`Fixed` headings
+- `python3 scripts/release.sh` re-execs bash instead of raising a SyntaxError
 
 ## [0.2.1] - 2026-09-17
 
