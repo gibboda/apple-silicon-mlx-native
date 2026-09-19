@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `scripts/release.sh` no longer duplicates the changelog title and preamble when moving `[Unreleased]` into a version heading
+- `make release` / `scripts/release.sh` publish by default (commit, tag, `git push`, `gh release create`) from the CHANGELOG patch bump on the default branch, so cutting a release does not require typing a version or running git by hand
+- `scripts/release.sh --dry-run --no-push` previews a local commit+tag only; the plan no longer claims it would push or create a GitHub Release
+
+## [0.2.2] - 2026-09-19
+
 ### Added
 
 - `scripts/release.sh` / `make release` cuts SemVer from `[Unreleased]` by patch-bumping the latest CHANGELOG heading (optional `VERSION=` / `--minor` / `--major`; annotated tag; no push by default; `--push` requires `gh` up front)
@@ -99,7 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gibboda/apple-silicon-mlx-native/releases/tag/v0.1.0
