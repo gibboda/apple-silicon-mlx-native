@@ -140,7 +140,7 @@ make video VIDEO_PROMPT="a red fox running through snow"
 | --- | --- | --- | --- |
 | constrained, 16 GB slow/moderate base chips, or fanless | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Generate refuses unless `--force` (UMT5 ~11 GB). Do not advertise LTX |
 | standard + fast cooled (16 GB M5, 18 GB Pro) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 17 frames, 10 steps | Swap-heavy; stop `mlx_lm.server`. 18 GB stays on 17 frames, not the 24 GB 33-frame profile. RAM still too small for LTX |
-| high cooled (24–32 GB) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 33–49 frames | First practical Wan profile; 49 frames only when GPU cores ≥ 24 and (`very_fast` or M5+ NAX) |
+| high cooled (24–32 GB) | `wan21` / `wan21-t2v-1.3b-q4` | 832×480, 33–49 frames | First practical Wan profile; 49 frames only when GPU cores ≥ 24 and (`very_fast` or M5+ NAX) — see [hardware tiers](hardware-tiers.md) |
 | workstation cooled (≤64 GB) | `ltx2` / `prince-canuma/LTX-2-distilled` | 512², 33 frames | HF download on first generate; no Wan convert |
 | large | `ltx2` / `prince-canuma/LTX-2-distilled` | 768×512, 65 frames | Quality path |
 
