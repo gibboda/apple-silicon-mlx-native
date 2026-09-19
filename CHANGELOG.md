@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- markdownlint-disable MD024 -->
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -12,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README no longer repeats the hardware-tiers details line
 - Document GPU NAX only as a `high`-tier Wan frame bump (33→49 when GPU cores ≥ 24), not as an image-default upgrade
 - README and models tables describe the `standard` memory tier as ≤18 GB (`< 24` GB), matching `classify_memory_tier`
+- Disable markdownlint MD024 on Keep a Changelog repeated `Added`/`Changed`/`Fixed` headings
 
 ## [0.2.1] - 2026-09-17
 
