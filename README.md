@@ -328,17 +328,17 @@ GitHub Actions runs the same script on pull requests. GitHub-generated merge com
 - Follow [Keep a Changelog](https://keepachangelog.com/) in `CHANGELOG.md`
 - Use Semantic Versioning for tagged releases (`v0.1.0`, `v0.2.0`, …)
 - Record user-visible work under `[Unreleased]` during development
-- Cut and publish a release from a clean tree on `main`:
+- Cut a release from a clean tree on `main` (Protect main forbids pushing `main` directly):
 
 ```bash
-make release                               # patch-bump, commit, tag, push, GitHub Release
+make release                               # patch-bump, commit on chore/release-x.y.z, open PR
 make release RELEASE_ARGS=--dry-run
 make release RELEASE_ARGS=--minor
 ```
 
 `scripts/release.sh` is bash. Prefer `make release` (`python3 scripts/release.sh` re-execs bash). There is no `release.py`.
 
-`scripts/release.sh` reads the latest `## [x.y.z]` heading from `CHANGELOG.md` and patch-bumps it unless you pass `--minor` or `--major`. It moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z`, creates annotated tag `vx.y.z` (git hooks still run), `git push`es the commit and tag, and runs `gh release create`. You do not type the next SemVer or run git by hand. `--dry-run` previews; `--no-push` stops after the local tag. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
+`scripts/release.sh` reads the latest `## [x.y.z]` heading from `CHANGELOG.md` and patch-bumps it unless you pass `--minor` or `--major`. It moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z` on `chore/release-x.y.z` (git hooks still run), and opens a pull request. You do not type the next SemVer or push `main`. After that PR merges, `.github/workflows/publish-release.yml` creates annotated tag `vx.y.z` and the GitHub Release. `--dry-run` previews; `--no-push` stops after a local commit+tag. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
 
 ## CODEOWNERS
 

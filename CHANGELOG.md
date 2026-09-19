@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `scripts/release.sh` no longer duplicates the changelog title and preamble when moving `[Unreleased]` into a version heading
-- `make release` / `scripts/release.sh` publish by default (commit, tag, `git push`, `gh release create`) from the CHANGELOG patch bump on the default branch, so cutting a release does not require typing a version or running git by hand
+- `make release` / `scripts/release.sh` publish by opening a `chore/release-x.y.z` pull request from the CHANGELOG patch bump (they never push protected `main`); the tag and GitHub Release are created after that PR merges
 - `scripts/release.sh --dry-run --no-push` previews a local commit+tag only; the plan no longer claims it would push or create a GitHub Release
 
 ## [0.2.2] - 2026-09-19

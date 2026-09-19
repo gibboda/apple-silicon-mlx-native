@@ -154,6 +154,7 @@ expect_fail "git-ref-illegal prerelease is rejected" "${RELEASE}" 1.0.0-rc.lock
 expect_fail "dry-run plus push rejected" "${RELEASE}" --dry-run --push 0.2.0
 expect_fail "explicit VERSION cannot combine with --minor" "${RELEASE}" --minor 0.2.0
 expect_fail "push and no-push rejected" "${RELEASE}" --push --no-push
+expect_fail "publish-merged plus dry-run rejected" "${RELEASE}" --publish-merged --dry-run
 
 REPO="${TMP}/cut"
 init_repo "${REPO}"
@@ -203,8 +204,10 @@ expect_contains "dry-run new version compare uses previous tag" \
   "[0.2.0]: https://github.com/example/apple-silicon-mlx-native/compare/v0.1.0...v0.2.0" "${dry_out}"
 expect_contains "dry-run keeps original tag URL" \
   "[0.1.0]: https://github.com/example/apple-silicon-mlx-native/releases/tag/v0.1.0" "${dry_out}"
-expect_contains "default dry-run plan includes publish" \
-  "git push, and gh release create" "${dry_out}"
+expect_contains "default dry-run plan opens a PR" \
+  "open a pull request to main" "${dry_out}"
+expect_contains "default dry-run plan tags after merge" \
+  "tag v0.2.0 after merge" "${dry_out}"
 
 no_push_dry=""
 if no_push_dry="$(run_release "${REPO}" --dry-run --no-push 2>&1)"; then
@@ -271,8 +274,7 @@ nogh_path="$(path_without gh "${TMP}/no-gh-bin")"
 push_without_gh() {
   (
     cd "${nogh}"
-    PATH="${nogh_path}"
-    RELEASE_DATE=2026-01-02 "${RELEASE}"
+    env PATH="${nogh_path}" RELEASE_DATE=2026-01-02 "${RELEASE}"
   )
 }
 expect_fail "publish without gh is rejected before commit" push_without_gh
@@ -383,6 +385,61 @@ else
   fail "dry-run allowed off main"
 fi
 expect_fail "refuses to cut off main" run_release "${offmain}" --no-push
+
+pub="${TMP}/publish-pr"
+init_repo "${pub}"
+bare="${TMP}/origin.git"
+git init -q --bare --template= -b main "${bare}"
+git -C "${pub}" remote set-url --push origin "${bare}"
+git -C "${pub}" push -q -u origin main
+fake_gh="${TMP}/fake-gh-bin"
+mkdir -p "${fake_gh}"
+cat >"${fake_gh}/gh" <<'EOF'
+#!/bin/sh
+if [ "$1" = pr ] && [ "$2" = create ]; then
+  echo https://github.com/example/apple-silicon-mlx-native/pull/42
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "${fake_gh}/gh"
+pub_seed="$(git -C "${pub}" rev-parse HEAD)"
+pub_out=""
+publish_pr() {
+  (
+    cd "${pub}"
+    env PATH="${fake_gh}:${PATH}" RELEASE_DATE=2026-01-02 "${RELEASE}"
+  )
+}
+if pub_out="$(publish_pr 2>&1)"; then
+  pass "default publish opens a PR"
+else
+  fail "default publish opens a PR"
+  printf '%s\n' "${pub_out}" >&2
+fi
+expect_contains "publish output has PR URL" \
+  "https://github.com/example/apple-silicon-mlx-native/pull/42" "${pub_out}"
+expect_contains "publish notes tag after merge" "tag v0.1.1 is created after merge" "${pub_out}"
+if [[ "$(git -C "${pub}" rev-parse --abbrev-ref HEAD)" == "chore/release-0.1.1" ]]; then
+  pass "publish checks out chore/release-0.1.1"
+else
+  fail "publish checks out chore/release-0.1.1 (got $(git -C "${pub}" rev-parse --abbrev-ref HEAD))"
+fi
+if git -C "${bare}" show-ref --verify --quiet refs/heads/chore/release-0.1.1; then
+  pass "publish pushes chore/release-0.1.1"
+else
+  fail "publish pushes chore/release-0.1.1"
+fi
+if [[ "$(git -C "${bare}" rev-parse refs/heads/main)" == "${pub_seed}" ]]; then
+  pass "publish does not push main"
+else
+  fail "publish pushed main"
+fi
+if git -C "${pub}" rev-parse -q --verify refs/tags/v0.1.1 >/dev/null; then
+  fail "publish created local tag v0.1.1"
+else
+  pass "publish does not tag before merge"
+fi
 
 first="${TMP}/first-release"
 mkdir -p "${first}"
