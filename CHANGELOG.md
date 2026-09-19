@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/release.sh` / `make release VERSION=x.y.z` cuts SemVer from `[Unreleased]` (annotated tag, no push by default; `--push` requires `gh` up front)
+
 ### Fixed
 
 - Linux/no-sysctl detect keeps `MLX_PHYSICAL_TIER_LABEL` as physical RAM, so an `OVERRIDE_MEMORY_TIER` no longer looks like installed memory
