@@ -331,14 +331,16 @@ GitHub Actions runs the same script on pull requests. GitHub-generated merge com
 - Cut a release from a clean tree:
 
 ```bash
-make release VERSION=0.2.2                 # commit + annotated tag, no push
-make release VERSION=0.2.2 RELEASE_ARGS=--dry-run
-make release VERSION=0.2.2 RELEASE_ARGS=--push
+make release                               # patch-bump latest CHANGELOG heading
+make release RELEASE_ARGS=--dry-run
+make release RELEASE_ARGS=--minor
+make release RELEASE_ARGS=--push
+make release VERSION=1.0.0                 # override (rare)
 ```
 
-`scripts/release.sh` is bash. Prefer `make release` or `scripts/release.sh --dry-run VERSION` (`python3 scripts/release.sh` re-execs bash).
+`scripts/release.sh` is bash. Prefer `make release` or `scripts/release.sh --dry-run` (`python3 scripts/release.sh` re-execs bash).
 
-`scripts/release.sh` moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z`, and creates annotated tag `vx.y.z` (git hooks still run). `--push` then `git push`es the commit and tag and runs `gh release create`. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
+`scripts/release.sh` reads the latest `## [x.y.z]` heading from `CHANGELOG.md` and patch-bumps it unless you pass `--minor`, `--major`, or an explicit `VERSION`. It moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z`, and creates annotated tag `vx.y.z` (git hooks still run). `--push` then `git push`es the commit and tag and runs `gh release create`. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
 
 ## CODEOWNERS
 

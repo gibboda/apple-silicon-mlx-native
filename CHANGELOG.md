@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `scripts/release.sh` / `make release VERSION=x.y.z` cuts SemVer from `[Unreleased]` (annotated tag, no push by default; `--push` requires `gh` up front)
+- `scripts/release.sh` / `make release` cuts SemVer from `[Unreleased]` by patch-bumping the latest CHANGELOG heading (optional `VERSION=` / `--minor` / `--major`; annotated tag; no push by default; `--push` requires `gh` up front)
 
 ### Fixed
 

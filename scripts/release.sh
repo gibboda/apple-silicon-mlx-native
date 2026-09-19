@@ -4,9 +4,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # Usage:
-#   scripts/release.sh 0.2.2
-#   scripts/release.sh --dry-run 0.2.2
-#   scripts/release.sh --push 0.2.2
+#   scripts/release.sh --dry-run
+#   scripts/release.sh --minor
+#   scripts/release.sh --push
+#   scripts/release.sh 0.3.0
 #
 # Environment:
 #   RELEASE_DATE      Override YYYY-MM-DD (tests / reproducible cuts)
@@ -26,15 +27,20 @@ source "${SCRIPT_DIR}/lib/common.sh"
 DRY_RUN=0
 DO_PUSH=0
 VERSION=""
+BUMP=""
 
 usage() {
   cat <<'EOF'
-Usage: release.sh [--dry-run] [--push] VERSION
+Usage: release.sh [--dry-run] [--push] [--patch|--minor|--major] [VERSION]
 
 Cut a SemVer release from CHANGELOG.md [Unreleased]. This is a bash script.
 `python3 scripts/release.sh` re-execs bash.
 
-  VERSION       MAJOR.MINOR.PATCH with optional pre-release (e.g. 0.2.2, 1.0.0-rc.1)
+  VERSION       Optional explicit MAJOR.MINOR.PATCH (e.g. 0.2.2, 1.0.0-rc.1)
+                If omitted, bump the latest ## [x.y.z] heading in CHANGELOG.md
+  --patch       Next x.y.(z+1) (default when VERSION is omitted)
+  --minor       Next x.(y+1).0
+  --major       Next (x+1).0.0
   --dry-run     Validate and print the planned changelog; write nothing, do not tag
   --push        After commit+tag, git push and gh release create (off by default)
   -h, --help    Show this help
@@ -150,6 +156,33 @@ changelog_has_list_item() {
   grep -qE '^[[:space:]]*-[[:space:]]' <<<"$1"
 }
 
+set_bump() {
+  local kind="$1"
+  if [[ -n "${BUMP}" && "${BUMP}" != "${kind}" ]]; then
+    die "Cannot combine --${BUMP} and --${kind}"
+  fi
+  BUMP="${kind}"
+}
+
+bump_semver() {
+  local v="$1"
+  local kind="$2"
+  local major minor patch
+  if [[ ! "${v}" =~ ^([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]]; then
+    die "Cannot auto-bump '${v}' (pre-release or invalid). Pass an explicit VERSION."
+  fi
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+  patch="${BASH_REMATCH[3]}"
+  case "${kind}" in
+    patch) patch=$((patch + 1)) ;;
+    minor) minor=$((minor + 1)); patch=0 ;;
+    major) major=$((major + 1)); minor=0; patch=0 ;;
+    *) die "Unknown bump kind: ${kind}" ;;
+  esac
+  printf '%s.%s.%s\n' "${major}" "${minor}" "${patch}"
+}
+
 build_footer() {
   local repo_url="$1"
   local version="$2"
@@ -202,6 +235,9 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
     --push) DO_PUSH=1; shift ;;
+    --patch) set_bump patch; shift ;;
+    --minor) set_bump minor; shift ;;
+    --major) set_bump major; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; break ;;
     -*) die "Unknown argument: $1" ;;
@@ -224,17 +260,23 @@ if [[ $# -gt 0 ]]; then
   [[ $# -eq 0 ]] || die "Unexpected extra argument: $1"
 fi
 
-[[ -n "${VERSION}" ]] || die "VERSION is required (e.g. 0.2.2). See --help."
 [[ "${DRY_RUN}" -eq 1 && "${DO_PUSH}" -eq 1 ]] && die "Cannot combine --dry-run and --push"
-
-if [[ "${VERSION}" == v* ]]; then
-  die "VERSION must not include a leading v (got '${VERSION}'; pass ${VERSION#v})"
+if [[ -n "${VERSION}" && -n "${BUMP}" ]]; then
+  die "Cannot combine explicit VERSION with --patch/--minor/--major"
 fi
-is_semver "${VERSION}" || die "VERSION must be MAJOR.MINOR.PATCH with optional pre-release (got '${VERSION}')"
+
+if [[ -n "${VERSION}" ]]; then
+  if [[ "${VERSION}" == v* ]]; then
+    die "VERSION must not include a leading v (got '${VERSION}'; pass ${VERSION#v})"
+  fi
+  is_semver "${VERSION}" || die "VERSION must be MAJOR.MINOR.PATCH with optional pre-release (got '${VERSION}')"
+fi
 
 require_cmd git
-git check-ref-format "refs/tags/v${VERSION}" \
-  || die "VERSION is not a valid git tag name: v${VERSION}"
+if [[ -n "${VERSION}" ]]; then
+  git check-ref-format "refs/tags/v${VERSION}" \
+    || die "VERSION is not a valid git tag name: v${VERSION}"
+fi
 if [[ "${DO_PUSH}" -eq 1 ]]; then
   require_cmd gh "Install GitHub CLI (gh) or omit --push."
 fi
@@ -248,14 +290,6 @@ if [[ -n "$(git -C "${GIT_ROOT}" status --porcelain)" ]]; then
   die "Working tree is not clean. Commit or stash changes before cutting a release."
 fi
 
-if git -C "${GIT_ROOT}" rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
-  die "Git tag v${VERSION} already exists"
-fi
-
-if grep -qF "## [${VERSION}]" "${CHANGELOG}"; then
-  die "CHANGELOG.md already has a '${VERSION}' section"
-fi
-
 grep -qE '^## [[]Unreleased][[:space:]]*$' "${CHANGELOG}" \
   || die "CHANGELOG.md has no '## [Unreleased]' heading"
 
@@ -264,6 +298,29 @@ changelog_has_list_item "${UNRELEASED_BODY}" \
   || die "CHANGELOG [Unreleased] has no notes to release (need at least one list item)"
 
 PREV_VERSION="$(previous_changelog_version "${CHANGELOG}")"
+
+if [[ -z "${VERSION}" ]]; then
+  [[ -n "${BUMP}" ]] || BUMP="patch"
+  if [[ -z "${PREV_VERSION}" ]]; then
+    VERSION="0.1.0"
+    log_info "No previous CHANGELOG version; using ${VERSION}"
+  else
+    VERSION="$(bump_semver "${PREV_VERSION}" "${BUMP}")"
+    log_info "Using ${VERSION} (${BUMP} bump of ${PREV_VERSION} from CHANGELOG.md)"
+  fi
+fi
+
+git check-ref-format "refs/tags/v${VERSION}" \
+  || die "VERSION is not a valid git tag name: v${VERSION}"
+
+if git -C "${GIT_ROOT}" rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+  die "Git tag v${VERSION} already exists"
+fi
+
+if grep -qF "## [${VERSION}]" "${CHANGELOG}"; then
+  die "CHANGELOG.md already has a '${VERSION}' section"
+fi
+
 REL_DATE="${RELEASE_DATE:-$(date +%Y-%m-%d)}"
 if [[ ! "${REL_DATE}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
   die "RELEASE_DATE must be YYYY-MM-DD (got '${REL_DATE}')"

@@ -130,7 +130,6 @@ path_without() {
 }
 
 expect_ok "help" "${RELEASE}" --help
-expect_fail "missing version" "${RELEASE}"
 if command -v python3 >/dev/null 2>&1; then
   py_help=""
   if py_help="$(python3 "${RELEASE}" --help 2>&1)"; then
@@ -153,10 +152,39 @@ expect_fail "leading prerelease dot is rejected" "${RELEASE}" 1.0.0-.rc
 expect_fail "numeric leading zero is rejected" "${RELEASE}" 01.0.0
 expect_fail "git-ref-illegal prerelease is rejected" "${RELEASE}" 1.0.0-rc.lock
 expect_fail "dry-run plus push rejected" "${RELEASE}" --dry-run --push 0.2.0
+expect_fail "explicit VERSION cannot combine with --minor" "${RELEASE}" --minor 0.2.0
 
 REPO="${TMP}/cut"
 init_repo "${REPO}"
 SEED="$(git -C "${REPO}" rev-parse HEAD)"
+
+auto_patch=""
+if auto_patch="$(run_release "${REPO}" --dry-run 2>&1)"; then
+  pass "dry-run without VERSION patch-bumps CHANGELOG"
+else
+  fail "dry-run without VERSION patch-bumps CHANGELOG"
+  printf '%s\n' "${auto_patch}" >&2
+fi
+expect_contains "auto patch heading is 0.1.1" "## [0.1.1] - 2026-01-02" "${auto_patch}"
+expect_contains "auto patch logs CHANGELOG source" "patch bump of 0.1.0 from CHANGELOG.md" "${auto_patch}"
+
+auto_minor=""
+if auto_minor="$(run_release "${REPO}" --dry-run --minor 2>&1)"; then
+  pass "dry-run --minor bumps from CHANGELOG"
+else
+  fail "dry-run --minor bumps from CHANGELOG"
+  printf '%s\n' "${auto_minor}" >&2
+fi
+expect_contains "auto minor heading is 0.2.0" "## [0.2.0] - 2026-01-02" "${auto_minor}"
+
+auto_major=""
+if auto_major="$(run_release "${REPO}" --dry-run --major 2>&1)"; then
+  pass "dry-run --major bumps from CHANGELOG"
+else
+  fail "dry-run --major bumps from CHANGELOG"
+  printf '%s\n' "${auto_major}" >&2
+fi
+expect_contains "auto major heading is 1.0.0" "## [1.0.0] - 2026-01-02" "${auto_major}"
 
 dry_out=""
 if dry_out="$(run_release "${REPO}" --dry-run 0.2.0 2>&1)"; then
@@ -321,6 +349,14 @@ cat >"${first}/CHANGELOG.md" <<'EOF'
 EOF
 git -C "${first}" add CHANGELOG.md
 git -C "${first}" commit -q -m "chore: seed first changelog"
+first_auto=""
+if first_auto="$(run_release "${first}" --dry-run 2>&1)"; then
+  pass "first release without VERSION uses 0.1.0"
+else
+  fail "first release without VERSION uses 0.1.0"
+  printf '%s\n' "${first_auto}" >&2
+fi
+expect_contains "first auto heading is 0.1.0" "## [0.1.0] - 2026-01-02" "${first_auto}"
 expect_ok "first release succeeds" run_release "${first}" 0.1.0
 first_log="$(cat "${first}/CHANGELOG.md")"
 expect_contains "first release uses tag URL not compare" \
@@ -335,6 +371,30 @@ pre_log="$(cat "${prerelease}/CHANGELOG.md")"
 expect_contains "pre-release heading" "## [1.0.0-rc.1] - 2026-01-02" "${pre_log}"
 expect_contains "pre-release compare URL" \
   "[1.0.0-rc.1]: https://github.com/example/apple-silicon-mlx-native/compare/v0.1.0...v1.0.0-rc.1" "${pre_log}"
+
+rcprev="${TMP}/rc-prev"
+init_repo "${rcprev}"
+cat >"${rcprev}/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## [Unreleased]
+
+### Fixed
+
+- a notable fix
+
+## [1.0.0-rc.1] - 2026-01-01
+
+### Added
+
+- preview
+
+[Unreleased]: https://github.com/example/apple-silicon-mlx-native/compare/v1.0.0-rc.1...HEAD
+[1.0.0-rc.1]: https://github.com/example/apple-silicon-mlx-native/releases/tag/v1.0.0-rc.1
+EOF
+git -C "${rcprev}" add CHANGELOG.md
+git -C "${rcprev}" commit -q -m "chore: seed rc changelog"
+expect_fail "auto-bump refuses pre-release previous version" run_release "${rcprev}" --dry-run
 
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
