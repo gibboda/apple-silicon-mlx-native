@@ -37,8 +37,6 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 - Intel/x86_64 Macs are **rejected** with a clear error
 - Memory tiers drive the **OOM fence** (what fits); chip throughput/thermal class drive the **performance fence** (how hard to push at that RAM). Unknown chips fall back to RAM-only defaults without failing install. Details: [docs/hardware-tiers.md](docs/hardware-tiers.md).
 
-Details: [docs/hardware-tiers.md](docs/hardware-tiers.md).
-
 ## Requirements
 
 - Apple Silicon Mac
@@ -193,7 +191,7 @@ On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) an
 | RAM tier | Slow / moderate / fanless (M1, M2/M3/M4 base) | Fast cooled (e.g. M5) |
 | --- | --- | --- |
 | ≤8 GB constrained | 3B 4-bit, context 2048 | still 3B (RAM wins) |
-| ≤18 GB standard | 3B 4-bit, context 2048 | 7B 4-bit, context 4096 |
+| ≤18 GB (`< 24` GB) standard | 3B 4-bit, context 2048 | 7B 4-bit, context 4096 |
 | 24–32 GB high | 7B 4-bit | 14B 4-bit on Max (`very_fast`) |
 | ≤64 GB workstation | 14B 4-bit | 14B 4-bit |
 | >64 GB large | 32B 4-bit | 32B 4-bit |
