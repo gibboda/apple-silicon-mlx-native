@@ -369,7 +369,11 @@ NEW_CHANGELOG="$(build_new_changelog "${CHANGELOG}" "${VERSION}" "${REL_DATE}" "
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   log_info "Dry-run: CHANGELOG.md would become:"
   printf '%s\n' "${NEW_CHANGELOG}"
-  log_info "Dry-run: would commit 'chore(release): cut ${VERSION}', annotated tag v${VERSION}, git push, and gh release create"
+  if [[ "${DO_PUSH}" -eq 1 ]]; then
+    log_info "Dry-run: would commit 'chore(release): cut ${VERSION}', annotated tag v${VERSION}, git push, and gh release create"
+  else
+    log_info "Dry-run: would commit 'chore(release): cut ${VERSION}' and annotated tag v${VERSION} (--no-push)"
+  fi
   log_ok "Dry-run complete (no write, no tag, no push)"
   exit 0
 fi

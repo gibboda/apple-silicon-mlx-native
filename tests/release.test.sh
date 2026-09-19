@@ -203,6 +203,19 @@ expect_contains "dry-run new version compare uses previous tag" \
   "[0.2.0]: https://github.com/example/apple-silicon-mlx-native/compare/v0.1.0...v0.2.0" "${dry_out}"
 expect_contains "dry-run keeps original tag URL" \
   "[0.1.0]: https://github.com/example/apple-silicon-mlx-native/releases/tag/v0.1.0" "${dry_out}"
+expect_contains "default dry-run plan includes publish" \
+  "git push, and gh release create" "${dry_out}"
+
+no_push_dry=""
+if no_push_dry="$(run_release "${REPO}" --dry-run --no-push 2>&1)"; then
+  pass "dry-run --no-push exits 0"
+else
+  fail "dry-run --no-push exits 0"
+  printf '%s\n' "${no_push_dry}" >&2
+fi
+expect_contains "dry-run --no-push plan mentions --no-push" "(--no-push)" "${no_push_dry}"
+expect_missing "dry-run --no-push plan omits git push" "git push" "${no_push_dry}"
+expect_missing "dry-run --no-push plan omits gh release create" "gh release create" "${no_push_dry}"
 
 on_disk="$(cat "${REPO}/CHANGELOG.md")"
 expect_missing "dry-run does not write version heading" "## [0.2.0]" "${on_disk}"
