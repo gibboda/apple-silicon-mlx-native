@@ -46,9 +46,53 @@ Environment:
 EOF
 }
 
+is_numeric_identifier() {
+  [[ "$1" =~ ^(0|[1-9][0-9]*)$ ]]
+}
+
+# SemVer 2.0 pre-release identifier: non-empty [0-9A-Za-z-]+; all-numeric
+# identifiers must not have leading zeros.
+is_prerelease_identifier() {
+  local id="$1"
+  [[ -n "${id}" ]] || return 1
+  [[ "${id}" =~ ^[0-9A-Za-z-]+$ ]] || return 1
+  if [[ "${id}" =~ ^[0-9]+$ ]]; then
+    is_numeric_identifier "${id}" || return 1
+  fi
+  return 0
+}
+
+is_prerelease() {
+  local pre="$1"
+  local id rest
+  [[ -n "${pre}" ]] || return 1
+  [[ "${pre}" != .* && "${pre}" != *. && "${pre}" != *..* ]] || return 1
+  rest="${pre}"
+  while [[ "${rest}" == *.* ]]; do
+    id="${rest%%.*}"
+    rest="${rest#*.}"
+    is_prerelease_identifier "${id}" || return 1
+  done
+  is_prerelease_identifier "${rest}"
+}
+
 is_semver() {
   local v="$1"
-  [[ "${v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+  local major minor patch pre
+  if [[ ! "${v}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z.-]+))?$ ]]; then
+    return 1
+  fi
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+  patch="${BASH_REMATCH[3]}"
+  pre="${BASH_REMATCH[5]:-}"
+  is_numeric_identifier "${major}" || return 1
+  is_numeric_identifier "${minor}" || return 1
+  is_numeric_identifier "${patch}" || return 1
+  if [[ -n "${pre}" ]]; then
+    is_prerelease "${pre}" || return 1
+  fi
+  return 0
 }
 
 github_https_from_remote() {
@@ -187,6 +231,11 @@ fi
 is_semver "${VERSION}" || die "VERSION must be MAJOR.MINOR.PATCH with optional pre-release (got '${VERSION}')"
 
 require_cmd git
+git check-ref-format "refs/tags/v${VERSION}" \
+  || die "VERSION is not a valid git tag name: v${VERSION}"
+if [[ "${DO_PUSH}" -eq 1 ]]; then
+  require_cmd gh "Install GitHub CLI (gh) or omit --push."
+fi
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not inside a git work tree"
 
 GIT_ROOT="$(git rev-parse --show-toplevel)"
@@ -246,11 +295,8 @@ trap 'rm -f "${NOTES_FILE}"' EXIT
 git -C "${GIT_ROOT}" tag -a "v${VERSION}" -F "${NOTES_FILE}"
 
 log_ok "Committed CHANGELOG and created annotated tag v${VERSION}"
-log_info "Push skipped (default). To publish: scripts/release.sh --push ${VERSION}"
-log_info "or: git push && git push origin v${VERSION} && gh release create v${VERSION}"
 
 if [[ "${DO_PUSH}" -eq 1 ]]; then
-  require_cmd gh "Install GitHub CLI (gh) or omit --push."
   if git -C "${GIT_ROOT}" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
     git -C "${GIT_ROOT}" push
   else
@@ -262,4 +308,7 @@ if [[ "${DO_PUSH}" -eq 1 ]]; then
   printf '%s\n' "${UNRELEASED_BODY}" >"${BODY_FILE}"
   gh release create "v${VERSION}" --title "v${VERSION}" --notes-file "${BODY_FILE}"
   log_ok "Pushed v${VERSION} and created GitHub Release"
+else
+  log_info "Push skipped (default). To publish this tag:"
+  log_info "  git push && git push origin v${VERSION} && gh release create v${VERSION} --notes-from-tag"
 fi

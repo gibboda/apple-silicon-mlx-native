@@ -105,10 +105,39 @@ run_release() {
   )
 }
 
+path_without() {
+  local hide="$1"
+  local prefix="$2"
+  local dir src out="" oldifs
+  mkdir -p "${prefix}"
+  oldifs="${IFS}"
+  IFS=':'
+  # shellcheck disable=SC2086
+  for dir in ${PATH}; do
+    IFS="${oldifs}"
+    if [[ -n "${dir}" && -e "${dir}/${hide}" ]]; then
+      for src in git awk grep sed date mktemp cat; do
+        if [[ -x "${dir}/${src}" && ! -e "${prefix}/${src}" ]]; then
+          ln -s "${dir}/${src}" "${prefix}/${src}"
+        fi
+      done
+      continue
+    fi
+    out="${out:+${out}:}${dir}"
+  done
+  IFS="${oldifs}"
+  printf '%s' "${prefix}:${out}"
+}
+
 expect_ok "help" "${RELEASE}" --help
 expect_fail "missing version" "${RELEASE}"
 expect_fail "invalid semver 1.2" "${RELEASE}" 1.2
 expect_fail "leading v is rejected" "${RELEASE}" v0.2.0
+expect_fail "empty prerelease identifier is rejected" "${RELEASE}" 1.0.0-rc..1
+expect_fail "trailing prerelease dot is rejected" "${RELEASE}" 1.0.0-rc.
+expect_fail "leading prerelease dot is rejected" "${RELEASE}" 1.0.0-.rc
+expect_fail "numeric leading zero is rejected" "${RELEASE}" 01.0.0
+expect_fail "git-ref-illegal prerelease is rejected" "${RELEASE}" 1.0.0-rc.lock
 expect_fail "dry-run plus push rejected" "${RELEASE}" --dry-run --push 0.2.0
 
 REPO="${TMP}/cut"
@@ -179,6 +208,30 @@ init_repo "${dirty}"
 printf 'dirty\n' >"${dirty}/extra.txt"
 expect_fail "dirty work tree is rejected" run_release "${dirty}" 0.2.0
 
+nogh="${TMP}/push-no-gh"
+init_repo "${nogh}"
+nogh_seed="$(git -C "${nogh}" rev-parse HEAD)"
+nogh_path="$(path_without gh "${TMP}/no-gh-bin")"
+push_without_gh() {
+  (
+    cd "${nogh}"
+    PATH="${nogh_path}"
+    RELEASE_DATE=2026-01-02 "${RELEASE}" --push 0.2.0
+  )
+}
+expect_fail "push without gh is rejected before commit" push_without_gh
+if [[ "$(git -C "${nogh}" rev-parse HEAD)" == "${nogh_seed}" ]]; then
+  pass "push without gh does not create a commit"
+else
+  fail "push without gh created a commit"
+fi
+if git -C "${nogh}" rev-parse -q --verify refs/tags/v0.2.0 >/dev/null; then
+  fail "push without gh created tag v0.2.0"
+else
+  pass "push without gh does not create a tag"
+fi
+expect_missing "push without gh does not rewrite CHANGELOG" "## [0.2.0]" "$(cat "${nogh}/CHANGELOG.md")"
+
 hookrepo="${TMP}/hooks"
 init_repo "${hookrepo}"
 mkdir -p "${hookrepo}/.git/hooks"
@@ -193,7 +246,16 @@ fi
 
 cut="${TMP}/real-cut"
 init_repo "${cut}"
-expect_ok "real cut succeeds" run_release "${cut}" 0.2.0
+cut_out=""
+if cut_out="$(run_release "${cut}" 0.2.0 2>&1)"; then
+  pass "real cut succeeds"
+else
+  fail "real cut succeeds"
+  printf '%s\n' "${cut_out}" >&2
+fi
+expect_contains "non-push hint uses git push origin tag" "git push origin v0.2.0" "${cut_out}"
+expect_contains "non-push hint uses gh --notes-from-tag" "gh release create v0.2.0 --notes-from-tag" "${cut_out}"
+expect_missing "non-push does not suggest re-running --push" "release.sh --push" "${cut_out}"
 cut_log="$(cat "${cut}/CHANGELOG.md")"
 expect_contains "cut writes version heading" "## [0.2.0] - 2026-01-02" "${cut_log}"
 expect_contains "cut keeps Unreleased stub" "## [Unreleased]" "${cut_log}"
