@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Image/video `--dump-plan` OVERRIDE fixtures lock 18 GB M3 Pro on 768² 8-bit / 17-frame Wan (`force_required=0`) and 24 GB high M3 Pro on 1024² / 33 frames
+
 ## [0.2.3] - 2026-09-19
 
 ### Fixed

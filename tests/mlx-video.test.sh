@@ -191,6 +191,38 @@ plan_air="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_S
   "${GENERATE}" --dump-plan --prompt "plan")"
 expect_contains "fanless M5 still force_required" "force_required=1" "${plan_air}"
 
+plan_m3pro18="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "18 GB M3 Pro dump-plan chip family" "chip_family=3" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan gpu cores" "gpu_cores=18" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan fast" "throughput_class=fast" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan standard tier" "tier=standard" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro stays wan21" "family=wan21" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro stays 17 frames" "frames=17" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro does not require force" "force_required=0" "${plan_m3pro18}"
+if [[ "${plan_m3pro18}" == *"frames=33"* || "${plan_m3pro18}" == *"ltx2"* || "${plan_m3pro18}" == *"LTX"* ]]; then
+  fail "18 GB M3 Pro plan used the 24 GB video profile"
+else
+  pass "18 GB M3 Pro plan is not 33-frame or LTX"
+fi
+
+plan_m3pro24="$(OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "24 GB M3 Pro dump-plan high tier" "tier=high" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro stays wan21" "family=wan21" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro frames 33" "frames=33" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro width 832" "width=832" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro does not require force" "force_required=0" "${plan_m3pro24}"
+if [[ "${plan_m3pro24}" == *"frames=49"* ]]; then
+  fail "24 GB M3 Pro 18-core plan used the 24-GPU NAX frame bump"
+else
+  pass "24 GB M3 Pro 18-core plan stays 33 frames"
+fi
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1

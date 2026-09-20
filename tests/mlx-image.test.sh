@@ -144,6 +144,40 @@ expect_contains "M3 16 GB stays 4-bit" "quantize=4" "${plan_m3}"
 expect_contains "M3 16 GB stays low_ram" "low_ram=1" "${plan_m3}"
 expect_contains "M3 16 GB width 768" "width=768" "${plan_m3}"
 
+plan_m3pro18="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "18 GB M3 Pro dump-plan chip family" "chip_family=3" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan gpu cores" "gpu_cores=18" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan fast" "throughput_class=fast" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro dump-plan standard tier" "tier=standard" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro stays flux2" "family=flux2" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro is 8-bit" "quantize=8" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro width 768" "width=768" "${plan_m3pro18}"
+expect_contains "18 GB M3 Pro height 768" "height=768" "${plan_m3pro18}"
+if [[ "${plan_m3pro18}" == *"z-image-turbo"* || "${plan_m3pro18}" == *"width=1024"* ]]; then
+  fail "18 GB M3 Pro plan used the 24 GB image profile"
+else
+  pass "18 GB M3 Pro plan is not z-image-turbo 1024"
+fi
+
+plan_m3pro24="$(OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  "${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "24 GB M3 Pro dump-plan high tier" "tier=high" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro default family is z-image-turbo" "family=z-image-turbo" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro width 1024" "width=1024" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro height 1024" "height=1024" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro steps 9" "steps=9" "${plan_m3pro24}"
+expect_contains "24 GB M3 Pro is 8-bit" "quantize=8" "${plan_m3pro24}"
+if [[ "${plan_m3pro24}" == *"flux2-klein-4b"* ]]; then
+  fail "24 GB M3 Pro plan leaked flux2-klein-4b"
+else
+  pass "24 GB M3 Pro plan has no flux2-klein-4b"
+fi
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1
