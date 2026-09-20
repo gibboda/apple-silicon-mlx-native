@@ -908,15 +908,167 @@ upsert_env_assignment() {
   local file="$1"
   local key="$2"
   local value="$3"
-  local tmp
+  local quoted tmp
+  is_models_env_key "${key}" || die "Refusing to write non-MLX key to models.env: ${key}"
+  quoted="$(quote_env_value "${value}")"
   tmp="$(mktemp)"
-  awk -v k="${key}" -v v="${value}" '
-    BEGIN { done=0 }
+  # Pass via ENVIRON so awk -v does not interpret backslashes in POSIX '\'' quoting.
+  MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
+    BEGIN { k=ENVIRON["MLX_UPSERT_KEY"]; v=ENVIRON["MLX_UPSERT_VALUE"]; done=0 }
     index($0, k "=") == 1 && !done { print k "=" v; done=1; next }
     { print }
     END { if (!done) print k "=" v }
   ' "${file}" >"${tmp}"
   mv "${tmp}" "${file}"
+}
+
+is_models_env_key() {
+  [[ "${1:-}" =~ ^MLX_[A-Z0-9_]+$ ]]
+}
+
+# Unquoted when the value is a simple token (model ids, numbers, hosts).
+# Otherwise POSIX single quotes so the file stays source-able without eval.
+quote_env_value() {
+  local value="$1"
+  local out c
+  local -i i
+  if [[ "${value}" =~ ^[A-Za-z0-9._:/=@%+-]+$ ]]; then
+    printf '%s' "${value}"
+    return 0
+  fi
+  out="'"
+  for (( i = 0; i < ${#value}; i++ )); do
+    c="${value:i:1}"
+    if [[ "${c}" == "'" ]]; then
+      out+="'\\''"
+    else
+      out+="${c}"
+    fi
+  done
+  out+="'"
+  printf '%s' "${out}"
+}
+
+# Strip surrounding quotes without executing the value. Returns 1 if unsafe.
+# Single-quoted values accept POSIX concatenation: 'Bob'\''s-model' → Bob's-model.
+unquote_env_value() {
+  local raw="$1"
+  local inner
+  if [[ "${raw:0:1}" == "'" ]]; then
+    unquote_posix_single "${raw}"
+    return $?
+  fi
+  if (( ${#raw} >= 2 )) && [[ "${raw:0:1}" == '"' && "${raw: -1}" == '"' ]]; then
+    inner="${raw:1:${#raw}-2}"
+    case "${inner}" in
+      *'$'* | *'`'* | *\\*) return 1 ;;
+    esac
+    printf '%s' "${inner}"
+    return 0
+  fi
+  if [[ "${raw}" =~ [][\$\`\;\|\&\<\>\(\)\{\}\\\'\"[:space:]] ]]; then
+    return 1
+  fi
+  if [[ -n "${HOME:-}" && "${raw}" == "~" ]]; then
+    printf '%s' "${HOME}"
+  elif [[ -n "${HOME:-}" && "${raw:0:2}" == $'~/' ]]; then
+    printf '%s' "${HOME}/${raw:2}"
+  else
+    printf '%s' "${raw}"
+  fi
+}
+
+unquote_posix_single() {
+  local raw="$1"
+  local out="" c nxt
+  local -i i=0 n=${#raw}
+  (( n >= 2 )) || return 1
+  while (( i < n )); do
+    c="${raw:i:1}"
+    if [[ "${c}" == "'" ]]; then
+      i+=1
+      while (( i < n )); do
+        c="${raw:i:1}"
+        [[ "${c}" == "'" ]] && break
+        out+="${c}"
+        i+=1
+      done
+      (( i < n )) || return 1
+      i+=1
+    elif [[ "${c}" == "\\" ]]; then
+      i+=1
+      (( i < n )) || return 1
+      nxt="${raw:i:1}"
+      [[ "${nxt}" == "'" ]] || return 1
+      out+="'"
+      i+=1
+    else
+      return 1
+    fi
+  done
+  printf '%s' "${out}"
+}
+
+# Parse config/models.env as data. Only documented MLX_* config keys are
+# exported. Lines are never executed (no command substitution, PATH=, or
+# HF_TOKEN). Runtime identity keys (workspace/venv/paths) are skipped.
+# Missing file is OK.
+load_models_env() {
+  local file="${1:-${MLX_MODELS_ENV}}"
+  local line key value decoded
+  [[ -f "${file}" ]] || return 0
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "${line}" || "${line}" == \#* ]] && continue
+    if [[ "${line}" == export[[:space:]]* ]]; then
+      line="${line#export}"
+      line="${line#"${line%%[![:space:]]*}"}"
+    fi
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      if ! is_models_env_key "${key}"; then
+        log_warn "Skipping non-MLX key ${key} in ${file}"
+        continue
+      fi
+      value="$(strip_unquoted_assignment_comment "${value}")"
+      if ! decoded="$(unquote_env_value "${value}")"; then
+        log_warn "Skipping unsafe ${key} assignment in ${file}"
+        continue
+      fi
+      if is_models_env_runtime_key "${key}"; then
+        log_warn "Skipping runtime key ${key} in ${file}"
+        continue
+      fi
+      printf -v "${key}" '%s' "${decoded}"
+      export "${key?}"
+    fi
+  done <"${file}"
+}
+
+is_models_env_runtime_key() {
+  case "${1:-}" in
+    MLX_WORKSPACE|MLX_VENV|MLX_CONFIG_DIR|MLX_MODELS_ENV|MLX_MODELS_EXAMPLE|MLX_PYTHON_VERSION|MLX_SKIP_DEVICE_PROBE)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# Drop an unquoted " # comment" suffix. Quoted values are left intact.
+strip_unquoted_assignment_comment() {
+  local value="$1"
+  local comment_re='^(.*)[[:space:]]+#'
+  if [[ "${value:0:1}" == "'" || "${value:0:1}" == '"' ]]; then
+    printf '%s' "${value}"
+    return 0
+  fi
+  if [[ "${value}" =~ ${comment_re} ]]; then
+    value="${BASH_REMATCH[1]}"
+    value="${value%"${value##*[![:space:]]}"}"
+  fi
+  printf '%s' "${value}"
 }
 
 # Create config/models.env once from the composed profile. Never overwrite an existing file.
@@ -938,8 +1090,8 @@ seed_models_env_if_missing() {
   else
     cat >"${MLX_MODELS_ENV}" <<EOF
 # Local model preferences (not committed)
-MLX_DEFAULT_MODEL=${model}
-MLX_RECOMMENDED_CONTEXT=${context}
+MLX_DEFAULT_MODEL=$(quote_env_value "${model}")
+MLX_RECOMMENDED_CONTEXT=$(quote_env_value "${context}")
 MLX_SERVER_HOST=127.0.0.1
 MLX_SERVER_PORT=8080
 EOF

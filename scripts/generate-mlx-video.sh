@@ -175,10 +175,7 @@ if [[ -z "${PROMPT}" ]]; then
   die "Missing --prompt (or VIDEO_PROMPT). Example: scripts/generate-mlx-video.sh --prompt \"a red fox running through snow\""
 fi
 
-if [[ -f "${MLX_MODELS_ENV}" ]]; then
-  # shellcheck source=/dev/null
-  source "${MLX_MODELS_ENV}"
-fi
+load_models_env "${MLX_MODELS_ENV}"
 
 SEED="${SEED:-${MLX_VIDEO_SEED:-}}"
 IMAGE="${IMAGE:-${MLX_VIDEO_IMAGE:-}}"

@@ -178,6 +178,17 @@ else
   pass "24 GB M3 Pro plan has no flux2-klein-4b"
 fi
 
+mkdir -p "${MLX_WORKSPACE}/config"
+PWNED_ENV="${TMP}/pwned-from-models-env"
+printf 'touch %q\nMLX_IMAGE_WIDTH=640\n' "${PWNED_ENV}" >"${MLX_WORKSPACE}/config/models.env"
+plan_env="$("${GENERATE}" --dump-plan --prompt "plan")"
+expect_contains "models.env width is parsed" "width=640" "${plan_env}"
+if [[ -e "${PWNED_ENV}" ]]; then
+  fail "models.env command line was executed"
+else
+  pass "models.env command line is not executed"
+fi
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1

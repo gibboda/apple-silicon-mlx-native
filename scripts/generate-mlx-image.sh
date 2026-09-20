@@ -174,10 +174,7 @@ if [[ -z "${PROMPT}" ]]; then
   die "Missing --prompt (or IMAGE_PROMPT). Example: scripts/generate-mlx-image.sh --prompt \"a red fox in snow\""
 fi
 
-if [[ -f "${MLX_MODELS_ENV}" ]]; then
-  # shellcheck source=/dev/null
-  source "${MLX_MODELS_ENV}"
-fi
+load_models_env "${MLX_MODELS_ENV}"
 
 SEED="${SEED:-${MLX_IMAGE_SEED:-}}"
 

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `config/models.env` is parsed as `MLX_*` assignments (not sourced as bash); writes quote values that need it, skip `PATH`/`HF_TOKEN`/runtime identity keys without logging values, and expand a leading unquoted `~/`
+
 ## [0.2.4] - 2026-09-20
 
 ### Added
