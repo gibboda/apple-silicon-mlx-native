@@ -6,7 +6,15 @@
 ERROR: Apple Silicon (arm64) required.
 ```
 
-This toolkit only supports Apple Silicon. Use an M-series Mac, or a different stack on Intel hardware.
+This toolkit only supports Apple Silicon macOS. Use an M-series Mac, or a different stack on Intel hardware.
+
+## Not macOS (Linux ARM / other kernels)
+
+```text
+ERROR: Apple Silicon macOS (Darwin arm64) required.
+```
+
+`assert_apple_silicon` and `scripts/detect-apple-silicon.sh --quiet` require Darwin, not only `uname -m == arm64`. Linux ARM hosts fail immediately instead of dying later on `sysctl`. Portable `--dump-plan` / OVERRIDE fixtures still skip that live-host check.
 
 ## Homebrew missing
 

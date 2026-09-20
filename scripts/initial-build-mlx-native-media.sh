@@ -42,7 +42,7 @@ Usage: initial-build-mlx-native-media.sh [-h|--help]
 Bootstrap MLX-native tooling on a new Apple Silicon Mac.
 
 Steps:
-  1. Verify arm64 / detect hardware, chip class, and memory tier
+  1. Verify Darwin arm64 / detect hardware, chip class, and memory tier
   2. Verify/install Xcode CLT guidance
   3. Detect (or optionally install) Homebrew
   4. Install Homebrew packages (python, git, ffmpeg)
@@ -145,6 +145,7 @@ log_ok "Using Python: ${BREW_PY} ($("${BREW_PY}" --version))"
 log_header "Workspace"
 mkdir -p "${MLX_WORKSPACE}"
 mkdir -p "${MLX_CONFIG_DIR}"
+assert_install_venv_paths
 seed_models_env_if_missing
 
 # --- Virtual environment ---

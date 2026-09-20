@@ -98,9 +98,21 @@ detect_architecture() {
   echo "${arch}"
 }
 
+detect_kernel() {
+  uname -s
+}
+
+host_is_apple_silicon() {
+  [[ "$(detect_kernel)" == "Darwin" && "$(detect_architecture)" == "arm64" ]]
+}
+
 assert_apple_silicon() {
-  local arch
+  local kernel arch
+  kernel="$(detect_kernel)"
   arch="$(detect_architecture)"
+  if [[ "${kernel}" != "Darwin" ]]; then
+    die "Apple Silicon macOS (Darwin arm64) required. Detected OS: ${kernel} architecture: ${arch}."
+  fi
   if [[ "${arch}" != "arm64" ]]; then
     die "Apple Silicon (arm64) required. Detected architecture: ${arch}. Intel/x86_64 Macs are not supported."
   fi
@@ -546,6 +558,21 @@ looks_like_venv() {
   local dir="${1:-${MLX_VENV}}"
   [[ -d "${dir}" ]] || return 1
   [[ -f "${dir}/pyvenv.cfg" || -f "${dir}/bin/python" ]]
+}
+
+# Callers mkdir -p the workspace first. Missing .venv is OK (create). An
+# existing path must be a venv under the workspace — never reuse a random dir.
+assert_install_venv_paths() {
+  assert_workspace_safe
+  assert_venv_under_workspace
+  if [[ -e "${MLX_VENV}" ]]; then
+    if [[ ! -d "${MLX_VENV}" ]]; then
+      die "MLX_VENV exists but is not a directory: ${MLX_VENV}"
+    fi
+    if ! looks_like_venv "${MLX_VENV}"; then
+      die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove it, then run make install (make rebuild / make clean also refuse non-venv paths)."
+    fi
+  fi
 }
 
 assert_path_under_workspace() {
