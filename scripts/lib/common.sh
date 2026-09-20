@@ -912,8 +912,9 @@ upsert_env_assignment() {
   is_models_env_key "${key}" || die "Refusing to write non-MLX key to models.env: ${key}"
   quoted="$(quote_env_value "${value}")"
   tmp="$(mktemp)"
-  awk -v k="${key}" -v v="${quoted}" '
-    BEGIN { done=0 }
+  # Pass via ENVIRON so awk -v does not interpret backslashes in POSIX '\'' quoting.
+  MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
+    BEGIN { k=ENVIRON["MLX_UPSERT_KEY"]; v=ENVIRON["MLX_UPSERT_VALUE"]; done=0 }
     index($0, k "=") == 1 && !done { print k "=" v; done=1; next }
     { print }
     END { if (!done) print k "=" v }
@@ -949,16 +950,13 @@ quote_env_value() {
 }
 
 # Strip surrounding quotes without executing the value. Returns 1 if unsafe.
+# Single-quoted values accept POSIX concatenation: 'Bob'\''s-model' → Bob's-model.
 unquote_env_value() {
   local raw="$1"
   local inner
-  if (( ${#raw} >= 2 )) && [[ "${raw:0:1}" == "'" && "${raw: -1}" == "'" ]]; then
-    inner="${raw:1:${#raw}-2}"
-    if [[ "${inner}" == *"'"* ]]; then
-      return 1
-    fi
-    printf '%s' "${inner}"
-    return 0
+  if [[ "${raw:0:1}" == "'" ]]; then
+    unquote_posix_single "${raw}"
+    return $?
   fi
   if (( ${#raw} >= 2 )) && [[ "${raw:0:1}" == '"' && "${raw: -1}" == '"' ]]; then
     inner="${raw:1:${#raw}-2}"
@@ -972,6 +970,37 @@ unquote_env_value() {
     return 1
   fi
   printf '%s' "${raw}"
+}
+
+unquote_posix_single() {
+  local raw="$1"
+  local out="" c nxt
+  local -i i=0 n=${#raw}
+  (( n >= 2 )) || return 1
+  while (( i < n )); do
+    c="${raw:i:1}"
+    if [[ "${c}" == "'" ]]; then
+      i+=1
+      while (( i < n )); do
+        c="${raw:i:1}"
+        [[ "${c}" == "'" ]] && break
+        out+="${c}"
+        i+=1
+      done
+      (( i < n )) || return 1
+      i+=1
+    elif [[ "${c}" == "\\" ]]; then
+      i+=1
+      (( i < n )) || return 1
+      nxt="${raw:i:1}"
+      [[ "${nxt}" == "'" ]] || return 1
+      out+="'"
+      i+=1
+    else
+      return 1
+    fi
+  done
+  printf '%s' "${out}"
 }
 
 # Parse config/models.env as data. Only MLX_* keys are exported. Lines are

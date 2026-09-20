@@ -60,6 +60,16 @@ expect_eq "upsert quotes spaces" "$(cat "${ENV_FILE}")" "MLX_DEFAULT_MODEL='hell
 expect_fail "upsert refuses PATH" upsert_env_assignment "${ENV_FILE}" PATH /tmp/evil
 expect_fail "upsert refuses HF_TOKEN" upsert_env_assignment "${ENV_FILE}" HF_TOKEN secret
 
+reset_mlx_keys
+printf 'MLX_DEFAULT_MODEL=old\n' >"${ENV_FILE}"
+upsert_env_assignment "${ENV_FILE}" MLX_DEFAULT_MODEL "Bob's-model"
+expect_eq "upsert apostrophe keeps POSIX concatenation" "$(cat "${ENV_FILE}")" \
+  "MLX_DEFAULT_MODEL='Bob'\\''s-model'"
+load_models_env "${ENV_FILE}" >/dev/null 2>&1
+expect_eq "load apostrophe round-trips" "${MLX_DEFAULT_MODEL}" "Bob's-model"
+sourced_apostrophe="$(MLX_DEFAULT_MODEL="" bash -c 'set -euo pipefail; source "$1"; printf %s "${MLX_DEFAULT_MODEL}"' bash "${ENV_FILE}")"
+expect_eq "source apostrophe round-trips" "${sourced_apostrophe}" "Bob's-model"
+
 # --- load: comments, blanks, MLX_* only ---
 
 reset_mlx_keys
