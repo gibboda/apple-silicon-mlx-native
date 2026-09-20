@@ -136,7 +136,8 @@ JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throu
 
 ```bash
 source .venv/bin/activate
-source config/models.env  # if present (interactive shell; wrappers parse MLX_* keys instead)
+source config/models.env  # if present
+# Wrappers parse MLX_* only. `source` executes the file — do not put secrets or commands here.
 mlx_lm.generate \
   --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
   --prompt "Hello from MLX" \
@@ -152,7 +153,8 @@ Prefer one long-lived server so weights stay resident (lower latency, less memor
 
 ```bash
 source .venv/bin/activate
-source config/models.env  # if present (interactive shell; wrappers parse MLX_* keys instead)
+source config/models.env  # if present
+# Wrappers parse MLX_* only. `source` executes the file — do not put secrets or commands here.
 mlx_lm.server \
   --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
   --host 127.0.0.1 \

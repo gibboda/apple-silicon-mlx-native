@@ -969,7 +969,13 @@ unquote_env_value() {
   if [[ "${raw}" =~ [][\$\`\;\|\&\<\>\(\)\{\}\\\'\"[:space:]] ]]; then
     return 1
   fi
-  printf '%s' "${raw}"
+  if [[ -n "${HOME:-}" && "${raw}" == "~" ]]; then
+    printf '%s' "${HOME}"
+  elif [[ -n "${HOME:-}" && "${raw:0:2}" == $'~/' ]]; then
+    printf '%s' "${HOME}/${raw:2}"
+  else
+    printf '%s' "${raw}"
+  fi
 }
 
 unquote_posix_single() {
@@ -1003,8 +1009,10 @@ unquote_posix_single() {
   printf '%s' "${out}"
 }
 
-# Parse config/models.env as data. Only MLX_* keys are exported. Lines are
-# never executed (no command substitution, PATH=, or HF_TOKEN). Missing file is OK.
+# Parse config/models.env as data. Only documented MLX_* config keys are
+# exported. Lines are never executed (no command substitution, PATH=, or
+# HF_TOKEN). Runtime identity keys (workspace/venv/paths) are skipped.
+# Missing file is OK.
 load_models_env() {
   local file="${1:-${MLX_MODELS_ENV}}"
   local line key value decoded
@@ -1017,17 +1025,50 @@ load_models_env() {
       line="${line#export}"
       line="${line#"${line%%[![:space:]]*}"}"
     fi
-    if [[ "${line}" =~ ^(MLX_[A-Z0-9_]+)=(.*)$ ]]; then
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
       key="${BASH_REMATCH[1]}"
       value="${BASH_REMATCH[2]}"
+      if ! is_models_env_key "${key}"; then
+        log_warn "Skipping non-MLX key ${key} in ${file}"
+        continue
+      fi
+      value="$(strip_unquoted_assignment_comment "${value}")"
       if ! decoded="$(unquote_env_value "${value}")"; then
         log_warn "Skipping unsafe ${key} assignment in ${file}"
+        continue
+      fi
+      if is_models_env_runtime_key "${key}"; then
+        log_warn "Skipping runtime key ${key} in ${file}"
         continue
       fi
       printf -v "${key}" '%s' "${decoded}"
       export "${key?}"
     fi
   done <"${file}"
+}
+
+is_models_env_runtime_key() {
+  case "${1:-}" in
+    MLX_WORKSPACE|MLX_VENV|MLX_CONFIG_DIR|MLX_MODELS_ENV|MLX_MODELS_EXAMPLE|MLX_PYTHON_VERSION|MLX_SKIP_DEVICE_PROBE)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# Drop an unquoted " # comment" suffix. Quoted values are left intact.
+strip_unquoted_assignment_comment() {
+  local value="$1"
+  local comment_re='^(.*)[[:space:]]+#'
+  if [[ "${value:0:1}" == "'" || "${value:0:1}" == '"' ]]; then
+    printf '%s' "${value}"
+    return 0
+  fi
+  if [[ "${value}" =~ ${comment_re} ]]; then
+    value="${BASH_REMATCH[1]}"
+    value="${value%"${value##*[![:space:]]}"}"
+  fi
+  printf '%s' "${value}"
 }
 
 # Create config/models.env once from the composed profile. Never overwrite an existing file.
