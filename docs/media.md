@@ -85,6 +85,12 @@ OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVER
   scripts/generate-mlx-image.sh --dump-plan --prompt "plan"
 OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled \
   scripts/generate-mlx-image.sh --dump-plan --prompt "plan"
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  scripts/generate-mlx-image.sh --dump-plan --prompt "plan"
+OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  scripts/generate-mlx-image.sh --dump-plan --prompt "plan"
 ```
 
 `--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). On constrained and standard memory tiers (and fanless), the generate wrapper adds `--vae-tiling` automatically unless you already pass it. Custom `--output` paths must resolve under `MLX_WORKSPACE`. PNGs land in `outputs/images/` (gitignored).
@@ -156,6 +162,12 @@ OVERRIDE_MEMORY_TIER=high OVERRIDE_THERMAL_CLASS=cooled scripts/generate-mlx-vid
 OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=1 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled \
   scripts/generate-mlx-video.sh --dump-plan --prompt "plan"
 OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled \
+  scripts/generate-mlx-video.sh --dump-plan --prompt "plan"
+OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
+  scripts/generate-mlx-video.sh --dump-plan --prompt "plan"
+OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
+  OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
   scripts/generate-mlx-video.sh --dump-plan --prompt "plan"
 ```
 
