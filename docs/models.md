@@ -21,6 +21,7 @@ model weights
 ```bash
 source .venv/bin/activate
 source config/models.env  # if present; provides MLX_DEFAULT_MODEL and MLX_RECOMMENDED_CONTEXT
+# Generate wrappers parse MLX_* assignments from this file (they do not source/execute it).
 
 # One-shot generation
 mlx_lm.generate \

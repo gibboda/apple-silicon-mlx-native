@@ -336,6 +336,13 @@ expect_contains "seed first call logs created" "Created ${SEED_ENV}" "${seed_log
 expect_contains "seed first call uses composed model" "MLX_DEFAULT_MODEL=${MLX_RECOMMENDED_MODEL}" "$(cat "${SEED_ENV}")"
 expect_contains "seed first call uses composed context" "MLX_RECOMMENDED_CONTEXT=${MLX_RECOMMENDED_CONTEXT}" "$(cat "${SEED_ENV}")"
 
+SAVED_MODEL="${MLX_RECOMMENDED_MODEL}"
+SAVED_CONTEXT="${MLX_RECOMMENDED_CONTEXT}"
+unset MLX_DEFAULT_MODEL MLX_RECOMMENDED_CONTEXT
+load_models_env "${SEED_ENV}"
+expect_eq "seed load round-trips model" "${MLX_DEFAULT_MODEL}" "${SAVED_MODEL}"
+expect_eq "seed load round-trips context" "${MLX_RECOMMENDED_CONTEXT}" "${SAVED_CONTEXT}"
+
 SEED_FIRST="$(cat "${SEED_ENV}")"
 MLX_RECOMMENDED_MODEL="mlx-community/SHOULD-NOT-OVERWRITE"
 MLX_RECOMMENDED_CONTEXT=99999
