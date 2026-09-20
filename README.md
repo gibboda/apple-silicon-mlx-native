@@ -338,7 +338,7 @@ make release RELEASE_ARGS=--minor
 
 `scripts/release.sh` is bash. Prefer `make release` (`python3 scripts/release.sh` re-execs bash). There is no `release.py`.
 
-`scripts/release.sh` reads the latest `## [x.y.z]` heading from `CHANGELOG.md` and patch-bumps it unless you pass `--minor` or `--major`. It moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z` on `chore/release-x.y.z` (git hooks still run), and opens a pull request. You do not type the next SemVer or push `main`. After that PR merges, `.github/workflows/publish-release.yml` creates annotated tag `vx.y.z` and the GitHub Release. `--dry-run` previews; `--no-push` stops after a local commit+tag. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
+`scripts/release.sh` reads the latest `## [x.y.z]` heading from `CHANGELOG.md` and patch-bumps it unless you pass `--minor` or `--major`. It moves `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD`, updates footer compare links, commits `chore(release): cut x.y.z` on `chore/release-x.y.z` (git hooks still run), and opens a pull request. You do not type the next SemVer or push `main`. After that PR merges (squash or merge commit), `.github/workflows/publish-release.yml` tags the merge result on `main` and creates the GitHub Release. `--dry-run` previews; `--no-push` stops after a local commit+tag. There is no `VERSION` file; the number lives in `CHANGELOG.md`, git tags, and GitHub Releases.
 
 ## CODEOWNERS
 

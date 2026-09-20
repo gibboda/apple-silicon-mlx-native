@@ -396,6 +396,9 @@ fake_gh="${TMP}/fake-gh-bin"
 mkdir -p "${fake_gh}"
 cat >"${fake_gh}/gh" <<'EOF'
 #!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then
+  exit 0
+fi
 if [ "$1" = pr ] && [ "$2" = create ]; then
   echo https://github.com/example/apple-silicon-mlx-native/pull/42
   exit 0
@@ -440,6 +443,162 @@ if git -C "${pub}" rev-parse -q --verify refs/tags/v0.1.1 >/dev/null; then
 else
   pass "publish does not tag before merge"
 fi
+
+behind="${TMP}/behind"
+init_repo "${behind}"
+behind_bare="${TMP}/behind.git"
+git init -q --bare --template= -b main "${behind_bare}"
+git -C "${behind}" remote set-url --push origin "${behind_bare}"
+git -C "${behind}" push -q -u origin main
+ahead="${TMP}/ahead"
+git clone -q "${behind_bare}" "${ahead}"
+git -C "${ahead}" config user.email "release-test@example.com"
+git -C "${ahead}" config user.name "Release Test"
+git -C "${ahead}" commit -q --allow-empty -m "chore: origin moved ahead"
+git -C "${ahead}" push -q origin main
+behind_cut() {
+  (
+    cd "${behind}"
+    env PATH="${fake_gh}:${PATH}" RELEASE_DATE=2026-01-02 "${RELEASE}"
+  )
+}
+expect_fail "refuses to cut when default branch is behind origin" behind_cut
+
+merged="${TMP}/publish-merged"
+init_repo "${merged}"
+merged_bare="${TMP}/merged.git"
+git init -q --bare --template= -b main "${merged_bare}"
+git -C "${merged}" remote set-url --push origin "${merged_bare}"
+git -C "${merged}" push -q -u origin main
+cat >"${merged}/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## [Unreleased]
+
+## [0x1x1] - 2026-01-01
+
+### Fixed
+
+- wrong notes
+
+## [0.1.1] - 2026-01-02
+
+### Fixed
+
+- a notable fix
+
+## [0.1.0] - 2026-01-01
+
+### Added
+
+- first release
+EOF
+git -C "${merged}" add CHANGELOG.md
+git -C "${merged}" commit -q -m "chore(release): cut 0.1.1"
+git -C "${merged}" checkout -q -b extra
+git -C "${merged}" commit -q --allow-empty -m "chore: extra"
+git -C "${merged}" checkout -q main
+git -C "${merged}" merge -q --no-ff extra -m "Merge pull request #42 from example/chore/release-0.1.1"
+fake_rel="${TMP}/fake-release-gh"
+mkdir -p "${fake_rel}"
+cat >"${fake_rel}/gh" <<'EOF'
+#!/bin/sh
+state="${FAKE_GH_STATE:?}"
+mkdir -p "${state}"
+if [ "$1" = auth ] && [ "$2" = status ]; then
+  exit 0
+fi
+if [ "$1" = release ] && [ "$2" = view ]; then
+  if [ -f "${state}/$3" ]; then
+    exit 0
+  fi
+  exit 1
+fi
+if [ "$1" = release ] && [ "$2" = create ]; then
+  printf '%s\n' "$@" >"${state}/$3"
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "${fake_rel}/gh"
+rel_state="${TMP}/fake-release-state"
+run_publish_merged() {
+  (
+    cd "${merged}"
+    env PATH="${fake_rel}:${PATH}" FAKE_GH_STATE="${rel_state}" \
+      RELEASE_PR_TITLE="${RELEASE_PR_TITLE-}" \
+      RELEASE_PR_HEAD="${RELEASE_PR_HEAD-}" \
+      "${RELEASE}" --publish-merged
+  )
+}
+merged_out=""
+if merged_out="$(RELEASE_PR_TITLE="chore(release): cut 0.1.1" RELEASE_PR_HEAD="chore/release-0.1.1" run_publish_merged 2>&1)"; then
+  pass "publish-merged after merge commit"
+else
+  fail "publish-merged after merge commit"
+  printf '%s\n' "${merged_out}" >&2
+fi
+expect_contains "publish-merged uses version notes not regex decoy" "- a notable fix" "$(git -C "${merged}" for-each-ref --format='%(contents)' refs/tags/v0.1.1)"
+expect_missing "publish-merged does not take regex decoy notes" "wrong notes" "$(git -C "${merged}" for-each-ref --format='%(contents)' refs/tags/v0.1.1)"
+tag_type="$(git -C "${merged}" cat-file -t v0.1.1)"
+if [[ "${tag_type}" == "tag" ]]; then
+  pass "publish-merged tag is annotated"
+else
+  fail "publish-merged tag is ${tag_type}, want annotated tag"
+fi
+if git -C "${merged_bare}" show-ref --verify --quiet refs/tags/v0.1.1; then
+  pass "publish-merged pushes tag"
+else
+  fail "publish-merged pushes tag"
+fi
+if [[ -f "${rel_state}/v0.1.1" ]]; then
+  pass "publish-merged creates GitHub Release"
+else
+  fail "publish-merged creates GitHub Release"
+fi
+if merged_again="$(RELEASE_PR_TITLE="chore(release): cut 0.1.1" run_publish_merged 2>&1)"; then
+  pass "publish-merged is idempotent"
+else
+  fail "publish-merged is idempotent"
+  printf '%s\n' "${merged_again}" >&2
+fi
+expect_contains "publish-merged skips existing release" "already exists" "${merged_again}"
+
+walk_out=""
+git -C "${merged}" tag -d v0.1.1 >/dev/null
+git -C "${merged_bare}" update-ref -d refs/tags/v0.1.1
+rm -f "${rel_state}/v0.1.1"
+if walk_out="$(RELEASE_PR_TITLE='' RELEASE_PR_HEAD='' run_publish_merged 2>&1)"; then
+  pass "publish-merged walks log under merge commit"
+else
+  fail "publish-merged walks log under merge commit"
+  printf '%s\n' "${walk_out}" >&2
+fi
+
+mismatch() {
+  (
+    cd "${merged}"
+    env PATH="${fake_rel}:${PATH}" FAKE_GH_STATE="${rel_state}" \
+      RELEASE_PR_TITLE="chore(release): cut 0.1.1" \
+      RELEASE_PR_HEAD="chore/release-0.2.0" \
+      "${RELEASE}" --publish-merged
+  )
+}
+expect_fail "publish-merged refuses title/branch version mismatch" mismatch
+
+badhead="${TMP}/bad-head"
+init_repo "${badhead}"
+bad_bare="${TMP}/bad-head.git"
+git init -q --bare --template= -b main "${bad_bare}"
+git -C "${badhead}" remote set-url --push origin "${bad_bare}"
+git -C "${badhead}" push -q -u origin main
+bad_merged() {
+  (
+    cd "${badhead}"
+    env PATH="${fake_rel}:${PATH}" FAKE_GH_STATE="${rel_state}" "${RELEASE}" --publish-merged
+  )
+}
+expect_fail "publish-merged refuses when version cannot be resolved" bad_merged
 
 first="${TMP}/first-release"
 mkdir -p "${first}"

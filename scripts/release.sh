@@ -50,7 +50,9 @@ This is a bash script. `python3 scripts/release.sh` re-execs bash.
   --dry-run          Validate and print the planned changelog; write nothing
   --push             Push chore/release-VERSION and open a pull request (default)
   --no-push          Commit and tag locally; do not push or open a PR
-  --publish-merged   CI: tag and gh release create after the cut PR merges to main
+  --publish-merged   CI: tag HEAD (merge result on main) and gh release create
+                     after a cut PR merges. Version comes from RELEASE_PR_TITLE /
+                     RELEASE_PR_HEAD or recent chore(release) commits.
   -h, --help         Show this help
 
 Requires a clean work tree on the default branch, a non-empty [Unreleased]
@@ -177,7 +179,16 @@ extract_version_body() {
   local file="$1"
   local version="$2"
   awk -v ver="${version}" '
-    $0 ~ "^## [[]" ver "]( |$)" { grab=1; next }
+    BEGIN { needle = "## [" ver "]" }
+    {
+      if (index($0, needle) == 1) {
+        rest = substr($0, length(needle) + 1)
+        if (rest == "" || substr(rest, 1, 1) == " ") {
+          grab=1
+          next
+        }
+      }
+    }
     grab && /^## [[]/ { exit }
     grab { print }
   ' "${file}" | trim_blank_lines
@@ -191,6 +202,52 @@ version_from_release_subject() {
   version="${rest%% *}"
   [[ -n "${version}" ]] || return 1
   printf '%s\n' "${version}"
+}
+
+version_from_release_ref() {
+  local ref="$1"
+  ref="${ref#refs/heads/}"
+  [[ "${ref}" == chore/release-* ]] || return 1
+  printf '%s\n' "${ref#chore/release-}"
+}
+
+resolve_merged_version() {
+  local from_title="" from_head="" from_log="" subject v
+  if [[ -n "${RELEASE_PR_TITLE:-}" ]]; then
+    from_title="$(version_from_release_subject "${RELEASE_PR_TITLE}" || true)"
+  fi
+  if [[ -n "${RELEASE_PR_HEAD:-}" ]]; then
+    from_head="$(version_from_release_ref "${RELEASE_PR_HEAD}" || true)"
+  fi
+  while IFS= read -r subject; do
+    if v="$(version_from_release_subject "${subject}")"; then
+      from_log="${v}"
+      break
+    fi
+  done < <(git -C "${GIT_ROOT}" log -20 --format=%s)
+  if [[ -n "${from_title}" && -n "${from_head}" && "${from_title}" != "${from_head}" ]]; then
+    die "Release PR title version '${from_title}' does not match branch '${from_head}'"
+  fi
+  VERSION="${from_title:-${from_head:-${from_log}}}"
+  [[ -n "${VERSION}" ]] || die "Could not resolve release version from PR title, branch, or recent commits"
+}
+
+require_gh_auth() {
+  gh auth status >/dev/null 2>&1 \
+    || die "GitHub CLI is not authenticated. Run: gh auth login"
+}
+
+sync_default_branch_with_origin() {
+  local push_url remote_sha
+  push_url="$(git -C "${GIT_ROOT}" remote get-url --push origin 2>/dev/null || true)"
+  [[ -n "${push_url}" ]] || die "git remote 'origin' is required"
+  git -C "${GIT_ROOT}" fetch --quiet "${push_url}" \
+    "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}" \
+    || die "Could not fetch origin/${DEFAULT_BRANCH}"
+  remote_sha="$(git -C "${GIT_ROOT}" rev-parse "refs/remotes/origin/${DEFAULT_BRANCH}")"
+  if [[ "$(git -C "${GIT_ROOT}" rev-parse HEAD)" != "${remote_sha}" ]]; then
+    die "Default branch is not in sync with origin/${DEFAULT_BRANCH}. Pull or rebase first."
+  fi
 }
 
 changelog_has_list_item() {
@@ -328,6 +385,7 @@ if [[ -n "${VERSION}" ]]; then
 fi
 if [[ "${DRY_RUN}" -eq 0 && ( "${DO_PUSH}" -eq 1 || "${PUBLISH_MERGED}" -eq 1 ) ]]; then
   require_cmd gh "Install GitHub CLI (gh) or pass --dry-run / --no-push."
+  require_gh_auth
 fi
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not inside a git work tree"
 
@@ -345,9 +403,7 @@ DEFAULT_BRANCH="${DEFAULT_BRANCH#origin/}"
 [[ -n "${DEFAULT_BRANCH}" ]] || DEFAULT_BRANCH="main"
 
 if [[ "${PUBLISH_MERGED}" -eq 1 ]]; then
-  SUBJECT="$(git -C "${GIT_ROOT}" log -1 --format=%s)"
-  VERSION="$(version_from_release_subject "${SUBJECT}")" \
-    || die "HEAD subject is not 'chore(release): cut VERSION' (got '${SUBJECT}')"
+  resolve_merged_version
   is_semver "${VERSION}" || die "VERSION must be MAJOR.MINOR.PATCH with optional pre-release (got '${VERSION}')"
   git check-ref-format "refs/tags/v${VERSION}" \
     || die "VERSION is not a valid git tag name: v${VERSION}"
@@ -451,6 +507,7 @@ if [[ "${DO_PUSH}" -eq 1 ]]; then
   if git -C "${GIT_ROOT}" ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
     die "Remote branch ${RELEASE_BRANCH} already exists"
   fi
+  sync_default_branch_with_origin
   git -C "${GIT_ROOT}" checkout -q -b "${RELEASE_BRANCH}"
 fi
 
