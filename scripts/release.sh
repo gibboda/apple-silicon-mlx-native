@@ -30,31 +30,34 @@ source "${SCRIPT_DIR}/lib/common.sh"
 DRY_RUN=0
 DO_PUSH=1
 PUSH_OPT=""
+PUBLISH_MERGED=0
 VERSION=""
 BUMP=""
 
 usage() {
   cat <<'EOF'
 Usage: release.sh [--dry-run] [--no-push|--push] [--patch|--minor|--major] [VERSION]
+       release.sh --publish-merged
 
-Cut and publish a SemVer release from CHANGELOG.md [Unreleased]. This is a bash
-script. `python3 scripts/release.sh` re-execs bash.
+Cut a SemVer release from CHANGELOG.md [Unreleased] and open a pull request.
+This is a bash script. `python3 scripts/release.sh` re-execs bash.
 
-  VERSION       Optional override (pre-releases / unusual jumps). Default: patch-bump
-                the latest ## [x.y.z] heading in CHANGELOG.md
-  --patch       Next x.y.(z+1) (default when VERSION is omitted)
-  --minor       Next x.(y+1).0
-  --major       Next (x+1).0.0
-  --dry-run     Validate and print the planned changelog; write nothing, do not tag
-  --push        After commit+tag, git push and gh release create (default)
-  --no-push     Commit and tag only; do not push or create a GitHub Release
-  -h, --help    Show this help
+  VERSION            Optional override (pre-releases / unusual jumps). Default:
+                     patch-bump the latest ## [x.y.z] heading in CHANGELOG.md
+  --patch            Next x.y.(z+1) (default when VERSION is omitted)
+  --minor            Next x.(y+1).0
+  --major            Next (x+1).0.0
+  --dry-run          Validate and print the planned changelog; write nothing
+  --push             Push chore/release-VERSION and open a pull request (default)
+  --no-push          Commit and tag locally; do not push or open a PR
+  --publish-merged   CI: tag HEAD (merge result on main) and gh release create
+                     after a cut PR merges. Version comes from RELEASE_PR_TITLE /
+                     RELEASE_PR_HEAD or recent chore(release) commits.
+  -h, --help         Show this help
 
 Requires a clean work tree on the default branch, a non-empty [Unreleased]
-section, and gh (unless --dry-run or --no-push). Creates commit
-  chore(release): cut VERSION
-and annotated tag vVERSION, then publishes. Never passes --no-verify or
-force-pushes tags.
+section, and gh (unless --dry-run or --no-push). Never pushes the default
+branch (Protect main). Never passes --no-verify or force-pushes tags.
 
 Environment:
   RELEASE_DATE  Override the changelog date (YYYY-MM-DD). Default: today.
@@ -172,6 +175,81 @@ previous_changelog_version() {
   ' "${file}"
 }
 
+extract_version_body() {
+  local file="$1"
+  local version="$2"
+  awk -v ver="${version}" '
+    BEGIN { needle = "## [" ver "]" }
+    {
+      if (index($0, needle) == 1) {
+        rest = substr($0, length(needle) + 1)
+        if (rest == "" || substr(rest, 1, 1) == " ") {
+          grab=1
+          next
+        }
+      }
+    }
+    grab && /^## [[]/ { exit }
+    grab { print }
+  ' "${file}" | trim_blank_lines
+}
+
+version_from_release_subject() {
+  local subject="$1"
+  local rest version
+  [[ "${subject}" == "chore(release): cut "* ]] || return 1
+  rest="${subject#chore(release): cut }"
+  version="${rest%% *}"
+  [[ -n "${version}" ]] || return 1
+  printf '%s\n' "${version}"
+}
+
+version_from_release_ref() {
+  local ref="$1"
+  ref="${ref#refs/heads/}"
+  [[ "${ref}" == chore/release-* ]] || return 1
+  printf '%s\n' "${ref#chore/release-}"
+}
+
+resolve_merged_version() {
+  local from_title="" from_head="" from_log="" subject v
+  if [[ -n "${RELEASE_PR_TITLE:-}" ]]; then
+    from_title="$(version_from_release_subject "${RELEASE_PR_TITLE}" || true)"
+  fi
+  if [[ -n "${RELEASE_PR_HEAD:-}" ]]; then
+    from_head="$(version_from_release_ref "${RELEASE_PR_HEAD}" || true)"
+  fi
+  while IFS= read -r subject; do
+    if v="$(version_from_release_subject "${subject}")"; then
+      from_log="${v}"
+      break
+    fi
+  done < <(git -C "${GIT_ROOT}" log -20 --format=%s)
+  if [[ -n "${from_title}" && -n "${from_head}" && "${from_title}" != "${from_head}" ]]; then
+    die "Release PR title version '${from_title}' does not match branch '${from_head}'"
+  fi
+  VERSION="${from_title:-${from_head:-${from_log}}}"
+  [[ -n "${VERSION}" ]] || die "Could not resolve release version from PR title, branch, or recent commits"
+}
+
+require_gh_auth() {
+  gh auth status >/dev/null 2>&1 \
+    || die "GitHub CLI is not authenticated. Run: gh auth login"
+}
+
+sync_default_branch_with_origin() {
+  local push_url remote_sha
+  push_url="$(git -C "${GIT_ROOT}" remote get-url --push origin 2>/dev/null || true)"
+  [[ -n "${push_url}" ]] || die "git remote 'origin' is required"
+  git -C "${GIT_ROOT}" fetch --quiet "${push_url}" \
+    "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}" \
+    || die "Could not fetch origin/${DEFAULT_BRANCH}"
+  remote_sha="$(git -C "${GIT_ROOT}" rev-parse "refs/remotes/origin/${DEFAULT_BRANCH}")"
+  if [[ "$(git -C "${GIT_ROOT}" rev-parse HEAD)" != "${remote_sha}" ]]; then
+    die "Default branch is not in sync with origin/${DEFAULT_BRANCH}. Pull or rebase first."
+  fi
+}
+
 changelog_has_list_item() {
   grep -qE '^[[:space:]]*-[[:space:]]' <<<"$1"
 }
@@ -257,6 +335,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1; shift ;;
     --push) set_push_opt push; shift ;;
     --no-push) set_push_opt no-push; shift ;;
+    --publish-merged) PUBLISH_MERGED=1; shift ;;
     --patch) set_bump patch; shift ;;
     --minor) set_bump minor; shift ;;
     --major) set_bump major; shift ;;
@@ -283,6 +362,11 @@ if [[ $# -gt 0 ]]; then
 fi
 
 [[ "${DRY_RUN}" -eq 1 && "${PUSH_OPT}" == "push" ]] && die "Cannot combine --dry-run and --push"
+if [[ "${PUBLISH_MERGED}" -eq 1 ]]; then
+  [[ "${DRY_RUN}" -eq 0 ]] || die "Cannot combine --publish-merged and --dry-run"
+  [[ -z "${PUSH_OPT}" ]] || die "Cannot combine --publish-merged and --push/--no-push"
+  [[ -z "${VERSION}" && -z "${BUMP}" ]] || die "Cannot combine --publish-merged with VERSION or --patch/--minor/--major"
+fi
 if [[ -n "${VERSION}" && -n "${BUMP}" ]]; then
   die "Cannot combine explicit VERSION with --patch/--minor/--major"
 fi
@@ -299,8 +383,9 @@ if [[ -n "${VERSION}" ]]; then
   git check-ref-format "refs/tags/v${VERSION}" \
     || die "VERSION is not a valid git tag name: v${VERSION}"
 fi
-if [[ "${DRY_RUN}" -eq 0 && "${DO_PUSH}" -eq 1 ]]; then
+if [[ "${DRY_RUN}" -eq 0 && ( "${DO_PUSH}" -eq 1 || "${PUBLISH_MERGED}" -eq 1 ) ]]; then
   require_cmd gh "Install GitHub CLI (gh) or pass --dry-run / --no-push."
+  require_gh_auth
 fi
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not inside a git work tree"
 
@@ -313,11 +398,47 @@ if [[ -n "$(git -C "${GIT_ROOT}" status --porcelain)" ]]; then
 fi
 
 CURRENT_BRANCH="$(git -C "${GIT_ROOT}" rev-parse --abbrev-ref HEAD)"
+DEFAULT_BRANCH="$(git -C "${GIT_ROOT}" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+DEFAULT_BRANCH="${DEFAULT_BRANCH#origin/}"
+[[ -n "${DEFAULT_BRANCH}" ]] || DEFAULT_BRANCH="main"
+
+if [[ "${PUBLISH_MERGED}" -eq 1 ]]; then
+  resolve_merged_version
+  is_semver "${VERSION}" || die "VERSION must be MAJOR.MINOR.PATCH with optional pre-release (got '${VERSION}')"
+  git check-ref-format "refs/tags/v${VERSION}" \
+    || die "VERSION is not a valid git tag name: v${VERSION}"
+  grep -qF "## [${VERSION}]" "${CHANGELOG}" \
+    || die "CHANGELOG.md has no '${VERSION}' section"
+  NOTES_BODY="$(extract_version_body "${CHANGELOG}" "${VERSION}")"
+  changelog_has_list_item "${NOTES_BODY}" \
+    || die "CHANGELOG [${VERSION}] has no notes to publish"
+  NOTES_FILE="$(mktemp)"
+  trap 'rm -f "${NOTES_FILE}"' EXIT
+  {
+    printf 'v%s\n\n' "${VERSION}"
+    printf '%s\n' "${NOTES_BODY}"
+  } >"${NOTES_FILE}"
+  if git -C "${GIT_ROOT}" rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+    log_info "Tag v${VERSION} already exists"
+  else
+    git -C "${GIT_ROOT}" tag -a "v${VERSION}" -F "${NOTES_FILE}"
+    log_ok "Created annotated tag v${VERSION}"
+  fi
+  git -C "${GIT_ROOT}" push origin "refs/tags/v${VERSION}"
+  if gh release view "v${VERSION}" >/dev/null 2>&1; then
+    log_info "GitHub Release v${VERSION} already exists"
+  else
+    BODY_FILE="$(mktemp)"
+    trap 'rm -f "${NOTES_FILE}" "${BODY_FILE}"' EXIT
+    printf '%s\n' "${NOTES_BODY}" >"${BODY_FILE}"
+    gh release create "v${VERSION}" --title "v${VERSION}" --notes-file "${BODY_FILE}" --target "$(git -C "${GIT_ROOT}" rev-parse HEAD)"
+    log_ok "Created GitHub Release v${VERSION}"
+  fi
+  exit 0
+fi
+
 if [[ "${DRY_RUN}" -eq 0 ]]; then
   [[ "${CURRENT_BRANCH}" != "HEAD" ]] || die "Cannot cut a release in detached HEAD"
-  DEFAULT_BRANCH="$(git -C "${GIT_ROOT}" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-  DEFAULT_BRANCH="${DEFAULT_BRANCH#origin/}"
-  [[ -n "${DEFAULT_BRANCH}" ]] || DEFAULT_BRANCH="main"
   if [[ "${CURRENT_BRANCH}" != "${DEFAULT_BRANCH}" ]]; then
     die "Cut releases on ${DEFAULT_BRANCH} (currently on ${CURRENT_BRANCH})"
   fi
@@ -370,7 +491,7 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
   log_info "Dry-run: CHANGELOG.md would become:"
   printf '%s\n' "${NEW_CHANGELOG}"
   if [[ "${DO_PUSH}" -eq 1 ]]; then
-    log_info "Dry-run: would commit 'chore(release): cut ${VERSION}', annotated tag v${VERSION}, git push, and gh release create"
+    log_info "Dry-run: would commit 'chore(release): cut ${VERSION}' on chore/release-${VERSION}, open a pull request to ${DEFAULT_BRANCH}, and tag v${VERSION} after merge"
   else
     log_info "Dry-run: would commit 'chore(release): cut ${VERSION}' and annotated tag v${VERSION} (--no-push)"
   fi
@@ -378,33 +499,35 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
   exit 0
 fi
 
+RELEASE_BRANCH="chore/release-${VERSION}"
+if [[ "${DO_PUSH}" -eq 1 ]]; then
+  if git -C "${GIT_ROOT}" show-ref --verify --quiet "refs/heads/${RELEASE_BRANCH}"; then
+    die "Branch ${RELEASE_BRANCH} already exists"
+  fi
+  if git -C "${GIT_ROOT}" ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+    die "Remote branch ${RELEASE_BRANCH} already exists"
+  fi
+  sync_default_branch_with_origin
+  git -C "${GIT_ROOT}" checkout -q -b "${RELEASE_BRANCH}"
+fi
+
 printf '%s\n' "${NEW_CHANGELOG}" >"${CHANGELOG}"
 git -C "${GIT_ROOT}" add -- CHANGELOG.md
 git -C "${GIT_ROOT}" commit -m "chore(release): cut ${VERSION}"
 
-NOTES_FILE="$(mktemp)"
-trap 'rm -f "${NOTES_FILE}"' EXIT
-{
-  printf 'v%s\n\n' "${VERSION}"
-  printf '%s\n' "${UNRELEASED_BODY}"
-} >"${NOTES_FILE}"
-git -C "${GIT_ROOT}" tag -a "v${VERSION}" -F "${NOTES_FILE}"
-
-log_ok "Committed CHANGELOG and created annotated tag v${VERSION}"
-
 if [[ "${DO_PUSH}" -eq 1 ]]; then
-  if git -C "${GIT_ROOT}" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-    git -C "${GIT_ROOT}" push
-  else
-    git -C "${GIT_ROOT}" push -u origin HEAD
-  fi
-  git -C "${GIT_ROOT}" push origin "refs/tags/v${VERSION}"
-  BODY_FILE="$(mktemp)"
-  trap 'rm -f "${NOTES_FILE}" "${BODY_FILE}"' EXIT
-  printf '%s\n' "${UNRELEASED_BODY}" >"${BODY_FILE}"
-  gh release create "v${VERSION}" --title "v${VERSION}" --notes-file "${BODY_FILE}"
-  log_ok "Pushed v${VERSION} and created GitHub Release"
+  git -C "${GIT_ROOT}" push -u origin HEAD
+  PR_URL="$(gh pr create --title "chore(release): cut ${VERSION}" --body "${UNRELEASED_BODY}" --base "${DEFAULT_BRANCH}")"
+  log_ok "Opened ${PR_URL} (tag v${VERSION} is created after merge)"
 else
+  NOTES_FILE="$(mktemp)"
+  trap 'rm -f "${NOTES_FILE}"' EXIT
+  {
+    printf 'v%s\n\n' "${VERSION}"
+    printf '%s\n' "${UNRELEASED_BODY}"
+  } >"${NOTES_FILE}"
+  git -C "${GIT_ROOT}" tag -a "v${VERSION}" -F "${NOTES_FILE}"
+  log_ok "Committed CHANGELOG and created annotated tag v${VERSION}"
   log_info "Publish skipped (--no-push)"
 fi
 
