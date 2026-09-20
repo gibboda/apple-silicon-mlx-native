@@ -6,7 +6,15 @@
 ERROR: Apple Silicon (arm64) required.
 ```
 
-This toolkit only supports Apple Silicon. Use an M-series Mac, or a different stack on Intel hardware.
+This toolkit only supports Apple Silicon macOS. Use an M-series Mac, or a different stack on Intel hardware.
+
+## Not macOS (Linux ARM / other kernels)
+
+```text
+ERROR: Apple Silicon macOS (Darwin arm64) required.
+```
+
+`assert_apple_silicon` and `scripts/detect-apple-silicon.sh --quiet` require Darwin, not only `uname -m == arm64`. Linux ARM hosts fail immediately instead of dying later on `sysctl`. Portable `--dump-plan` / OVERRIDE fixtures still skip that live-host check.
 
 ## Homebrew missing
 
@@ -82,6 +90,12 @@ Subjects must match:
 Allowed types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `build` `ci` `chore` `revert`.
 
 GitHub merge commits are exempt by default. See `scripts/conventional-commits-audit.sh --help`.
+
+## Install refused to reuse `.venv`
+
+`make install` will not reuse a directory that is not a virtualenv. Remove or rename that path, then re-run `make install`. `make rebuild` and `make clean` also refuse non-venv paths.
+
+A venv must resolve under `MLX_WORKSPACE`. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory (and optionally `MLX_VENV` under it). `MLX_VENV` alone pointing outside the workspace is rejected.
 
 ## Rebuild refused to delete `.venv`
 

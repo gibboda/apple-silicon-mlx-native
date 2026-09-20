@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Image/video `--dump-plan` OVERRIDE fixtures lock 18 GB M3 Pro on 768² 8-bit / 17-frame Wan (`force_required=0`) and 24 GB high M3 Pro on 1024² / 33 frames
 
+### Fixed
+
+- `assert_apple_silicon` and `detect --quiet` require Darwin arm64, so Linux ARM fails with a not-macOS error instead of a later `sysctl` failure
+- Initial build validates workspace/venv paths before Homebrew, refuses to reuse a non-venv `.venv`, and requires `MLX_VENV` under `MLX_WORKSPACE`
+
 ## [0.2.3] - 2026-09-19
 
 ### Fixed

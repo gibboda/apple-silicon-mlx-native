@@ -42,13 +42,14 @@ Usage: initial-build-mlx-native-media.sh [-h|--help]
 Bootstrap MLX-native tooling on a new Apple Silicon Mac.
 
 Steps:
-  1. Verify arm64 / detect hardware, chip class, and memory tier
-  2. Verify/install Xcode CLT guidance
-  3. Detect (or optionally install) Homebrew
-  4. Install Homebrew packages (python, git, ffmpeg)
-  5. Create workspace + Python venv
-  6. Upgrade packaging tools; install mlx, mlx-lm, selected media
-  7. Validate MLX; print versions, hardware, next commands
+  1. Verify Darwin arm64 / detect hardware, chip class, and memory tier
+  2. Validate workspace / venv paths (fail closed before Homebrew)
+  3. Verify/install Xcode CLT guidance
+  4. Detect (or optionally install) Homebrew
+  5. Install Homebrew packages (python, git, ffmpeg)
+  6. Seed config and create or reuse Python venv
+  7. Upgrade packaging tools; install mlx, mlx-lm, selected media
+  8. Validate MLX; print versions, hardware, next commands
 
 Image/video packages are NOT installed by default. See docs/media.md.
 EOF
@@ -77,6 +78,13 @@ fi
 if [[ "${MLX_THERMAL_CLASS}" == "fanless" ]]; then
   log_warn "Fanless chassis (MacBook Air): image/video/context stay on the conservative Air profile."
 fi
+
+log_header "Workspace"
+mkdir -p "${MLX_WORKSPACE}"
+mkdir -p "${MLX_CONFIG_DIR}"
+assert_install_venv_paths
+log_ok "Workspace validated: ${MLX_WORKSPACE}"
+seed_models_env_if_missing
 
 # --- Prerequisites ---
 log_header "Prerequisites"
@@ -140,12 +148,6 @@ if [[ -z "${BREW_PY}" || ! -x "${BREW_PY}" ]]; then
   die "Python ${MLX_PYTHON_VERSION} not found after Homebrew install."
 fi
 log_ok "Using Python: ${BREW_PY} ($("${BREW_PY}" --version))"
-
-# --- Workspace ---
-log_header "Workspace"
-mkdir -p "${MLX_WORKSPACE}"
-mkdir -p "${MLX_CONFIG_DIR}"
-seed_models_env_if_missing
 
 # --- Virtual environment ---
 log_header "Python virtual environment"

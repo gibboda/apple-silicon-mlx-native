@@ -17,7 +17,7 @@ Unknown chips (unrecognized brand string, or a family with no bandwidth row such
 
 | Signal | Use |
 | --- | --- |
-| `arm64` architecture | Hard requirement; Intel Macs are rejected |
+| Darwin `arm64` | Hard requirement; Linux ARM and Intel Macs are rejected |
 | Apple chip / brand string | Parsed with longest-match regex (Ultra, then Max, then Pro, then base). `Apple M1 Pro` is Pro, not base; `Apple M10` is family 10, not 1 |
 | Chip family / SKU | Bandwidth lookup and throughput class |
 | GPU cores (`ioreg` `gpu-core-count`) | Max GPU-bin footnotes; modest video frame scaling when RAM already allows Wan |

@@ -33,8 +33,8 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 
 ## Supported hardware
 
-- macOS on **Apple Silicon** (`arm64`) only
-- Intel/x86_64 Macs are **rejected** with a clear error
+- macOS on **Apple Silicon** (`Darwin` `arm64`) only
+- Linux ARM and Intel/x86_64 Macs are **rejected** with a clear error
 - Memory tiers drive the **OOM fence** (what fits); chip throughput/thermal class drive the **performance fence** (how hard to push at that RAM). Unknown chips fall back to RAM-only defaults without failing install. Details: [docs/hardware-tiers.md](docs/hardware-tiers.md).
 
 ## Requirements
@@ -61,7 +61,7 @@ make install
 # equivalent: scripts/initial-build-mlx-native-media.sh
 ```
 
-The bootstrap script verifies `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv`, installs `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
+The bootstrap script verifies Darwin `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, validates workspace/venv paths before Homebrew, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv` only under `MLX_WORKSPACE` (and refuses to reuse a directory that is not a venv), installs `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory; `MLX_VENV` must remain under it. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
 
 Optional:
 

@@ -8,7 +8,7 @@
 #   scripts/detect-apple-silicon.sh --json
 #   scripts/detect-apple-silicon.sh --env
 #   scripts/detect-apple-silicon.sh --recommend
-#   scripts/detect-apple-silicon.sh --quiet   # exit 0 on Apple Silicon, 1 otherwise
+#   scripts/detect-apple-silicon.sh --quiet   # exit 0 on Darwin arm64, 1 otherwise
 #
 # shellcheck source=scripts/lib/common.sh
 
@@ -31,7 +31,7 @@ Detect Apple Silicon hardware characteristics for MLX workstation defaults.
   --env         KEY=value lines suitable for eval/sourcing
                 (MLX_TIER_ID is policy; MLX_PHYSICAL_TIER_ID is detected RAM)
   --recommend   Print a fresh composed profile only (does not write models.env)
-  --quiet       Exit 0 if arm64 Apple Silicon, else exit 1 (no output)
+  --quiet       Exit 0 if Darwin arm64, else exit 1 (no output)
   -h            Show this help
 
 Environment:
@@ -62,17 +62,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-arch="$(detect_architecture)"
-if [[ "${arch}" != "arm64" ]]; then
-  if [[ "${MODE}" == "quiet" ]]; then
-    exit 1
+if [[ "${MODE}" == "quiet" ]]; then
+  if host_is_apple_silicon; then
+    exit 0
   fi
-  die "Apple Silicon (arm64) required. Detected architecture: ${arch}."
+  exit 1
 fi
 
-if [[ "${MODE}" == "quiet" ]]; then
-  exit 0
-fi
+assert_apple_silicon
 
 export_detect_env
 brew_prefix="$(homebrew_prefix)"
