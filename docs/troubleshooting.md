@@ -91,6 +91,12 @@ Allowed types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `build` `ci`
 
 GitHub merge commits are exempt by default. See `scripts/conventional-commits-audit.sh --help`.
 
+## Install refused to reuse `.venv`
+
+`make install` will not reuse a directory that is not a virtualenv. Remove or rename that path, then re-run `make install`. `make rebuild` and `make clean` also refuse non-venv paths.
+
+A venv must resolve under `MLX_WORKSPACE`. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory (and optionally `MLX_VENV` under it). `MLX_VENV` alone pointing outside the workspace is rejected.
+
 ## Rebuild refused to delete `.venv`
 
 The rebuild script only removes a path that looks like a virtualenv under the workspace. Check `MLX_WORKSPACE` / `MLX_VENV` and re-run with `--force` via `make rebuild`.

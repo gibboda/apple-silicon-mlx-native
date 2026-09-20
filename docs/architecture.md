@@ -54,7 +54,7 @@ apple-silicon-mlx-native/
   docs/                  # deep documentation
 ```
 
-Override with `MLX_WORKSPACE` / `MLX_VENV` when you want the environment outside the clone.
+Override `MLX_WORKSPACE` when you want the environment outside the clone. `MLX_VENV` must stay under that workspace (default `$MLX_WORKSPACE/.venv`); pointing `MLX_VENV` outside it is rejected.
 
 Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** state, not a full workstation uninstall. Homebrew, Xcode Command Line Tools, and brew formulae stay installed; Hugging Face hub caches are reported unless `--huggingface-cache` is passed.
 

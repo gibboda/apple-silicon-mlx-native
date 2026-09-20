@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `assert_apple_silicon` and `detect --quiet` require Darwin arm64, so Linux ARM fails with a not-macOS error instead of a later `sysctl` failure
-- Initial build applies the same workspace/venv path guards as rebuild and refuses to reuse a non-venv `.venv`
+- Initial build validates workspace/venv paths before Homebrew, refuses to reuse a non-venv `.venv`, and requires `MLX_VENV` under `MLX_WORKSPACE`
 
 ## [0.2.3] - 2026-09-19
 

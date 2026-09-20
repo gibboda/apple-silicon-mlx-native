@@ -570,7 +570,7 @@ assert_install_venv_paths() {
       die "MLX_VENV exists but is not a directory: ${MLX_VENV}"
     fi
     if ! looks_like_venv "${MLX_VENV}"; then
-      die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove it, then run make install (make rebuild / make clean also refuse non-venv paths)."
+      die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove or rename it, then re-run make install."
     fi
   fi
 }

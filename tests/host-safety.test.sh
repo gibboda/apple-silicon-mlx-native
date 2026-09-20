@@ -48,12 +48,13 @@ expect_contains() {
 
 BIN="${TMP}/bin"
 mkdir -p "${BIN}"
-cat >"${BIN}/uname" <<'EOF'
+REAL_UNAME="$(command -v uname)"
+cat >"${BIN}/uname" <<EOF
 #!/usr/bin/env bash
-case "${1:-}" in
-  -m) printf '%s\n' "${FAKE_UNAME_M:-arm64}" ;;
-  -s) printf '%s\n' "${FAKE_UNAME_S:-Darwin}" ;;
-  *) exec /usr/bin/uname "$@" ;;
+case "\${1:-}" in
+  -m) printf '%s\\n' "\${FAKE_UNAME_M:-arm64}" ;;
+  -s) printf '%s\\n' "\${FAKE_UNAME_S:-Darwin}" ;;
+  *) exec "${REAL_UNAME}" "\$@" ;;
 esac
 EOF
 chmod +x "${BIN}/uname"
@@ -118,7 +119,7 @@ printf 'not a venv\n' >"${WS}/.venv/readme.txt"
 expect_fail "install paths refuse a non-venv directory" run_install_paths "${WS}" "${WS}/.venv"
 non_venv_err="$(run_install_paths "${WS}" "${WS}/.venv" 2>&1)" || true
 expect_contains "non-venv error mentions reuse" "reuse" "${non_venv_err}"
-expect_contains "non-venv error points at rebuild" "make rebuild" "${non_venv_err}"
+expect_contains "non-venv error says remove or rename" "Remove or rename" "${non_venv_err}"
 if [[ -f "${WS}/.venv/readme.txt" ]]; then
   pass "non-venv directory left in place"
 else

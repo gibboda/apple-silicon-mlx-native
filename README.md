@@ -61,7 +61,7 @@ make install
 # equivalent: scripts/initial-build-mlx-native-media.sh
 ```
 
-The bootstrap script verifies Darwin `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv` only under the workspace (and refuses to reuse a directory that is not a venv), installs `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
+The bootstrap script verifies Darwin `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, validates workspace/venv paths before Homebrew, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv` only under `MLX_WORKSPACE` (and refuses to reuse a directory that is not a venv), installs `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory; `MLX_VENV` must remain under it. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
 
 Optional:
 
