@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-09-23
+
 ### Fixed
 
 - `detect-apple-silicon.sh --env` exports composed `MLX_RECOMMENDED_IMAGE_PROFILE`, `MLX_RECOMMENDED_VIDEO_PROFILE`, and `MLX_VIDEO_FORCE_REQUIRED` (parity with `--json` / `--recommend`)
@@ -131,7 +133,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.2...v0.2.3
