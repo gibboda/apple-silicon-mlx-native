@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Initial build refuses to reuse an existing `.venv` that has `bin/python` but no `pyvenv.cfg` (incomplete venv); rebuild/cleanup still accept either marker via `looks_like_venv`
 - `config/models.env` is parsed as `MLX_*` assignments (not sourced as bash); writes quote values that need it, skip `PATH`/`HF_TOKEN`/runtime identity keys without logging values, and expand a leading unquoted `~/`
 
 ## [0.2.4] - 2026-09-20

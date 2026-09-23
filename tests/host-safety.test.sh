@@ -114,6 +114,20 @@ printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${WS}
 expect_ok "install paths reuse a real venv" run_install_paths "${WS}" "${WS}/.venv"
 
 rm -rf "${WS}/.venv"
+mkdir -p "${WS}/.venv/bin"
+printf '#!/bin/sh\nexit 0\n' >"${WS}/.venv/bin/python"
+chmod +x "${WS}/.venv/bin/python"
+expect_fail "install paths refuse bin/python without pyvenv.cfg" run_install_paths "${WS}" "${WS}/.venv"
+incomplete_err="$(run_install_paths "${WS}" "${WS}/.venv" 2>&1)" || true
+expect_contains "incomplete venv error mentions pyvenv.cfg" "pyvenv.cfg" "${incomplete_err}"
+expect_contains "incomplete venv error says remove or rename" "Remove or rename" "${incomplete_err}"
+if [[ -x "${WS}/.venv/bin/python" && ! -f "${WS}/.venv/pyvenv.cfg" ]]; then
+  pass "incomplete venv directory left in place"
+else
+  fail "incomplete venv directory was modified"
+fi
+
+rm -rf "${WS}/.venv"
 mkdir -p "${WS}/.venv"
 printf 'not a venv\n' >"${WS}/.venv/readme.txt"
 expect_fail "install paths refuse a non-venv directory" run_install_paths "${WS}" "${WS}/.venv"
