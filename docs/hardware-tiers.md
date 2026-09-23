@@ -86,7 +86,7 @@ On an 8 GB M1-class fanless system:
 
 ## Overrides
 
-Overrides change **recommendations**, not reported facts. Physical detect output stays truthful. `scripts/detect-apple-silicon.sh --env` prints `MLX_PHYSICAL_TIER_ID` (detected RAM) and `MLX_TIER_ID` (policy, including `OVERRIDE_MEMORY_TIER`). `--json` uses `physical_memory_tier_id` and `memory_tier_id` the same way.
+Overrides change **recommendations**, not reported facts. Physical detect output stays truthful. `scripts/detect-apple-silicon.sh --env` prints `MLX_PHYSICAL_TIER_ID` (detected RAM) and `MLX_TIER_ID` (policy, including `OVERRIDE_MEMORY_TIER`), plus composed `MLX_RECOMMENDED_IMAGE_PROFILE`, `MLX_RECOMMENDED_VIDEO_PROFILE`, and `MLX_VIDEO_FORCE_REQUIRED` (`0`/`1`). `--json` uses `physical_memory_tier_id` / `memory_tier_id` the same way, and emits `recommended_image_profile`, `recommended_video_profile`, and boolean `video_force_required`.
 
 ```bash
 # Force recommendation tier without lying about physical RAM in detect output
