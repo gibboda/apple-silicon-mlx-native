@@ -249,6 +249,9 @@ expect_eq "print_detect_env physical MLX_PHYSICAL_TIER_ID stays constrained" \
 expect_contains "print_detect_env includes image profile key" "MLX_RECOMMENDED_IMAGE_PROFILE=" "${env_out}"
 expect_contains "print_detect_env includes video profile key" "MLX_RECOMMENDED_VIDEO_PROFILE=" "${env_out}"
 expect_contains "print_detect_env includes video force key" "MLX_VIDEO_FORCE_REQUIRED=" "${env_out}"
+expect_contains "print_detect_env raw image profile value" "flux2-klein-4b" "${env_out}"
+expect_contains "print_detect_env raw video profile value" "${MLX_VIDEO_WAN_MODEL_NAME}" "${env_out}"
+expect_contains "print_detect_env raw video force token" "MLX_VIDEO_FORCE_REQUIRED=1" "${env_out}"
 eval "$(print_detect_env false "" false)"
 expect_eq "print_detect_env exports image profile" \
   "${MLX_RECOMMENDED_IMAGE_PROFILE}" "flux2|flux2-klein-4b|4|4|768|768|1"
