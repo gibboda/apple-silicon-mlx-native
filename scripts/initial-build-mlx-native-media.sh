@@ -18,6 +18,11 @@
 #   MLX_SKIP_MEDIA          If 1, skip selected media packages (mlx-audio)
 #   MLX_INSTALL_IMAGE       If 1, optionally install mflux (Pure MLX image; high memory)
 #   MLX_INSTALL_VIDEO       If 1, optionally install mlx-video (Pure MLX video; high memory)
+#   MLX_PACKAGE             pip spec for mlx (default: pinned == version)
+#   MLX_LM_PACKAGE          pip spec for mlx-lm (default: pinned == version)
+#   MLX_AUDIO_PACKAGE       pip spec for mlx-audio (default: pinned == version)
+#   MLX_DISK_ENFORCE        If 1, abort when free space is under the download floor
+#   MLX_SKIP_DISK_CHECK     If 1, skip the free-space warning
 #   OVERRIDE_MEMORY_TIER    Force policy tier id: constrained|standard|high|workstation|large
 #   OVERRIDE_CHIP_FAMILY    Force policy chip generation (e.g. 1, 5)
 #   OVERRIDE_CHIP_SKU       Force policy sku: base|pro|max|ultra
@@ -48,7 +53,7 @@ Steps:
   4. Detect (or optionally install) Homebrew
   5. Install Homebrew packages (python, git, ffmpeg)
   6. Seed config and create or reuse Python venv
-  7. Upgrade packaging tools; install mlx, mlx-lm, selected media
+  7. Upgrade packaging tools; install pinned mlx, mlx-lm, selected media
   8. Validate MLX; print versions, hardware, next commands
 
 Image/video packages are NOT installed by default. See docs/media.md.
@@ -163,11 +168,13 @@ PIP="$(venv_pip)"
 "${PY}" -m pip install --upgrade pip setuptools wheel
 
 log_header "MLX core packages"
+log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
 "${PIP}" install --upgrade "${MLX_CORE_PACKAGES[@]}"
 
 if ! is_truthy "${MLX_SKIP_MEDIA}"; then
   log_header "Selected MLX-native media packages"
-  log_info "Installing Pure MLX speech/audio: mlx-audio"
+  log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
+  warn_or_die_disk_headroom media-pip
   "${PIP}" install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
 else
   log_warn "Skipping media packages (MLX_SKIP_MEDIA=1)"
@@ -178,6 +185,7 @@ if is_truthy "${MLX_INSTALL_IMAGE}"; then
     log_warn "Image generation (mflux) typically needs ≥16 GB unified memory; proceeding due to MLX_INSTALL_IMAGE=1"
   fi
   log_info "Installing Pure MLX image tooling: ${MLX_IMAGE_PACKAGE} (opt-in)"
+  warn_or_die_disk_headroom image-pip
   "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
 else
   log_info "Image tooling (${MLX_IMAGE_PACKAGE}) not installed by default. Run: make install-image"
@@ -188,6 +196,7 @@ if is_truthy "${MLX_INSTALL_VIDEO}"; then
     log_warn "Video generation (mlx-video) typically needs ≥24 GB unified memory; proceeding due to MLX_INSTALL_VIDEO=1"
   fi
   log_info "Installing Pure MLX video tooling: ${MLX_VIDEO_PACKAGE} (opt-in)"
+  warn_or_die_disk_headroom video-pip
   "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
 else
   log_info "Video tooling (mlx-video) is not installed by default. Run: make install-video"

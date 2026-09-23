@@ -69,8 +69,23 @@ Expected: `arm64`.
 ## Model download failures
 
 - Check network access to Hugging Face.
-- Ensure disk headroom (`make detect`).
+- Ensure disk headroom (`make detect`). See [Low disk space](#low-disk-space-before-install-or-download) below.
 - Set `HF_TOKEN` if accessing gated repos (never commit tokens).
+
+## Low disk space before install or download
+
+`make detect` prints free GiB on the workspace volume. Before selected media installs and large downloads, scripts warn when free space is under a floor. They do not delete Hugging Face caches, `models/`, or `.venv` to make room.
+
+| Profile | Default floor | When |
+| --- | --- | --- |
+| `media-pip` | 4 GiB | `mlx-audio` during `make install` / `make rebuild` |
+| `image-pip` | 8 GiB | `make install-image` (mflux and its torch wheel) |
+| `video-pip` | 8 GiB | `make install-video` |
+| `image-weights` | 12 GiB | `make image` (skipped for `--dump-plan`) |
+| `video-weights` | 20 GiB | `make video` (skipped for `--dump-plan`) |
+| `wan-prepare` | 40 GiB | `make prepare-video` (upstream snapshot plus converted copy) |
+
+Override a floor with `MLX_DISK_MIN_MEDIA_GIB`, `MLX_DISK_MIN_IMAGE_GIB`, `MLX_DISK_MIN_VIDEO_GIB`, `MLX_DISK_MIN_IMAGE_WEIGHTS_GIB`, `MLX_DISK_MIN_VIDEO_WEIGHTS_GIB`, or `MLX_DISK_MIN_WAN_GIB`. `MLX_DISK_ENFORCE=1` aborts instead of warning. `MLX_SKIP_DISK_CHECK=1` skips the check. `MLX_DISK_AVAIL_GIB` overrides the measured free space (whole GiB).
 
 ## ShellCheck not found locally
 
@@ -149,6 +164,8 @@ On 8 GB, stop `mlx_lm.server`, close browsers and other large apps, and keep the
 ```bash
 make image IMAGE_PROMPT="a red fox in snow" GENERATE_IMAGE_ARGS='-- --vae-tiling'
 ```
+
+`GENERATE_IMAGE_ARGS` is split on whitespace. Semicolons, pipes, and quotes are literal flag text, not a shell command.
 
 First generate downloads several GB of weights. If the process is killed or the machine swaps heavily, drop `--width`/`--height` further or wait until you have more unified memory.
 

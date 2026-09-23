@@ -79,6 +79,7 @@ fi
 
 mkdir -p "$(dirname "${src_dir}")" "$(dirname "${out_dir}")"
 
+warn_or_die_disk_headroom wan-prepare
 log_info "Downloading ${MLX_VIDEO_WAN_SOURCE_REPO} → ${src_dir}"
 export MLX_VIDEO_WAN_SOURCE_REPO
 export MLX_VIDEO_WAN_PREPARE_SRC_DIR="${src_dir}"

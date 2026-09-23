@@ -291,6 +291,8 @@ if ((${#PASSTHRU[@]} > 0)); then
   cmd+=("${PASSTHRU[@]}")
 fi
 
+warn_or_die_disk_headroom image-weights
+
 log_header "MLX text-to-image"
 log_info "family=${FAMILY} model=${MODEL:-default} ${WIDTH}x${HEIGHT} steps=${STEPS} quantize=${QUANTIZE} low_ram=${LOW_RAM}"
 log_info "output=${OUTPUT}"

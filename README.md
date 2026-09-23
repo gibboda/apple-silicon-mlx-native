@@ -61,7 +61,13 @@ make install
 # equivalent: scripts/initial-build-mlx-native-media.sh
 ```
 
-The bootstrap script verifies Darwin `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, validates workspace/venv paths before Homebrew, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv` only under `MLX_WORKSPACE` (and refuses to reuse a directory that is not a venv), installs `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory; `MLX_VENV` must remain under it. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
+The bootstrap script verifies Darwin `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, validates workspace/venv paths before Homebrew, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv` only under `MLX_WORKSPACE` (and refuses to reuse a directory that is not a venv), installs pinned `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory; `MLX_VENV` must remain under it. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
+
+Default pins live in `scripts/lib/common.sh`: `mlx==0.32.2`, `mlx-lm==0.31.3`, `mlx-audio==0.5.5` (same pattern as `MLX_IMAGE_PACKAGE` / `MLX_VIDEO_PACKAGE`). Override a spec, or drop the `==` pin to track upstream:
+
+```bash
+MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
+```
 
 Optional:
 
@@ -264,10 +270,17 @@ apple-silicon-mlx-native/
 │   ├── conventional-commits-audit.sh
 │   └── delete-merged-pr-branch.sh
 ├── tests/
+│   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
+│   ├── conventional-commits-audit.test.sh
+│   ├── delete-merged-pr-branch.test.sh
+│   ├── disk-headroom.test.sh
+│   ├── generate-args.test.sh
+│   ├── host-safety.test.sh
 │   ├── mlx-image.test.sh
 │   ├── mlx-video.test.sh
-│   └── chip-profile.test.sh
+│   ├── models-env.test.sh
+│   └── release.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE

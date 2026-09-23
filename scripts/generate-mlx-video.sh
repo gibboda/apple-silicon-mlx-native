@@ -363,6 +363,8 @@ if ((${#PASSTHRU[@]} > 0)); then
   cmd+=("${PASSTHRU[@]}")
 fi
 
+warn_or_die_disk_headroom video-weights
+
 log_header "MLX text-to-video"
 log_info "family=${FAMILY} model=${MODEL} ${WIDTH}x${HEIGHT} frames=${FRAMES} steps=${STEPS_PLAN} tiling=${TILING}"
 log_info "output=${OUTPUT}"

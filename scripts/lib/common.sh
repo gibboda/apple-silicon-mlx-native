@@ -19,8 +19,15 @@ MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
 
 # Deliberately selected Python packages (Pure MLX core + selected media).
 # Image/video packages are NOT installed by default — see docs/media.md.
-MLX_CORE_PACKAGES=(mlx mlx-lm)
-MLX_MEDIA_PACKAGES=(mlx-audio)
+# Core and mlx-audio are pinned so two installs on different days match.
+# Override a spec to track upstream, for example:
+#   MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
+# Do not add PyTorch/MPS as a generation backend.
+MLX_PACKAGE="${MLX_PACKAGE:-mlx==0.32.2}"
+MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-mlx-lm==0.31.3}"
+MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-mlx-audio==0.5.5}"
+MLX_CORE_PACKAGES=("${MLX_PACKAGE}" "${MLX_LM_PACKAGE}")
+MLX_MEDIA_PACKAGES=("${MLX_AUDIO_PACKAGE}")
 MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
 # Pin mlx-video to a git SHA (not published on PyPI). Override with MLX_VIDEO_PACKAGE.
 MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837}"
@@ -410,6 +417,74 @@ detect_disk_available_gib() {
   # Available space on the volume containing MLX_WORKSPACE (or /).
   local target="${1:-/}"
   df -g "${target}" 2>/dev/null | awk 'NR==2 {print $4}'
+}
+
+# Conservative free-space floors (whole GiB) before large downloads.
+# Override one floor with the matching MLX_DISK_MIN_* variable.
+# Profiles: media-pip, image-pip, video-pip, image-weights, video-weights, wan-prepare.
+disk_floor_gib() {
+  local profile="${1:-}"
+  case "${profile}" in
+    media-pip) printf '%s\n' "${MLX_DISK_MIN_MEDIA_GIB:-4}" ;;
+    image-pip) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GIB:-8}" ;;
+    video-pip) printf '%s\n' "${MLX_DISK_MIN_VIDEO_GIB:-8}" ;;
+    image-weights) printf '%s\n' "${MLX_DISK_MIN_IMAGE_WEIGHTS_GIB:-12}" ;;
+    video-weights) printf '%s\n' "${MLX_DISK_MIN_VIDEO_WEIGHTS_GIB:-20}" ;;
+    wan-prepare) printf '%s\n' "${MLX_DISK_MIN_WAN_GIB:-40}" ;;
+    *) return 1 ;;
+  esac
+}
+
+# ok | low | unknown. Non-integers are unknown so a bad df reading does not abort.
+disk_headroom_status() {
+  local avail="${1:-}"
+  local required="${2:-}"
+  if [[ ! "${avail}" =~ ^[0-9]+$ || ! "${required}" =~ ^[0-9]+$ ]]; then
+    printf 'unknown\n'
+    return 0
+  fi
+  if (( avail < required )); then
+    printf 'low\n'
+  else
+    printf 'ok\n'
+  fi
+}
+
+# Warn when free space is under the profile floor. MLX_DISK_ENFORCE=1 aborts.
+# MLX_SKIP_DISK_CHECK=1 skips. Does not delete caches or model weights.
+# Uses MLX_DISK_AVAIL_GIB when set; otherwise df via detect_disk_available_gib.
+warn_or_die_disk_headroom() {
+  local profile="${1:-}"
+  local required="" avail="" status="" msg=""
+  if is_truthy "${MLX_SKIP_DISK_CHECK:-}"; then
+    log_info "Disk headroom check skipped (MLX_SKIP_DISK_CHECK)."
+    return 0
+  fi
+  required="$(disk_floor_gib "${profile}")" || die "Unknown disk profile: ${profile}"
+  if [[ ! "${required}" =~ ^[0-9]+$ ]]; then
+    die "Disk floor for ${profile} must be a non-negative integer GiB (got '${required}')."
+  fi
+  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" ]]; then
+    avail="${MLX_DISK_AVAIL_GIB}"
+  else
+    avail="$(detect_disk_available_gib "${MLX_WORKSPACE}")"
+  fi
+  status="$(disk_headroom_status "${avail}" "${required}")"
+  case "${status}" in
+    ok)
+      log_ok "Disk headroom: ${avail} GiB free (need >= ${required} GiB before ${profile})."
+      ;;
+    unknown)
+      log_warn "Could not read free space before ${profile} (need >= ${required} GiB). Continuing. Set MLX_DISK_AVAIL_GIB to override."
+      ;;
+    low)
+      msg="Only ${avail} GiB free; ${profile} wants at least ${required} GiB. Caches are not deleted automatically."
+      if is_truthy "${MLX_DISK_ENFORCE:-}"; then
+        die "${msg} Unset MLX_DISK_ENFORCE or set MLX_SKIP_DISK_CHECK=1 to proceed."
+      fi
+      log_warn "${msg} Set MLX_DISK_ENFORCE=1 to abort instead of continuing."
+      ;;
+  esac
 }
 
 detect_python_version() {

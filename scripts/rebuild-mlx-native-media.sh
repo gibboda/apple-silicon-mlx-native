@@ -106,17 +106,22 @@ log_info "Creating venv with ${BREW_PY}"
 PY="$(venv_python)"
 PIP="$(venv_pip)"
 "${PY}" -m pip install --upgrade pip setuptools wheel
+log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
 "${PIP}" install --upgrade "${MLX_CORE_PACKAGES[@]}"
 
 if ! is_truthy "${MLX_SKIP_MEDIA}"; then
+  log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
+  warn_or_die_disk_headroom media-pip
   "${PIP}" install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
 fi
 
 if is_truthy "${MLX_INSTALL_IMAGE}"; then
+  warn_or_die_disk_headroom image-pip
   "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
 fi
 
 if is_truthy "${MLX_INSTALL_VIDEO}"; then
+  warn_or_die_disk_headroom video-pip
   "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
 fi
 
