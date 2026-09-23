@@ -98,6 +98,102 @@ expect_contains "mlx-audio pin" "mlx-audio==0.5.5" "${pins}"
 overridden="$(MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_CORE_PACKAGES[@]}\" \"\${MLX_MEDIA_PACKAGES[@]}\"")"
 expect_eq "unpinned override" "$(printf '%s\n' mlx mlx-lm mlx-audio)" "${overridden}"
 
+TMP="$(mktemp -d)"
+trap 'rm -rf "${TMP}"' EXIT
+BIN="${TMP}/bin"
+CACHE="${TMP}/hf/hub"
+WS="${TMP}/ws"
+mkdir -p "${BIN}" "${CACHE}" "${WS}"
+
+cat >"${BIN}/sysctl" <<'EOF'
+#!/bin/sh
+if [ "$1" = "-n" ]; then
+  case "$2" in
+    hw.memsize) printf '%s\n' 17179869184 ;;
+    hw.ncpu) printf '%s\n' 8 ;;
+    hw.model) printf '%s\n' MacBookPro18,1 ;;
+    machdep.cpu.brand_string) printf '%s\n' 'Apple M3 Pro' ;;
+    *) printf '\n' ;;
+  esac
+fi
+exit 0
+EOF
+cat >"${BIN}/sw_vers" <<'EOF'
+#!/bin/sh
+printf '%s\n' 15.0
+EOF
+cat >"${BIN}/df" <<'EOF'
+#!/bin/sh
+target=""
+for arg in "$@"; do
+  case "$arg" in
+    -*) ;;
+    *) target="$arg" ;;
+  esac
+done
+printf '%s\n' "Filesystem 1G-blocks Used Available"
+case "$target" in
+  *hub*|*huggingface*)
+    printf '%s\n' "/dev/disk2 100 90 2"
+    ;;
+  *)
+    printf '%s\n' "/dev/disk1 900 100 800"
+    ;;
+esac
+EOF
+chmod +x "${BIN}/sysctl" "${BIN}/sw_vers" "${BIN}/df"
+
+detect_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_DISK_AVAIL_GIB=1 \
+    MLX_DISK_ENFORCE=1 \
+    MLX_SKIP_DEVICE_PROBE=1 \
+    bash -c "source \"${COMMON}\"; export_detect_env; printf 'fact=%s\n' \"\${MLX_DISK_AVAIL_GIB}\"; warn_or_die_disk_headroom wan-prepare" \
+    2>&1 || true
+)"
+expect_contains "detect still records workspace df" "fact=800" "${detect_out}"
+expect_contains "enforce after detect uses the caller override" "Only 1 GiB free" "${detect_out}"
+expect_contains "override is named in the enforce error" "MLX_DISK_AVAIL_GIB override" "${detect_out}"
+
+nosysctl_out="$(
+  MLX_DISK_AVAIL_GIB=1 \
+    MLX_DISK_ENFORCE=1 \
+    bash -c "source \"${COMMON}\"; load_runtime_profile_without_sysctl; printf 'fact=%s\n' \"\${MLX_DISK_AVAIL_GIB}\"; warn_or_die_disk_headroom media-pip" \
+    2>&1 || true
+)"
+expect_contains "no-sysctl detect clears the reported fact" $'fact=\n' "${nosysctl_out}"
+expect_contains "no-sysctl detect still enforces the override" "Only 1 GiB free" "${nosysctl_out}"
+
+image_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_WORKSPACE="${WS}" \
+    HF_HUB_CACHE="${CACHE}" \
+    bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom image-weights" \
+    2>&1 || true
+)"
+expect_contains "image weights measure the hub cache" "Only 2 GiB free" "${image_out}"
+expect_contains "image weights name the hub path" "${CACHE}" "${image_out}"
+
+media_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_WORKSPACE="${WS}" \
+    HF_HUB_CACHE="${CACHE}" \
+    bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom media-pip" \
+    2>&1 || true
+)"
+expect_contains "pip install measures the workspace" "800 GiB free" "${media_out}"
+expect_contains "pip install names the workspace" "${WS}" "${media_out}"
+
+wan_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_WORKSPACE="${WS}" \
+    HF_HUB_CACHE="${CACHE}" \
+    bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom wan-prepare" \
+    2>&1 || true
+)"
+expect_contains "wan prepare uses the tighter hub volume" "Only 2 GiB free" "${wan_out}"
+expect_contains "wan prepare names the hub path" "${CACHE}" "${wan_out}"
+
 if (( failures > 0 )); then
   printf 'FAIL: %s disk/pin check(s) failed\n' "${failures}" >&2
   exit 1

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `make image` / `make video` pass `GENERATE_IMAGE_ARGS` / `GENERATE_VIDEO_ARGS` as whitespace-separated flags without shell evaluation
+- A caller-supplied `MLX_DISK_AVAIL_GIB` survives hardware detection, and weight/prepare disk checks measure the Hugging Face hub cache (Wan prepare uses the tighter of that cache and the workspace)
 
 ## [0.2.6] - 2026-09-23
 

@@ -76,16 +76,18 @@ Expected: `arm64`.
 
 `make detect` prints free GiB on the workspace volume. Before selected media installs and large downloads, scripts warn when free space is under a floor. They do not delete Hugging Face caches, `models/`, or `.venv` to make room.
 
-| Profile | Default floor | When |
-| --- | --- | --- |
-| `media-pip` | 4 GiB | `mlx-audio` during `make install` / `make rebuild` |
-| `image-pip` | 8 GiB | `make install-image` (mflux and its torch wheel) |
-| `video-pip` | 8 GiB | `make install-video` |
-| `image-weights` | 12 GiB | `make image` (skipped for `--dump-plan`) |
-| `video-weights` | 20 GiB | `make video` (skipped for `--dump-plan`) |
-| `wan-prepare` | 40 GiB | `make prepare-video` (upstream snapshot plus converted copy) |
+| Profile | Default floor | Volume measured | When |
+| --- | --- | --- | --- |
+| `media-pip` | 4 GiB | workspace (`.venv`) | `mlx-audio` during `make install` / `make rebuild` |
+| `image-pip` | 8 GiB | workspace (`.venv`) | `make install-image` (mflux and its torch wheel) |
+| `video-pip` | 8 GiB | workspace (`.venv`) | `make install-video` |
+| `image-weights` | 12 GiB | Hugging Face hub cache | `make image` (skipped for `--dump-plan`) |
+| `video-weights` | 20 GiB | Hugging Face hub cache | `make video` (skipped for `--dump-plan`) |
+| `wan-prepare` | 40 GiB | tighter of workspace and hub cache | `make prepare-video` (snapshot, convert, and any hub staging) |
 
-Override a floor with `MLX_DISK_MIN_MEDIA_GIB`, `MLX_DISK_MIN_IMAGE_GIB`, `MLX_DISK_MIN_VIDEO_GIB`, `MLX_DISK_MIN_IMAGE_WEIGHTS_GIB`, `MLX_DISK_MIN_VIDEO_WEIGHTS_GIB`, or `MLX_DISK_MIN_WAN_GIB`. `MLX_DISK_ENFORCE=1` aborts instead of warning. `MLX_SKIP_DISK_CHECK=1` skips the check. `MLX_DISK_AVAIL_GIB` overrides the measured free space (whole GiB).
+The hub cache is `$HF_HUB_CACHE`, or `$HF_HOME/hub`, or `~/.cache/huggingface/hub`. Pip wheels stay on the workspace volume even when that cache is on another disk.
+
+Override a floor with `MLX_DISK_MIN_MEDIA_GIB`, `MLX_DISK_MIN_IMAGE_GIB`, `MLX_DISK_MIN_VIDEO_GIB`, `MLX_DISK_MIN_IMAGE_WEIGHTS_GIB`, `MLX_DISK_MIN_VIDEO_WEIGHTS_GIB`, or `MLX_DISK_MIN_WAN_GIB`. `MLX_DISK_ENFORCE=1` aborts instead of warning. `MLX_SKIP_DISK_CHECK=1` skips the check. Set `MLX_DISK_AVAIL_GIB` (whole GiB) in the environment before the command to override the measured free space for the check. Hardware detection still records the workspace `df` reading; it does not replace this override.
 
 ## ShellCheck not found locally
 

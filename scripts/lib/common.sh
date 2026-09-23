@@ -414,9 +414,88 @@ detect_macos_version() {
 }
 
 detect_disk_available_gib() {
-  # Available space on the volume containing MLX_WORKSPACE (or /).
+  # Available space (whole GiB) on the volume containing the path.
   local target="${1:-/}"
   df -g "${target}" 2>/dev/null | awk 'NR==2 {print $4}'
+}
+
+# Remember a caller-supplied MLX_DISK_AVAIL_GIB before detection overwrites it.
+# Idempotent: a later measurement must not become the override.
+note_disk_avail_override() {
+  if [[ -n "${MLX_DISK_OVERRIDE_NOTED:-}" ]]; then
+    return 0
+  fi
+  MLX_DISK_OVERRIDE_NOTED=1
+  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" ]]; then
+    MLX_DISK_AVAIL_GIB_OVERRIDE="${MLX_DISK_AVAIL_GIB}"
+  else
+    MLX_DISK_AVAIL_GIB_OVERRIDE=""
+  fi
+}
+
+# df needs an existing directory. Walk up so a not-yet-created cache still
+# names the volume that will hold it.
+existing_dir_for_df() {
+  local path="${1:-/}"
+  path="${path%/}"
+  [[ -n "${path}" ]] || path="/"
+  while [[ ! -d "${path}" ]]; do
+    if [[ "${path}" == "/" ]]; then
+      break
+    fi
+    path="$(dirname "${path}")"
+  done
+  printf '%s\n' "${path}"
+}
+
+huggingface_hub_cache_dir() {
+  local hf_home="${HF_HOME:-${HOME}/.cache/huggingface}"
+  printf '%s\n' "${HF_HUB_CACHE:-${hf_home}/hub}"
+}
+
+# Where bytes for this profile actually land.
+# Pip wheels go into the workspace venv.
+# Image/video weights go to the Hugging Face hub cache.
+# Wan prepare writes the snapshot and converted copy under the workspace and
+# may also stage blobs in the hub cache, so both paths are checked.
+disk_probe_paths() {
+  local profile="${1:-}"
+  case "${profile}" in
+    media-pip|image-pip|video-pip)
+      printf '%s\n' "${MLX_WORKSPACE}"
+      ;;
+    image-weights|video-weights)
+      huggingface_hub_cache_dir
+      ;;
+    wan-prepare)
+      printf '%s\n' "${MLX_WORKSPACE}"
+      huggingface_hub_cache_dir
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# Smallest successful df reading for the profile, and the path it came from.
+# Prints "avail<TAB>path". Fails when every probe is unreadable.
+tightest_disk_for_profile() {
+  local profile="${1:-}"
+  local path="" probe="" avail="" best_avail="" best_path=""
+  while IFS= read -r path; do
+    [[ -n "${path}" ]] || continue
+    probe="$(existing_dir_for_df "${path}")"
+    avail="$(detect_disk_available_gib "${probe}")"
+    if [[ ! "${avail}" =~ ^[0-9]+$ ]]; then
+      continue
+    fi
+    if [[ -z "${best_avail}" ]] || (( avail < best_avail )); then
+      best_avail="${avail}"
+      best_path="${probe}"
+    fi
+  done < <(disk_probe_paths "${profile}")
+  if [[ -z "${best_avail}" ]]; then
+    return 1
+  fi
+  printf '%s\t%s\n' "${best_avail}" "${best_path}"
 }
 
 # Conservative free-space floors (whole GiB) before large downloads.
@@ -452,10 +531,11 @@ disk_headroom_status() {
 
 # Warn when free space is under the profile floor. MLX_DISK_ENFORCE=1 aborts.
 # MLX_SKIP_DISK_CHECK=1 skips. Does not delete caches or model weights.
-# Uses MLX_DISK_AVAIL_GIB when set; otherwise df via detect_disk_available_gib.
+# A MLX_DISK_AVAIL_GIB set before detection wins over df. Otherwise df runs
+# on the profile's download path (workspace venv, hub cache, or both).
 warn_or_die_disk_headroom() {
   local profile="${1:-}"
-  local required="" avail="" status="" msg=""
+  local required="" avail="" where="" status="" msg="" tight=""
   if is_truthy "${MLX_SKIP_DISK_CHECK:-}"; then
     log_info "Disk headroom check skipped (MLX_SKIP_DISK_CHECK)."
     return 0
@@ -464,21 +544,32 @@ warn_or_die_disk_headroom() {
   if [[ ! "${required}" =~ ^[0-9]+$ ]]; then
     die "Disk floor for ${profile} must be a non-negative integer GiB (got '${required}')."
   fi
-  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" ]]; then
-    avail="${MLX_DISK_AVAIL_GIB}"
+  note_disk_avail_override
+  if [[ -n "${MLX_DISK_AVAIL_GIB_OVERRIDE:-}" ]]; then
+    avail="${MLX_DISK_AVAIL_GIB_OVERRIDE}"
+    where="MLX_DISK_AVAIL_GIB override"
   else
-    avail="$(detect_disk_available_gib "${MLX_WORKSPACE}")"
+    tight="$(tightest_disk_for_profile "${profile}" || true)"
+    avail="${tight%%$'\t'*}"
+    where="${tight#*$'\t'}"
+    if [[ "${where}" == "${avail}" ]]; then
+      where=""
+    fi
   fi
   status="$(disk_headroom_status "${avail}" "${required}")"
   case "${status}" in
     ok)
-      log_ok "Disk headroom: ${avail} GiB free (need >= ${required} GiB before ${profile})."
+      log_ok "Disk headroom: ${avail} GiB free on ${where} (need >= ${required} GiB before ${profile})."
       ;;
     unknown)
       log_warn "Could not read free space before ${profile} (need >= ${required} GiB). Continuing. Set MLX_DISK_AVAIL_GIB to override."
       ;;
     low)
-      msg="Only ${avail} GiB free; ${profile} wants at least ${required} GiB. Caches are not deleted automatically."
+      if [[ -n "${where}" ]]; then
+        msg="Only ${avail} GiB free on ${where}; ${profile} wants at least ${required} GiB. Caches are not deleted automatically."
+      else
+        msg="Only ${avail} GiB free; ${profile} wants at least ${required} GiB. Caches are not deleted automatically."
+      fi
       if is_truthy "${MLX_DISK_ENFORCE:-}"; then
         die "${msg} Unset MLX_DISK_ENFORCE or set MLX_SKIP_DISK_CHECK=1 to proceed."
       fi
@@ -794,6 +885,7 @@ compose_chip_policy() {
 
 collect_hardware_facts() {
   local mem_bytes mem_gib tier_line parsed_family parsed_sku ws_line
+  note_disk_avail_override
   mem_bytes="$(detect_memory_bytes)"
   mem_gib="$(bytes_to_gib "${mem_bytes}")"
   tier_line="$(classify_memory_tier "${mem_gib}")"
@@ -864,6 +956,7 @@ load_runtime_profile() {
 # Linux CI / no-sysctl path. Physical RAM is always the constrained floor;
 # OVERRIDE_* may rewrite policy labels after this, not physical facts.
 load_runtime_profile_without_sysctl() {
+  note_disk_avail_override
   MLX_ARCH="$(detect_architecture)"
   MLX_CHIP=""
   MLX_MEM_BYTES=""
