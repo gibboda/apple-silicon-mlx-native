@@ -111,7 +111,22 @@ expect_ok "install paths allow missing venv" run_install_paths "${WS}" "${WS}/.v
 
 mkdir -p "${WS}/.venv/bin"
 printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${WS}/.venv/pyvenv.cfg"
+printf '#!/bin/sh\nexit 0\n' >"${WS}/.venv/bin/python"
+chmod +x "${WS}/.venv/bin/python"
 expect_ok "install paths reuse a real venv" run_install_paths "${WS}" "${WS}/.venv"
+
+rm -rf "${WS}/.venv"
+mkdir -p "${WS}/.venv"
+printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${WS}/.venv/pyvenv.cfg"
+expect_fail "install paths refuse pyvenv.cfg without bin/python" run_install_paths "${WS}" "${WS}/.venv"
+cfg_only_err="$(run_install_paths "${WS}" "${WS}/.venv" 2>&1)" || true
+expect_contains "cfg-only error mentions bin/python" "bin/python" "${cfg_only_err}"
+expect_contains "cfg-only error says remove or rename" "Remove or rename" "${cfg_only_err}"
+if [[ -f "${WS}/.venv/pyvenv.cfg" && ! -f "${WS}/.venv/bin/python" && ! -f "${WS}/.venv/bin/python3" ]]; then
+  pass "cfg-only venv directory left in place"
+else
+  fail "cfg-only venv directory was modified"
+fi
 
 rm -rf "${WS}/.venv"
 mkdir -p "${WS}/.venv/bin"
