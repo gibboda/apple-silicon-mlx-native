@@ -453,16 +453,37 @@ huggingface_hub_cache_dir() {
   printf '%s\n' "${HF_HUB_CACHE:-${hf_home}/hub}"
 }
 
+# mflux downloads a preset name or Hugging Face repo into the hub cache.
+# A local checkpoint is an absolute path, a ./ ../ or ~ path, or any path
+# that already exists. Those generates write a PNG and do not download weights.
+image_model_is_local() {
+  local model="${1:-}"
+  [[ -n "${model}" ]] || return 1
+  case "${model}" in
+    /*|./*|../*|~*) return 0 ;;
+  esac
+  [[ -e "${model}" ]]
+}
+
+image_generate_disk_profile() {
+  if image_model_is_local "${1:-}"; then
+    printf '%s\n' image-generate
+  else
+    printf '%s\n' image-weights
+  fi
+}
+
 # Where bytes for this profile actually land.
 # Pip wheels go into the workspace venv.
 # Image weights and LTX video weights go to the Hugging Face hub cache.
+# A local image checkpoint writes the PNG on the workspace and skips the hub.
 # Wan generate reads a local model directory and writes the MP4 on the workspace.
 # Wan prepare writes the snapshot and converted copy under the workspace and
 # may also stage blobs in the hub cache, so both paths are checked.
 disk_probe_paths() {
   local profile="${1:-}"
   case "${profile}" in
-    media-pip|image-pip|video-pip)
+    media-pip|image-pip|video-pip|image-generate)
       printf '%s\n' "${MLX_WORKSPACE}"
       ;;
     image-weights|video-weights)
@@ -507,8 +528,8 @@ tightest_disk_for_profile() {
 
 # Conservative free-space floors (whole GiB) before large downloads.
 # Override one floor with the matching MLX_DISK_MIN_* variable.
-# Profiles: media-pip, image-pip, video-pip, image-weights, video-weights,
-# wan-generate, wan-prepare.
+# Profiles: media-pip, image-pip, video-pip, image-weights, image-generate,
+# video-weights, wan-generate, wan-prepare.
 disk_floor_gib() {
   local profile="${1:-}"
   case "${profile}" in
@@ -516,6 +537,7 @@ disk_floor_gib() {
     image-pip) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GIB:-8}" ;;
     video-pip) printf '%s\n' "${MLX_DISK_MIN_VIDEO_GIB:-8}" ;;
     image-weights) printf '%s\n' "${MLX_DISK_MIN_IMAGE_WEIGHTS_GIB:-12}" ;;
+    image-generate) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GENERATE_GIB:-4}" ;;
     video-weights) printf '%s\n' "${MLX_DISK_MIN_VIDEO_WEIGHTS_GIB:-20}" ;;
     wan-generate) printf '%s\n' "${MLX_DISK_MIN_WAN_GENERATE_GIB:-4}" ;;
     wan-prepare) printf '%s\n' "${MLX_DISK_MIN_WAN_GIB:-40}" ;;

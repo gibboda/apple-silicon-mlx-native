@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make image` / `make video` pass `GENERATE_IMAGE_ARGS` / `GENERATE_VIDEO_ARGS` as whitespace-separated flags without shell evaluation
 - A caller-supplied `MLX_DISK_AVAIL_GIB` survives hardware detection, and weight/prepare disk checks measure the Hugging Face hub cache (Wan prepare uses the tighter of that cache and the workspace)
 - Wan video generation checks the workspace and local model directory, not the hub cache (LTX still checks the hub cache)
+- Local image checkpoints (`--model` or `MLX_IMAGE_MODEL` path) check the workspace, not the hub cache (preset and Hugging Face repo generates still check the hub cache)
 
 ## [0.2.6] - 2026-09-23
 

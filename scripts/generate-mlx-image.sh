@@ -291,7 +291,13 @@ if ((${#PASSTHRU[@]} > 0)); then
   cmd+=("${PASSTHRU[@]}")
 fi
 
-warn_or_die_disk_headroom image-weights
+if image_model_is_local "${MODEL}"; then
+  # Local checkpoint plus the PNG. Do not probe the hub cache: a full
+  # cache volume must not abort a generate that never downloads weights.
+  warn_or_die_disk_headroom image-generate
+else
+  warn_or_die_disk_headroom image-weights
+fi
 
 log_header "MLX text-to-image"
 log_info "family=${FAMILY} model=${MODEL:-default} ${WIDTH}x${HEIGHT} steps=${STEPS} quantize=${QUANTIZE} low_ram=${LOW_RAM}"

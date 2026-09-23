@@ -65,6 +65,8 @@ expect_eq "media floor default" "4" "$(floor_of media-pip)"
 expect_eq "image pip floor default" "8" "$(floor_of image-pip)"
 expect_eq "video pip floor default" "8" "$(floor_of video-pip)"
 expect_eq "image weights floor default" "12" "$(floor_of image-weights)"
+expect_eq "image generate floor default" "4" "$(floor_of image-generate)"
+expect_eq "image generate floor override" "2" "$(floor_of image-generate MLX_DISK_MIN_IMAGE_GENERATE_GIB=2)"
 expect_eq "video weights floor default" "20" "$(floor_of video-weights)"
 expect_eq "wan generate floor default" "4" "$(floor_of wan-generate)"
 expect_eq "wan floor default" "40" "$(floor_of wan-prepare)"
@@ -177,6 +179,44 @@ image_out="$(
 )"
 expect_contains "image weights measure the hub cache" "Only 2 GiB free" "${image_out}"
 expect_contains "image weights name the hub path" "${CACHE}" "${image_out}"
+
+image_gen_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_WORKSPACE="${WS}" \
+    HF_HUB_CACHE="${CACHE}" \
+    bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom image-generate" \
+    2>&1 || true
+)"
+expect_contains "local image generate ignores a full hub cache" "800 GiB free" "${image_gen_out}"
+expect_contains "local image generate names the workspace" "${WS}" "${image_gen_out}"
+if [[ "${image_gen_out}" == *"${CACHE}"* ]]; then
+  fail "local image generate named the hub cache"
+else
+  pass "local image generate does not name the hub cache"
+fi
+
+model_is_local() {
+  local model="$1"
+  if bash -c 'source "$1"; image_model_is_local "$2"' _ "${COMMON}" "${model}"; then
+    printf 'yes\n'
+  else
+    printf 'no\n'
+  fi
+}
+disk_profile_for() {
+  local model="$1"
+  bash -c 'source "$1"; image_generate_disk_profile "$2"' _ "${COMMON}" "${model}"
+}
+expect_eq "preset is not a local checkpoint" "no" "$(model_is_local flux2-klein-4b)"
+expect_eq "hf repo is not a local checkpoint" "no" "$(model_is_local org/does-not-exist-mlx-disk-test)"
+expect_eq "absolute path is a local checkpoint" "yes" "$(model_is_local /var/empty/mlx-ckpt)"
+expect_eq "dot path is a local checkpoint" "yes" "$(model_is_local ./models/flux)"
+expect_eq "parent path is a local checkpoint" "yes" "$(model_is_local ../models/flux)"
+expect_eq "tilde path is a local checkpoint" "yes" "$(model_is_local ~/models/flux)"
+mkdir -p "${TMP}/relckpt"
+expect_eq "existing relative dir is a local checkpoint" "yes" "$(cd "${TMP}" && model_is_local relckpt)"
+expect_eq "preset uses image-weights" "image-weights" "$(disk_profile_for z-image-turbo)"
+expect_eq "local path uses image-generate" "image-generate" "$(disk_profile_for "${TMP}/relckpt")"
 
 media_out="$(
   PATH="${BIN}:/usr/bin:/bin" \
