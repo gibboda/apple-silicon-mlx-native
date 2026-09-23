@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `detect-apple-silicon.sh --env` exports composed `MLX_RECOMMENDED_IMAGE_PROFILE`, `MLX_RECOMMENDED_VIDEO_PROFILE`, and `MLX_VIDEO_FORCE_REQUIRED` (parity with `--json` / `--recommend`)
+
 ## [0.2.5] - 2026-09-22
 
 ### Fixed

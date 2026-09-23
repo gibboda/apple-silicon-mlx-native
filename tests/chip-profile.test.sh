@@ -246,6 +246,15 @@ expect_eq "print_detect_env policy MLX_TIER_ID is standard" \
   "$(printf '%s\n' "${env_out}" | awk -F= '/^MLX_TIER_ID=/{print $2; exit}')" "standard"
 expect_eq "print_detect_env physical MLX_PHYSICAL_TIER_ID stays constrained" \
   "$(printf '%s\n' "${env_out}" | awk -F= '/^MLX_PHYSICAL_TIER_ID=/{print $2; exit}')" "constrained"
+expect_contains "print_detect_env includes image profile key" "MLX_RECOMMENDED_IMAGE_PROFILE=" "${env_out}"
+expect_contains "print_detect_env includes video profile key" "MLX_RECOMMENDED_VIDEO_PROFILE=" "${env_out}"
+expect_contains "print_detect_env includes video force key" "MLX_VIDEO_FORCE_REQUIRED=" "${env_out}"
+eval "$(print_detect_env false "" false)"
+expect_eq "print_detect_env exports image profile" \
+  "${MLX_RECOMMENDED_IMAGE_PROFILE}" "flux2|flux2-klein-4b|4|4|768|768|1"
+expect_eq "print_detect_env exports video profile" \
+  "${MLX_RECOMMENDED_VIDEO_PROFILE}" "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+expect_eq "print_detect_env exports video force" "${MLX_VIDEO_FORCE_REQUIRED}" "1"
 
 # Linux / no-sysctl fallback must keep physical label stable when OVERRIDE rewrites policy.
 unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS

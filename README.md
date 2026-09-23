@@ -130,7 +130,7 @@ scripts/detect-apple-silicon.sh --json
 scripts/detect-apple-silicon.sh --env
 ```
 
-JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throughput_class`, `thermal_class`, `recommended_context`, and `working_set_bytes` when mlx is importable. `--env` / `--json` report **policy** `MLX_TIER_ID` / `memory_tier_id` (honors `OVERRIDE_MEMORY_TIER`) and **physical** `MLX_PHYSICAL_TIER_ID` / `physical_memory_tier_id` separately. RAM is the OOM fence; chip class is the performance fence. Unknown chips warn and use RAM-only defaults.
+JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throughput_class`, `thermal_class`, `recommended_context`, composed `recommended_image_profile` / `recommended_video_profile`, `video_force_required`, and `working_set_bytes` when mlx is importable. `--env` exports the media fields as `MLX_RECOMMENDED_IMAGE_PROFILE`, `MLX_RECOMMENDED_VIDEO_PROFILE`, and `MLX_VIDEO_FORCE_REQUIRED`. `--env` / `--json` report **policy** `MLX_TIER_ID` / `memory_tier_id` (honors `OVERRIDE_MEMORY_TIER`) and **physical** `MLX_PHYSICAL_TIER_ID` / `physical_memory_tier_id` separately. RAM is the OOM fence; chip class is the performance fence. Unknown chips warn and use RAM-only defaults.
 
 ## LLM inference
 
