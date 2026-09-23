@@ -560,8 +560,14 @@ looks_like_venv() {
   [[ -f "${dir}/pyvenv.cfg" || -f "${dir}/bin/python" ]]
 }
 
+has_venv_interpreter() {
+  local dir="${1:-${MLX_VENV}}"
+  [[ -f "${dir}/bin/python" || -f "${dir}/bin/python3" ]]
+}
+
 # Callers mkdir -p the workspace first. Missing .venv is OK (create). An
-# existing path must be a venv under the workspace — never reuse a random dir.
+# existing path must be a complete venv under the workspace — never reuse a
+# random dir or a half-created tree (cfg or interpreter alone is not enough).
 assert_install_venv_paths() {
   assert_workspace_safe
   assert_venv_under_workspace
@@ -569,9 +575,16 @@ assert_install_venv_paths() {
     if [[ ! -d "${MLX_VENV}" ]]; then
       die "MLX_VENV exists but is not a directory: ${MLX_VENV}"
     fi
-    if ! looks_like_venv "${MLX_VENV}"; then
-      die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove or rename it, then re-run make install."
+    if [[ -f "${MLX_VENV}/pyvenv.cfg" ]] && has_venv_interpreter "${MLX_VENV}"; then
+      return 0
     fi
+    if [[ -f "${MLX_VENV}/pyvenv.cfg" ]]; then
+      die "Refusing to reuse incomplete venv (missing bin/python): ${MLX_VENV}. Remove or rename it, then re-run make install."
+    fi
+    if has_venv_interpreter "${MLX_VENV}"; then
+      die "Refusing to reuse incomplete venv (missing pyvenv.cfg): ${MLX_VENV}. Remove or rename it, then re-run make install."
+    fi
+    die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove or rename it, then re-run make install."
   fi
 }
 
