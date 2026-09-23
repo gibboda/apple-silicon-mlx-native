@@ -455,7 +455,8 @@ huggingface_hub_cache_dir() {
 
 # Where bytes for this profile actually land.
 # Pip wheels go into the workspace venv.
-# Image/video weights go to the Hugging Face hub cache.
+# Image weights and LTX video weights go to the Hugging Face hub cache.
+# Wan generate reads a local model directory and writes the MP4 on the workspace.
 # Wan prepare writes the snapshot and converted copy under the workspace and
 # may also stage blobs in the hub cache, so both paths are checked.
 disk_probe_paths() {
@@ -466,6 +467,12 @@ disk_probe_paths() {
       ;;
     image-weights|video-weights)
       huggingface_hub_cache_dir
+      ;;
+    wan-generate)
+      printf '%s\n' "${MLX_WORKSPACE}"
+      if [[ -n "${MLX_WAN_GENERATE_DIR:-}" ]]; then
+        printf '%s\n' "${MLX_WAN_GENERATE_DIR}"
+      fi
       ;;
     wan-prepare)
       printf '%s\n' "${MLX_WORKSPACE}"
@@ -500,7 +507,8 @@ tightest_disk_for_profile() {
 
 # Conservative free-space floors (whole GiB) before large downloads.
 # Override one floor with the matching MLX_DISK_MIN_* variable.
-# Profiles: media-pip, image-pip, video-pip, image-weights, video-weights, wan-prepare.
+# Profiles: media-pip, image-pip, video-pip, image-weights, video-weights,
+# wan-generate, wan-prepare.
 disk_floor_gib() {
   local profile="${1:-}"
   case "${profile}" in
@@ -509,6 +517,7 @@ disk_floor_gib() {
     video-pip) printf '%s\n' "${MLX_DISK_MIN_VIDEO_GIB:-8}" ;;
     image-weights) printf '%s\n' "${MLX_DISK_MIN_IMAGE_WEIGHTS_GIB:-12}" ;;
     video-weights) printf '%s\n' "${MLX_DISK_MIN_VIDEO_WEIGHTS_GIB:-20}" ;;
+    wan-generate) printf '%s\n' "${MLX_DISK_MIN_WAN_GENERATE_GIB:-4}" ;;
     wan-prepare) printf '%s\n' "${MLX_DISK_MIN_WAN_GIB:-40}" ;;
     *) return 1 ;;
   esac

@@ -66,6 +66,7 @@ expect_eq "image pip floor default" "8" "$(floor_of image-pip)"
 expect_eq "video pip floor default" "8" "$(floor_of video-pip)"
 expect_eq "image weights floor default" "12" "$(floor_of image-weights)"
 expect_eq "video weights floor default" "20" "$(floor_of video-weights)"
+expect_eq "wan generate floor default" "4" "$(floor_of wan-generate)"
 expect_eq "wan floor default" "40" "$(floor_of wan-prepare)"
 expect_eq "wan floor override" "7" "$(floor_of wan-prepare MLX_DISK_MIN_WAN_GIB=7)"
 expect_fail "unknown disk profile" bash -c "source \"${COMMON}\"; disk_floor_gib nope"
@@ -136,6 +137,9 @@ case "$target" in
   *hub*|*huggingface*)
     printf '%s\n' "/dev/disk2 100 90 2"
     ;;
+  *lowvol*)
+    printf '%s\n' "/dev/disk3 10 7 3"
+    ;;
   *)
     printf '%s\n' "/dev/disk1 900 100 800"
     ;;
@@ -193,6 +197,43 @@ wan_out="$(
 )"
 expect_contains "wan prepare uses the tighter hub volume" "Only 2 GiB free" "${wan_out}"
 expect_contains "wan prepare names the hub path" "${CACHE}" "${wan_out}"
+
+ltx_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_WORKSPACE="${WS}" \
+    HF_HUB_CACHE="${CACHE}" \
+    bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom video-weights" \
+    2>&1 || true
+)"
+expect_contains "LTX weights still measure the hub cache" "Only 2 GiB free" "${ltx_out}"
+
+wan_gen_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_WORKSPACE="${WS}" \
+    HF_HUB_CACHE="${CACHE}" \
+    bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom wan-generate" \
+    2>&1 || true
+)"
+expect_contains "Wan generate ignores a full hub cache" "800 GiB free" "${wan_gen_out}"
+expect_contains "Wan generate names the workspace" "${WS}" "${wan_gen_out}"
+if [[ "${wan_gen_out}" == *"${CACHE}"* ]]; then
+  fail "Wan generate named the hub cache"
+else
+  pass "Wan generate does not name the hub cache"
+fi
+
+LOW="${TMP}/lowvol/wan"
+mkdir -p "${LOW}"
+wan_model_out="$(
+  PATH="${BIN}:/usr/bin:/bin" \
+    MLX_WORKSPACE="${WS}" \
+    HF_HUB_CACHE="${CACHE}" \
+    MLX_WAN_GENERATE_DIR="${LOW}" \
+    bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom wan-generate" \
+    2>&1 || true
+)"
+expect_contains "Wan generate uses the tighter model volume" "Only 3 GiB free" "${wan_model_out}"
+expect_contains "Wan generate names the model directory" "${LOW}" "${wan_model_out}"
 
 if (( failures > 0 )); then
   printf 'FAIL: %s disk/pin check(s) failed\n' "${failures}" >&2
