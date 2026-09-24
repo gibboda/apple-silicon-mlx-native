@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Free-space warning before `mlx-audio`, image/video package installs, Wan snapshot conversion, and image/video generation (`MLX_DISK_ENFORCE=1` aborts; `MLX_SKIP_DISK_CHECK=1` skips; caches are not deleted)
+- Portable self-tests for merged-branch deletion and the Conventional Commits audit
+
+### Changed
+
+- Pin `mlx==0.32.2`, `mlx-lm==0.31.3`, and `mlx-audio==0.5.5` (`MLX_PACKAGE`, `MLX_LM_PACKAGE`, `MLX_AUDIO_PACKAGE`; set a spec to the bare name to track upstream)
+- Pin `actions/checkout` to the v4.4.0 commit SHA in GitHub workflows
+
+### Fixed
+
+- `make image` / `make video` pass `GENERATE_IMAGE_ARGS` / `GENERATE_VIDEO_ARGS` as whitespace-separated flags without shell evaluation
+- A caller-supplied `MLX_DISK_AVAIL_GIB` survives hardware detection, and weight/prepare disk checks measure the Hugging Face hub cache (Wan prepare uses the tighter of that cache and the workspace)
+- Wan video generation checks the workspace and local model directory, not the hub cache (LTX still checks the hub cache)
+- Local image checkpoints (`--model` or `MLX_IMAGE_MODEL` path) check the workspace, not the hub cache (preset and Hugging Face repo generates still check the hub cache)
+
 ## [0.2.6] - 2026-09-23
 
 ### Fixed

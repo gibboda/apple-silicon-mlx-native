@@ -19,8 +19,15 @@ MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
 
 # Deliberately selected Python packages (Pure MLX core + selected media).
 # Image/video packages are NOT installed by default — see docs/media.md.
-MLX_CORE_PACKAGES=(mlx mlx-lm)
-MLX_MEDIA_PACKAGES=(mlx-audio)
+# Core and mlx-audio are pinned so two installs on different days match.
+# Override a spec to track upstream, for example:
+#   MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
+# Do not add PyTorch/MPS as a generation backend.
+MLX_PACKAGE="${MLX_PACKAGE:-mlx==0.32.2}"
+MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-mlx-lm==0.31.3}"
+MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-mlx-audio==0.5.5}"
+MLX_CORE_PACKAGES=("${MLX_PACKAGE}" "${MLX_LM_PACKAGE}")
+MLX_MEDIA_PACKAGES=("${MLX_AUDIO_PACKAGE}")
 MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
 # Pin mlx-video to a git SHA (not published on PyPI). Override with MLX_VIDEO_PACKAGE.
 MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837}"
@@ -407,9 +414,199 @@ detect_macos_version() {
 }
 
 detect_disk_available_gib() {
-  # Available space on the volume containing MLX_WORKSPACE (or /).
+  # Available space (whole GiB) on the volume containing the path.
   local target="${1:-/}"
   df -g "${target}" 2>/dev/null | awk 'NR==2 {print $4}'
+}
+
+# Remember a caller-supplied MLX_DISK_AVAIL_GIB before detection overwrites it.
+# Idempotent: a later measurement must not become the override.
+note_disk_avail_override() {
+  if [[ -n "${MLX_DISK_OVERRIDE_NOTED:-}" ]]; then
+    return 0
+  fi
+  MLX_DISK_OVERRIDE_NOTED=1
+  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" ]]; then
+    MLX_DISK_AVAIL_GIB_OVERRIDE="${MLX_DISK_AVAIL_GIB}"
+  else
+    MLX_DISK_AVAIL_GIB_OVERRIDE=""
+  fi
+}
+
+# df needs an existing directory. Walk up so a not-yet-created cache still
+# names the volume that will hold it.
+existing_dir_for_df() {
+  local path="${1:-/}"
+  path="${path%/}"
+  [[ -n "${path}" ]] || path="/"
+  while [[ ! -d "${path}" ]]; do
+    if [[ "${path}" == "/" ]]; then
+      break
+    fi
+    path="$(dirname "${path}")"
+  done
+  printf '%s\n' "${path}"
+}
+
+huggingface_hub_cache_dir() {
+  local hf_home="${HF_HOME:-${HOME}/.cache/huggingface}"
+  printf '%s\n' "${HF_HUB_CACHE:-${hf_home}/hub}"
+}
+
+# mflux downloads a preset name or Hugging Face repo into the hub cache.
+# A local checkpoint is an absolute path, a ./ ../ or ~ path, or any path
+# that already exists. Those generates write a PNG and do not download weights.
+image_model_is_local() {
+  local model="${1:-}"
+  [[ -n "${model}" ]] || return 1
+  case "${model}" in
+    /*|./*|../*|~*) return 0 ;;
+  esac
+  [[ -e "${model}" ]]
+}
+
+image_generate_disk_profile() {
+  if image_model_is_local "${1:-}"; then
+    printf '%s\n' image-generate
+  else
+    printf '%s\n' image-weights
+  fi
+}
+
+# Where bytes for this profile actually land.
+# Pip wheels go into the workspace venv.
+# Image weights and LTX video weights go to the Hugging Face hub cache.
+# A local image checkpoint writes the PNG on the workspace and skips the hub.
+# Wan generate reads a local model directory and writes the MP4 on the workspace.
+# Wan prepare writes the snapshot and converted copy under the workspace and
+# may also stage blobs in the hub cache, so both paths are checked.
+disk_probe_paths() {
+  local profile="${1:-}"
+  case "${profile}" in
+    media-pip|image-pip|video-pip|image-generate)
+      printf '%s\n' "${MLX_WORKSPACE}"
+      ;;
+    image-weights|video-weights)
+      huggingface_hub_cache_dir
+      ;;
+    wan-generate)
+      printf '%s\n' "${MLX_WORKSPACE}"
+      if [[ -n "${MLX_WAN_GENERATE_DIR:-}" ]]; then
+        printf '%s\n' "${MLX_WAN_GENERATE_DIR}"
+      fi
+      ;;
+    wan-prepare)
+      printf '%s\n' "${MLX_WORKSPACE}"
+      huggingface_hub_cache_dir
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# Smallest successful df reading for the profile, and the path it came from.
+# Prints "avail<TAB>path". Fails when every probe is unreadable.
+tightest_disk_for_profile() {
+  local profile="${1:-}"
+  local path="" probe="" avail="" best_avail="" best_path=""
+  while IFS= read -r path; do
+    [[ -n "${path}" ]] || continue
+    probe="$(existing_dir_for_df "${path}")"
+    avail="$(detect_disk_available_gib "${probe}")"
+    if [[ ! "${avail}" =~ ^[0-9]+$ ]]; then
+      continue
+    fi
+    if [[ -z "${best_avail}" ]] || (( avail < best_avail )); then
+      best_avail="${avail}"
+      best_path="${probe}"
+    fi
+  done < <(disk_probe_paths "${profile}")
+  if [[ -z "${best_avail}" ]]; then
+    return 1
+  fi
+  printf '%s\t%s\n' "${best_avail}" "${best_path}"
+}
+
+# Conservative free-space floors (whole GiB) before large downloads.
+# Override one floor with the matching MLX_DISK_MIN_* variable.
+# Profiles: media-pip, image-pip, video-pip, image-weights, image-generate,
+# video-weights, wan-generate, wan-prepare.
+disk_floor_gib() {
+  local profile="${1:-}"
+  case "${profile}" in
+    media-pip) printf '%s\n' "${MLX_DISK_MIN_MEDIA_GIB:-4}" ;;
+    image-pip) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GIB:-8}" ;;
+    video-pip) printf '%s\n' "${MLX_DISK_MIN_VIDEO_GIB:-8}" ;;
+    image-weights) printf '%s\n' "${MLX_DISK_MIN_IMAGE_WEIGHTS_GIB:-12}" ;;
+    image-generate) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GENERATE_GIB:-4}" ;;
+    video-weights) printf '%s\n' "${MLX_DISK_MIN_VIDEO_WEIGHTS_GIB:-20}" ;;
+    wan-generate) printf '%s\n' "${MLX_DISK_MIN_WAN_GENERATE_GIB:-4}" ;;
+    wan-prepare) printf '%s\n' "${MLX_DISK_MIN_WAN_GIB:-40}" ;;
+    *) return 1 ;;
+  esac
+}
+
+# ok | low | unknown. Non-integers are unknown so a bad df reading does not abort.
+disk_headroom_status() {
+  local avail="${1:-}"
+  local required="${2:-}"
+  if [[ ! "${avail}" =~ ^[0-9]+$ || ! "${required}" =~ ^[0-9]+$ ]]; then
+    printf 'unknown\n'
+    return 0
+  fi
+  if (( avail < required )); then
+    printf 'low\n'
+  else
+    printf 'ok\n'
+  fi
+}
+
+# Warn when free space is under the profile floor. MLX_DISK_ENFORCE=1 aborts.
+# MLX_SKIP_DISK_CHECK=1 skips. Does not delete caches or model weights.
+# A MLX_DISK_AVAIL_GIB set before detection wins over df. Otherwise df runs
+# on the profile's download path (workspace venv, hub cache, or both).
+warn_or_die_disk_headroom() {
+  local profile="${1:-}"
+  local required="" avail="" where="" status="" msg="" tight=""
+  if is_truthy "${MLX_SKIP_DISK_CHECK:-}"; then
+    log_info "Disk headroom check skipped (MLX_SKIP_DISK_CHECK)."
+    return 0
+  fi
+  required="$(disk_floor_gib "${profile}")" || die "Unknown disk profile: ${profile}"
+  if [[ ! "${required}" =~ ^[0-9]+$ ]]; then
+    die "Disk floor for ${profile} must be a non-negative integer GiB (got '${required}')."
+  fi
+  note_disk_avail_override
+  if [[ -n "${MLX_DISK_AVAIL_GIB_OVERRIDE:-}" ]]; then
+    avail="${MLX_DISK_AVAIL_GIB_OVERRIDE}"
+    where="MLX_DISK_AVAIL_GIB override"
+  else
+    tight="$(tightest_disk_for_profile "${profile}" || true)"
+    avail="${tight%%$'\t'*}"
+    where="${tight#*$'\t'}"
+    if [[ "${where}" == "${avail}" ]]; then
+      where=""
+    fi
+  fi
+  status="$(disk_headroom_status "${avail}" "${required}")"
+  case "${status}" in
+    ok)
+      log_ok "Disk headroom: ${avail} GiB free on ${where} (need >= ${required} GiB before ${profile})."
+      ;;
+    unknown)
+      log_warn "Could not read free space before ${profile} (need >= ${required} GiB). Continuing. Set MLX_DISK_AVAIL_GIB to override."
+      ;;
+    low)
+      if [[ -n "${where}" ]]; then
+        msg="Only ${avail} GiB free on ${where}; ${profile} wants at least ${required} GiB. Caches are not deleted automatically."
+      else
+        msg="Only ${avail} GiB free; ${profile} wants at least ${required} GiB. Caches are not deleted automatically."
+      fi
+      if is_truthy "${MLX_DISK_ENFORCE:-}"; then
+        die "${msg} Unset MLX_DISK_ENFORCE or set MLX_SKIP_DISK_CHECK=1 to proceed."
+      fi
+      log_warn "${msg} Set MLX_DISK_ENFORCE=1 to abort instead of continuing."
+      ;;
+  esac
 }
 
 detect_python_version() {
@@ -719,6 +916,7 @@ compose_chip_policy() {
 
 collect_hardware_facts() {
   local mem_bytes mem_gib tier_line parsed_family parsed_sku ws_line
+  note_disk_avail_override
   mem_bytes="$(detect_memory_bytes)"
   mem_gib="$(bytes_to_gib "${mem_bytes}")"
   tier_line="$(classify_memory_tier "${mem_gib}")"
@@ -789,6 +987,7 @@ load_runtime_profile() {
 # Linux CI / no-sysctl path. Physical RAM is always the constrained floor;
 # OVERRIDE_* may rewrite policy labels after this, not physical facts.
 load_runtime_profile_without_sysctl() {
+  note_disk_avail_override
   MLX_ARCH="$(detect_architecture)"
   MLX_CHIP=""
   MLX_MEM_BYTES=""

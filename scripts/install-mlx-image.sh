@@ -64,6 +64,7 @@ elif [[ "${MLX_THERMAL_CLASS}" == "fanless" ]]; then
 fi
 
 log_info "Installing ${MLX_IMAGE_PACKAGE} into ${MLX_VENV}"
+warn_or_die_disk_headroom image-pip
 "${PY}" -m pip install --upgrade pip setuptools wheel
 "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
 

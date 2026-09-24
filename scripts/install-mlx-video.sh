@@ -66,6 +66,7 @@ fi
 require_cmd git
 
 log_info "Installing ${MLX_VIDEO_PACKAGE} into ${MLX_VENV}"
+warn_or_die_disk_headroom video-pip
 "${PY}" -m pip install --upgrade pip setuptools wheel
 "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
 

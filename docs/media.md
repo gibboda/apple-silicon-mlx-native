@@ -20,7 +20,13 @@ This repository installs **only deliberately selected** media dependencies. Gaps
 | Cloud TTS/STT APIs | FALLBACK / NON-MLX | Not installed | N/A |
 | PyTorch audio stacks | FALLBACK / NON-MLX | Not installed | Often large |
 
-Bootstrap installs `mlx-audio` and Homebrew `ffmpeg` (encoding/decoding support). Extra TTS feature extras may be needed for some models; install those intentionally after reading upstream docs.
+Bootstrap installs `mlx-audio` and Homebrew `ffmpeg` (encoding/decoding support). **`mlx`**, **`mlx-lm`**, and **`mlx-audio` are pinned** in `scripts/lib/common.sh` (`mlx==0.32.2`, `mlx-lm==0.31.3`, `mlx-audio==0.5.5`). Override a spec before install or rebuild, including an unpinned name to track upstream:
+
+```bash
+MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
+```
+
+Extra TTS feature extras may be needed for some models; install those intentionally after reading upstream docs.
 
 Example (after `source .venv/bin/activate`):
 
@@ -93,7 +99,7 @@ OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
   scripts/generate-mlx-image.sh --dump-plan --prompt "plan"
 ```
 
-`--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). On constrained and standard memory tiers (and fanless), the generate wrapper adds `--vae-tiling` automatically unless you already pass it. Custom `--output` paths must resolve under `MLX_WORKSPACE`. PNGs land in `outputs/images/` (gitignored).
+`--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). `GENERATE_IMAGE_ARGS` is split on whitespace and is not a shell command, so `;`, pipes, and quotes stay literal flag text. On constrained and standard memory tiers (and fanless), the generate wrapper adds `--vae-tiling` automatically unless you already pass it. Custom `--output` paths must resolve under `MLX_WORKSPACE`. PNGs land in `outputs/images/` (gitignored).
 
 Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current `mflux` still depends on `torch` for checkpoint loading (`safetensors.torch`); it does not use PyTorch/MPS to denoise. This toolkit does not install Diffusers+MPS image stacks.
 
@@ -171,7 +177,7 @@ OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
   scripts/generate-mlx-video.sh --dump-plan --prompt "plan"
 ```
 
-`--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). Custom `--output` and `--image` paths must exist (for `--image`) and resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
+`--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). `GENERATE_VIDEO_ARGS` is split on whitespace and is not a shell command. Custom `--output` and `--image` paths must exist (for `--image`) and resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
 
 Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.19.1`).
 

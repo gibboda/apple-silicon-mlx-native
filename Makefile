@@ -8,6 +8,9 @@ SHELL := /bin/bash
 SCRIPTS := scripts
 .DEFAULT_GOAL := help
 
+# Single-quote a Make value so the recipe shell does not evaluate metacharacters.
+sq = '$(subst ','\'',$(1))'
+
 .PHONY: help detect recommend install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video release
 
 help: ## Show available targets
@@ -50,7 +53,13 @@ install-image: ## Install mflux into the existing venv (does not recreate .venv)
 
 image: ## Generate a PNG with mflux (IMAGE_PROMPT required)
 	@test -n "$(IMAGE_PROMPT)" || { echo 'Set IMAGE_PROMPT=... e.g. make image IMAGE_PROMPT="a red fox in snow"'; exit 1; }
-	@$(SCRIPTS)/generate-mlx-image.sh --prompt "$(IMAGE_PROMPT)" $(GENERATE_IMAGE_ARGS)
+	@extra=$(call sq,$(GENERATE_IMAGE_ARGS)); \
+	if [[ -n "$$extra" ]]; then \
+	  read -r -a image_args <<<"$$extra"; \
+	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$(IMAGE_PROMPT)" "$${image_args[@]}"; \
+	else \
+	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$(IMAGE_PROMPT)"; \
+	fi
 
 install-video: ## Install mlx-video into the existing venv (does not recreate .venv)
 	@$(SCRIPTS)/install-mlx-video.sh
@@ -60,7 +69,13 @@ prepare-video: ## Download and convert Wan2.1 T2V 1.3B (needs torch in .venv)
 
 video: ## Generate an MP4 with mlx-video (VIDEO_PROMPT required)
 	@test -n "$(VIDEO_PROMPT)" || { echo 'Set VIDEO_PROMPT=... e.g. make video VIDEO_PROMPT="a red fox running through snow"'; exit 1; }
-	@$(SCRIPTS)/generate-mlx-video.sh --prompt "$(VIDEO_PROMPT)" $(GENERATE_VIDEO_ARGS)
+	@extra=$(call sq,$(GENERATE_VIDEO_ARGS)); \
+	if [[ -n "$$extra" ]]; then \
+	  read -r -a video_args <<<"$$extra"; \
+	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$(VIDEO_PROMPT)" "$${video_args[@]}"; \
+	else \
+	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$(VIDEO_PROMPT)"; \
+	fi
 
 clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew
 	@$(SCRIPTS)/cleanup-mlx-native.sh --force

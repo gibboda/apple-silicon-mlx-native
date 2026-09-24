@@ -363,6 +363,15 @@ if ((${#PASSTHRU[@]} > 0)); then
   cmd+=("${PASSTHRU[@]}")
 fi
 
+if [[ "${FAMILY}" == "wan21" ]]; then
+  # Local --model-dir plus the MP4. Do not probe the hub cache: a full
+  # cache volume must not abort a generate that never downloads weights.
+  MLX_WAN_GENERATE_DIR="${MODEL_DIR}"
+  warn_or_die_disk_headroom wan-generate
+else
+  warn_or_die_disk_headroom video-weights
+fi
+
 log_header "MLX text-to-video"
 log_info "family=${FAMILY} model=${MODEL} ${WIDTH}x${HEIGHT} frames=${FRAMES} steps=${STEPS_PLAN} tiling=${TILING}"
 log_info "output=${OUTPUT}"
