@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-09-26
+
 ### Added
 
 - `scripts/generate-mlx-text.sh` and `scripts/serve-mlx.sh` (`make generate-text`, `make serve`): on physical ≤8 GB RAM, pin MLX to the GPU and set memory and wired limits to the Metal working set with a 256 MiB cache cap before weights load. `OVERRIDE_MEMORY_TIER` changes model and context recommendations only. If Metal or the working set cannot be applied, the launch stops; a wired-limit error still keeps the memory and cache limits. Larger machines keep MLX defaults. Image and video paths are unchanged
@@ -151,7 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.3...v0.2.4
