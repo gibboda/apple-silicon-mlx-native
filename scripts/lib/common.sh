@@ -319,15 +319,65 @@ except Exception:
 PY
 }
 
+# 256 MiB cache cap for the constrained (≤8 GB) tier.
+# Measured on this 8 GB M1 (applegpu_g13g, working set 5726633984):
+# the default MLX cache limit is 8160437862 (95% of 8 GB) and retains a freed
+# 512 MiB buffer (536870916 bytes). A working-set/4 cap retains it too.
+# 256 MiB releases it (cache falls to 4 bytes) without slowing a 2048² GPU
+# matmul or changing greedy Llama 3.2 3B tokens. Cache limit 0 is slower.
+# Image/video wrappers do not use this cap; they may need swap past the working set.
+MLX_CONSTRAINED_CACHE_LIMIT_BYTES=$((256 * 1024 * 1024))
+
+# stdout: apply|cache_bytes. apply=1 only on the constrained RAM tier.
+inference_limit_plan() {
+  local tier="${1:-}"
+  if [[ "${tier}" == "constrained" ]]; then
+    printf '1|%s\n' "${MLX_CONSTRAINED_CACHE_LIMIT_BYTES}"
+  else
+    printf '0|\n'
+  fi
+}
+
+# Export the env mlx_launch.py reads. Other tiers leave MLX defaults in place.
+export_inference_limit_env() {
+  local tier="${1:-${MLX_TIER_ID:-}}"
+  local plan apply cache
+  plan="$(inference_limit_plan "${tier}")"
+  IFS='|' read -r apply cache <<<"${plan}"
+  if [[ "${apply}" == "1" ]]; then
+    MLX_APPLY_WORKING_SET_LIMITS=1
+    MLX_CACHE_LIMIT_BYTES="${cache}"
+    export MLX_APPLY_WORKING_SET_LIMITS MLX_CACHE_LIMIT_BYTES
+  else
+    unset MLX_APPLY_WORKING_SET_LIMITS MLX_CACHE_LIMIT_BYTES
+  fi
+}
+
+# True when argv contains FLAG or FLAG=value.
+argv_has_flag() {
+  local flag="$1"
+  shift
+  local arg
+  for arg in "$@"; do
+    if [[ "${arg}" == "${flag}" || "${arg}" == "${flag}="* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Probe mx.set_wired_limit / set_memory_limit / set_cache_limit from the Metal working set.
 # Limits are process-local: this subprocess cannot enforce them on later CLI processes.
 # Used by validate-mlx.sh as an API/working-set check. Constrained never exceeds
-# max_recommended_working_set_size. Prints KEY=value lines. No-op when mlx/Metal is missing.
+# max_recommended_working_set_size and uses MLX_CONSTRAINED_CACHE_LIMIT_BYTES.
+# Prints KEY=value lines. No-op when mlx/Metal is missing.
 apply_mlx_runtime_limits() {
   local py="${1:-$(venv_python)}"
   local tier="${2:-${MLX_TIER_ID:-}}"
   [[ -x "${py}" ]] || return 0
-  MLX_LIMIT_TIER="${tier}" "${py}" - <<'PY' 2>/dev/null || true
+  MLX_LIMIT_TIER="${tier}" \
+    MLX_CONSTRAINED_CACHE_LIMIT_BYTES="${MLX_CONSTRAINED_CACHE_LIMIT_BYTES}" \
+    "${py}" - <<'PY' 2>/dev/null || true
 import os, sys
 try:
     import mlx.core as mx
@@ -340,6 +390,8 @@ ws = int(info.get("max_recommended_working_set_size") or 0)
 arch = str(info.get("architecture") or "")
 memsize = int(info.get("memory_size") or 0)
 tier = os.environ.get("MLX_LIMIT_TIER", "")
+cache_cap_s = os.environ.get("MLX_CONSTRAINED_CACHE_LIMIT_BYTES", "")
+cache_cap = int(cache_cap_s) if cache_cap_s.isdigit() else 0
 print("working_set_bytes=%s" % (ws if ws else "",))
 print("gpu_arch=%s" % (arch,))
 print("memory_size_bytes=%s" % (memsize if memsize else "",))
@@ -349,7 +401,7 @@ if ws <= 0:
 wired = ws
 if tier == "constrained":
     memory = ws
-    cache = max(ws // 4, 1)
+    cache = cache_cap if cache_cap > 0 else max(ws // 4, 1)
 else:
     memory = int(ws * 1.5)
     if memsize > 0:

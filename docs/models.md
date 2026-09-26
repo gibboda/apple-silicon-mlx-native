@@ -19,25 +19,17 @@ model weights
 ## CLI and server
 
 ```bash
-source .venv/bin/activate
-source config/models.env  # if present; provides MLX_DEFAULT_MODEL and MLX_RECOMMENDED_CONTEXT
-# Generate wrappers parse MLX_* assignments (they do not source/execute this file).
-# `source` still executes the file — do not put secrets or commands here.
-
-# One-shot generation
-mlx_lm.generate \
-  --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
+# One-shot generation. On ≤8 GB this pins the GPU and caps MLX cache at 256 MiB.
+scripts/generate-mlx-text.sh \
   --prompt "Explain unified memory in one paragraph." \
-  --max-tokens 128 \
-  --max-kv-size "${MLX_RECOMMENDED_CONTEXT:-2048}"
+  --max-tokens 128
 
-# Persistent OpenAI-compatible server (preferred)
-mlx_lm.server \
-  --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
-  --host 127.0.0.1 \
-  --port 8080
-  # Add --max-kv-size "${MLX_RECOMMENDED_CONTEXT}" when mlx_lm.server supports that flag.
+# Persistent OpenAI-compatible server (preferred; same ≤8 GB limits)
+scripts/serve-mlx.sh
+# mlx-lm 0.31.3 server has no --max-kv-size. Cap clients to MLX_RECOMMENDED_CONTEXT.
 ```
+
+`generate-mlx-text.sh` passes `--max-kv-size` from `MLX_RECOMMENDED_CONTEXT` unless you override it. Direct `mlx_lm.generate` / `mlx_lm.server` remain available and do not apply the 8 GB cache cap. Wrappers parse `MLX_*` assignments (they do not execute `config/models.env`).
 
 Example client call:
 

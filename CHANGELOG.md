@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `scripts/generate-mlx-text.sh` and `scripts/serve-mlx.sh` (`make generate-text`, `make serve`): on ≤8 GB, pin MLX to the GPU and set memory and wired limits to the Metal working set with a 256 MiB cache cap before weights load. Larger tiers keep MLX defaults. Image and video paths are unchanged
 - Free-space warning before `mlx-audio`, image/video package installs, Wan snapshot conversion, and image/video generation (`MLX_DISK_ENFORCE=1` aborts; `MLX_SKIP_DISK_CHECK=1` skips; caches are not deleted)
 - Portable self-tests for merged-branch deletion and the Conventional Commits audit
 

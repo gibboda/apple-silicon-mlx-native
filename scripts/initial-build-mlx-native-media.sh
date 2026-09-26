@@ -216,7 +216,7 @@ recommended="${MLX_RECOMMENDED_MODEL}"
 context="${MLX_RECOMMENDED_CONTEXT}"
 server_kv=""
 if mlx_lm_help_has_flag mlx_lm.server --max-kv-size; then
-  server_kv=" --max-kv-size ${context}"
+  server_kv=" -- --max-kv-size ${context}"
 fi
 cat <<EOF
 
@@ -225,11 +225,12 @@ ${COLOR_BOLD}Next commands${COLOR_RESET}
   # Activate the environment
   source ${MLX_VENV}/bin/activate
 
-  # One-shot generation (downloads model on first use)
-  mlx_lm.generate --model ${recommended} --prompt "Hello from MLX" --max-tokens 64 --max-kv-size ${context}
+  # One-shot generation (downloads model on first use; ≤8 GB applies the MLX cache cap)
+  # generate-mlx-text.sh also passes --max-kv-size ${context} unless overridden
+  ${SCRIPT_DIR}/generate-mlx-text.sh --model ${recommended} --prompt "Hello from MLX" --max-tokens 64
 
   # Persistent OpenAI-compatible server (preferred for repeated use)
-  mlx_lm.server --model ${recommended} --host 127.0.0.1 --port 8080${server_kv}
+  ${SCRIPT_DIR}/serve-mlx.sh${server_kv}
 
   # Re-validate / rebuild later
   make validate

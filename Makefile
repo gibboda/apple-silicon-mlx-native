@@ -11,7 +11,7 @@ SCRIPTS := scripts
 # Single-quote a Make value so the recipe shell does not evaluate metacharacters.
 sq = '$(subst ','\'',$(1))'
 
-.PHONY: help detect recommend install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video release
+.PHONY: help detect recommend install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
 
 help: ## Show available targets
 	@printf '%s\n' \
@@ -26,6 +26,8 @@ help: ## Show available targets
 		'make install-video — install Pure MLX text-to-video (mlx-video) into .venv' \
 		'make prepare-video — download and convert Wan2.1 T2V 1.3B for mlx-video' \
 		'make video     — generate a video (VIDEO_PROMPT="...")' \
+		'make generate-text — mlx_lm text generation (PROMPT="..."); 8 GB cache cap' \
+		'make serve     — resident mlx_lm.server; 8 GB uses the Metal working-set cap' \
 		'make clean     — remove .venv (toolkit-owned environment); reports leftovers' \
 		'make uninstall — same as make clean' \
 		'make audit     — audit commit subjects for Conventional Commits' \
@@ -66,6 +68,13 @@ install-video: ## Install mlx-video into the existing venv (does not recreate .v
 
 prepare-video: ## Download and convert Wan2.1 T2V 1.3B (needs torch in .venv)
 	@$(SCRIPTS)/prepare-mlx-video-wan.sh
+
+generate-text: ## Generate text with mlx_lm (PROMPT required); caps MLX cache on ≤8 GB
+	@test -n "$(PROMPT)" || { echo 'Set PROMPT=... e.g. make generate-text PROMPT="Hello from MLX"'; exit 1; }
+	@"$(SCRIPTS)/generate-mlx-text.sh" --prompt "$(PROMPT)"
+
+serve: ## Start mlx_lm.server; on ≤8 GB pin GPU and cap MLX memory to the Metal working set
+	@"$(SCRIPTS)/serve-mlx.sh"
 
 video: ## Generate an MP4 with mlx-video (VIDEO_PROMPT required)
 	@test -n "$(VIDEO_PROMPT)" || { echo 'Set VIDEO_PROMPT=... e.g. make video VIDEO_PROMPT="a red fox running through snow"'; exit 1; }

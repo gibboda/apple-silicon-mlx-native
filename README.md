@@ -140,32 +140,25 @@ JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throu
 
 ## LLM inference
 
+On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap.
+
 ```bash
-source .venv/bin/activate
-source config/models.env  # if present
-# Wrappers parse MLX_* only. `source` executes the file — do not put secrets or commands here.
-mlx_lm.generate \
-  --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
-  --prompt "Hello from MLX" \
-  --max-tokens 64 \
-  --max-kv-size "${MLX_RECOMMENDED_CONTEXT:-2048}"
+make generate-text PROMPT="Hello from MLX"
+# equivalent:
+scripts/generate-mlx-text.sh --prompt "Hello from MLX" --max-tokens 64
 ```
 
 Model matrix and memory notes: [docs/models.md](docs/models.md).
 
 ## Persistent `mlx_lm.server`
 
-Prefer one long-lived server so weights stay resident (lower latency, less memory churn than reload-per-prompt):
+Prefer one long-lived server so weights stay resident (lower latency, less memory churn than reload-per-prompt). The serve wrapper uses the same ≤8 GB limits as text generation. `mlx_lm.server` started by hand does not.
 
 ```bash
-source .venv/bin/activate
-source config/models.env  # if present
-# Wrappers parse MLX_* only. `source` executes the file — do not put secrets or commands here.
-mlx_lm.server \
-  --model "${MLX_DEFAULT_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}" \
-  --host 127.0.0.1 \
-  --port 8080
-# Add --max-kv-size "${MLX_RECOMMENDED_CONTEXT}" when mlx_lm.server supports that flag.
+make serve
+# equivalent:
+scripts/serve-mlx.sh
+# Add --max-kv-size when mlx_lm.server supports that flag (mlx-lm 0.31.3 does not).
 ```
 
 OpenAI-compatible example:
