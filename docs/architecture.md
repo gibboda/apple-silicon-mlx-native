@@ -66,6 +66,8 @@ Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** st
 | `initial-build-mlx-native-media.sh` | First-time bootstrap; seeds `models.env` from the composed profile |
 | `rebuild-mlx-native-media.sh` | Recreate `.venv` safely; never clobbers existing `models.env` |
 | `install-mlx-image.sh` | Opt-in `mflux` into the existing venv |
+| `generate-mlx-text.sh` | Text generation via `mlx_lm.generate`; ≤8 GB GPU and working-set/cache limits |
+| `serve-mlx.sh` | Resident `mlx_lm.server` with the same ≤8 GB limits |
 | `generate-mlx-image.sh` | Text-to-image via mflux with composed chip+RAM defaults |
 | `install-mlx-video.sh` | Opt-in `mlx-video` into the existing venv |
 | `prepare-mlx-video-wan.sh` | Download + convert Wan2.1 1.3B to MLX 4-bit (torch for .pth load only) |

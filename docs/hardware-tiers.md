@@ -72,7 +72,9 @@ Fanless keeps the RAM-only default model and context at 2048.
 
 ## MLX runtime limits
 
-On constrained machines, `make validate` probes `mx.set_wired_limit` / `set_memory_limit` / `set_cache_limit` from `max_recommended_working_set_size` and does **not** exceed that Metal recommended working set in the probe process (this M1: ~5.33 GB). Those limits are process-local and are **not** inherited by generate wrappers (`mflux-generate`, `mlx-video`). `make detect` prints the working set when mlx is importable.
+On machines whose physical RAM is ≤8 GB (`MLX_PHYSICAL_TIER_ID=constrained`), `scripts/generate-mlx-text.sh` and `scripts/serve-mlx.sh` set `mx.set_memory_limit` and `mx.set_wired_limit` to `max_recommended_working_set_size` and `mx.set_cache_limit` to 256 MiB in the inference process, and select the GPU, before weights load. `OVERRIDE_MEMORY_TIER` does not change that cap. If Metal or the working set cannot be applied, those launches stop. A wired-limit error still leaves the memory and cache limits set. `make validate` probes those same APIs and does **not** exceed that Metal recommended working set (this M1: 5726633984 bytes). Image and video wrappers do **not** inherit the cap; those workloads may need swap beyond the working set. `make detect` prints the working set when mlx is importable.
+
+On this 8 GB M1 the default MLX memory and cache limits are 8160437862 bytes (95% of RAM). That cache retains a freed 512 MiB buffer. A working-set/4 cap retains it too. 256 MiB releases it. A 2048² GPU matmul stays in the same range as the default cache; disabling the cache is slower. Greedy Llama 3.2 3B tokens match the uncapped path.
 
 ## 8 GB guidance (minimum target)
 
