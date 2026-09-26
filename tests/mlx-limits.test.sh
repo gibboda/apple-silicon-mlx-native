@@ -135,7 +135,7 @@ physical_env="$(
   unset MLX_APPLY_WORKING_SET_LIMITS MLX_CACHE_LIMIT_BYTES
   MLX_TIER_ID=standard
   MLX_PHYSICAL_TIER_ID=constrained
-  export_inference_limit_env
+  export_inference_limit_env "${MLX_PHYSICAL_TIER_ID}"
   printf 'apply=%s\ncache=%s\n' "${MLX_APPLY_WORKING_SET_LIMITS:-}" "${MLX_CACHE_LIMIT_BYTES:-}"
 )"
 expect_eq "physical constrained exports the cap" "${physical_env}" $'apply=1\ncache=268435456'
@@ -144,7 +144,7 @@ policy_env="$(
   unset MLX_APPLY_WORKING_SET_LIMITS MLX_CACHE_LIMIT_BYTES
   MLX_TIER_ID=constrained
   MLX_PHYSICAL_TIER_ID=high
-  export_inference_limit_env
+  export_inference_limit_env "${MLX_PHYSICAL_TIER_ID}"
   printf 'apply=%s\ncache=%s\n' "${MLX_APPLY_WORKING_SET_LIMITS-unset}" "${MLX_CACHE_LIMIT_BYTES-unset}"
 )"
 expect_eq "policy constrained does not export the cap" "${policy_env}" $'apply=unset\ncache=unset'
