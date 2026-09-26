@@ -5,8 +5,8 @@
 """Launch mlx_lm in this process so memory limits apply to model load.
 
 The shell wrapper exports MLX_APPLY_WORKING_SET_LIMITS=1 and
-MLX_CACHE_LIMIT_BYTES only for the constrained (≤8 GB) tier. Other tiers
-keep MLX defaults. Image and video wrappers do not call this module.
+MLX_CACHE_LIMIT_BYTES only for physical constrained RAM (≤8 GB). Other
+physical tiers keep MLX defaults. Image and video wrappers do not call this module.
 """
 
 from __future__ import annotations
@@ -23,9 +23,11 @@ def _positive_int(name: str) -> int:
 
 
 def apply_runtime_limits() -> None:
-    """Pin GPU and, on the constrained tier, cap memory, cache, and wired limits.
+    """Pin GPU and cap memory, cache, and wired limits on constrained physical RAM.
 
     Called before importing mlx_lm so the generation stream is created on GPU.
+    Exits when Metal or the working-set cap is unavailable. A wired-limit
+    exception is logged; the memory and cache limits stay in place.
     """
     if os.environ.get("MLX_APPLY_WORKING_SET_LIMITS") != "1":
         return
@@ -33,16 +35,14 @@ def apply_runtime_limits() -> None:
     import mlx.core as mx
 
     if not mx.metal.is_available():
-        sys.stderr.write("mlx_runtime=metal_unavailable\n")
-        return
+        raise SystemExit("mlx_runtime=metal_unavailable")
 
     mx.set_default_device(mx.gpu)
     info = mx.device_info()
     working_set = int(info.get("max_recommended_working_set_size") or 0)
     memory_size = int(info.get("memory_size") or 0)
     if working_set <= 0:
-        sys.stderr.write("mlx_runtime=no_working_set\n")
-        return
+        raise SystemExit("mlx_runtime=no_working_set")
 
     memory_limit = working_set
     wired_limit = working_set

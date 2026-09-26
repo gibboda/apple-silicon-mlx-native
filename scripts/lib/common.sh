@@ -328,7 +328,8 @@ PY
 # Image/video wrappers do not use this cap; they may need swap past the working set.
 MLX_CONSTRAINED_CACHE_LIMIT_BYTES=$((256 * 1024 * 1024))
 
-# stdout: apply|cache_bytes. apply=1 only on the constrained RAM tier.
+# stdout: apply|cache_bytes. apply=1 only for physical constrained RAM.
+# Callers pass MLX_PHYSICAL_TIER_ID. OVERRIDE_MEMORY_TIER is recommendations only.
 inference_limit_plan() {
   local tier="${1:-}"
   if [[ "${tier}" == "constrained" ]]; then
@@ -338,9 +339,10 @@ inference_limit_plan() {
   fi
 }
 
-# Export the env mlx_launch.py reads. Other tiers leave MLX defaults in place.
+# Export the env mlx_launch.py reads. Defaults to physical RAM, not policy.
+# Other physical tiers leave MLX defaults in place.
 export_inference_limit_env() {
-  local tier="${1:-${MLX_TIER_ID:-}}"
+  local tier="${1:-${MLX_PHYSICAL_TIER_ID:-}}"
   local plan apply cache
   plan="$(inference_limit_plan "${tier}")"
   IFS='|' read -r apply cache <<<"${plan}"

@@ -27,11 +27,13 @@ usage() {
   cat <<'EOF'
 Usage: generate-mlx-text.sh --prompt TEXT [options]
 
-One-shot text generation with mlx_lm.generate. On the constrained (≤8 GB)
-tier this process pins MLX to the GPU and sets the memory and wired limits
+One-shot text generation with mlx_lm.generate. On physical ≤8 GB RAM
+this process pins MLX to the GPU and sets the memory and wired limits
 to the Metal recommended working set and the cache limit to 256 MiB before
-weights load. Larger tiers keep MLX defaults. mlx_lm.generate itself is
-unchanged if you call it directly.
+weights load. OVERRIDE_MEMORY_TIER changes the recommended model and context
+only. If Metal or the working set cannot be applied, the launch stops.
+Larger machines keep MLX defaults. mlx_lm.generate itself is unchanged
+if you call it directly.
 
 Options:
   --prompt TEXT       Prompt (required unless --dump-plan)
@@ -96,16 +98,19 @@ MAX_TOKENS="${MAX_TOKENS:-${MLX_MAX_TOKENS:-}}"
 MAX_KV="${MAX_KV:-${MLX_RECOMMENDED_CONTEXT:-2048}}"
 TEMP="${TEMP:-${MLX_TEMPERATURE:-}}"
 
-plan="$(inference_limit_plan "${MLX_TIER_ID:-}")"
+plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"
 
 if (( DUMP_PLAN == 1 )); then
-  printf 'tier=%s\ndevice=%s\napply_working_set_limits=%s\ncache_limit_bytes=%s\nmodel=%s\nmax_tokens=%s\nmax_kv_size=%s\ntemp=%s\n' \
+  printf 'tier=%s\nphysical_tier=%s\ndevice=%s\napply_working_set_limits=%s\ncache_limit_bytes=%s\nmodel=%s\nrecommended_model=%s\nrecommended_context=%s\nmax_tokens=%s\nmax_kv_size=%s\ntemp=%s\n' \
     "${MLX_TIER_ID:-}" \
+    "${MLX_PHYSICAL_TIER_ID:-}" \
     "$([[ "${apply_limits}" == "1" ]] && echo gpu || echo default)" \
     "${apply_limits}" \
     "${cache_limit}" \
     "${MODEL}" \
+    "${MLX_RECOMMENDED_MODEL:-}" \
+    "${MLX_RECOMMENDED_CONTEXT:-}" \
     "${MAX_TOKENS}" \
     "${MAX_KV}" \
     "${TEMP}"
@@ -136,7 +141,7 @@ if ((${#PASSTHRU[@]} > 0)); then
   args+=("${PASSTHRU[@]}")
 fi
 
-export_inference_limit_env "${MLX_TIER_ID:-}"
+export_inference_limit_env "${MLX_PHYSICAL_TIER_ID:-}"
 if [[ "${apply_limits}" == "1" ]]; then
   log_info "Constrained tier: GPU, memory and wired limits at the Metal working set, cache ${cache_limit} bytes" >&2
 fi

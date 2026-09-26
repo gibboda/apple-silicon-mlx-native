@@ -25,10 +25,12 @@ usage() {
   cat <<'EOF'
 Usage: serve-mlx.sh [options]
 
-Start one mlx_lm.server process so weights stay resident. On the constrained
-(≤8 GB) tier this process pins MLX to the GPU and sets the memory and wired
-limits to the Metal recommended working set and the cache limit to 256 MiB
-before weights load. Larger tiers keep MLX defaults.
+Start one mlx_lm.server process so weights stay resident. On physical ≤8 GB
+RAM this process pins MLX to the GPU and sets the memory and wired limits
+to the Metal recommended working set and the cache limit to 256 MiB before
+weights load. OVERRIDE_MEMORY_TIER changes the recommended model and context
+only. If Metal or the working set cannot be applied, the launch stops.
+Larger machines keep MLX defaults.
 
 Options:
   --model NAME     Model id or local path (default: MLX_DEFAULT_MODEL or composed recommendation)
@@ -81,16 +83,18 @@ MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llam
 HOST="${HOST:-${MLX_SERVER_HOST:-127.0.0.1}}"
 PORT="${PORT:-${MLX_SERVER_PORT:-8080}}"
 
-plan="$(inference_limit_plan "${MLX_TIER_ID:-}")"
+plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"
 
 if (( DUMP_PLAN == 1 )); then
-  printf 'tier=%s\ndevice=%s\napply_working_set_limits=%s\ncache_limit_bytes=%s\nmodel=%s\nhost=%s\nport=%s\ncontext=%s\n' \
+  printf 'tier=%s\nphysical_tier=%s\ndevice=%s\napply_working_set_limits=%s\ncache_limit_bytes=%s\nmodel=%s\nrecommended_model=%s\nhost=%s\nport=%s\ncontext=%s\n' \
     "${MLX_TIER_ID:-}" \
+    "${MLX_PHYSICAL_TIER_ID:-}" \
     "$([[ "${apply_limits}" == "1" ]] && echo gpu || echo default)" \
     "${apply_limits}" \
     "${cache_limit}" \
     "${MODEL}" \
+    "${MLX_RECOMMENDED_MODEL:-}" \
     "${HOST}" \
     "${PORT}" \
     "${MLX_RECOMMENDED_CONTEXT:-2048}"
@@ -114,7 +118,7 @@ if ((${#PASSTHRU[@]} > 0)); then
   args+=("${PASSTHRU[@]}")
 fi
 
-export_inference_limit_env "${MLX_TIER_ID:-}"
+export_inference_limit_env "${MLX_PHYSICAL_TIER_ID:-}"
 if [[ "${apply_limits}" == "1" ]]; then
   log_info "Constrained tier: GPU, memory and wired limits at the Metal working set, cache ${cache_limit} bytes" >&2
 fi
