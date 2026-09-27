@@ -83,12 +83,13 @@ require_positive_integer() {
   fi
 }
 
-# Finite non-negative decimal: 0, 0.7, 10, .5, 1.
-# Signs, exponents, nan, and inf are rejected.
+# Finite non-negative decimal: 0, 0.7, 10, .5, 5., 1.
+# Signs, exponents, nan, inf, and strings longer than 16 characters are
+# rejected so Python cannot turn the value into infinity.
 require_nonnegative_number() {
   local name="$1"
   local value="$2"
-  if [[ ! "${value}" =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]]; then
+  if [[ ! "${value}" =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]] || (( ${#value} > 16 )); then
     die "${name} must be a finite non-negative number (got '${value}')"
   fi
 }

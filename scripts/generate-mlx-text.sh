@@ -47,7 +47,8 @@ Options:
 
 config/models.env is parsed as MLX_* assignments (not executed).
 Max tokens and KV size must be positive integers. Temperature, when set,
-must be a finite non-negative number. Invalid values fail before launch.
+must be a finite non-negative number. An empty value is invalid. Invalid
+values, including flags after --, fail before launch.
 EOF
 }
 
@@ -65,16 +66,19 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-tokens)
       [[ $# -ge 2 ]] || die "--max-tokens requires N"
+      [[ -n "$2" ]] || die "MLX_MAX_TOKENS/--max-tokens must be a positive integer (got '')"
       MAX_TOKENS="$2"
       shift 2
       ;;
     --max-kv-size)
       [[ $# -ge 2 ]] || die "--max-kv-size requires N"
+      [[ -n "$2" ]] || die "MLX_RECOMMENDED_CONTEXT/--max-kv-size must be a positive integer (got '')"
       MAX_KV="$2"
       shift 2
       ;;
     --temp)
       [[ $# -ge 2 ]] || die "--temp requires T"
+      [[ -n "$2" ]] || die "MLX_TEMPERATURE/--temp must be a finite non-negative number (got '')"
       TEMP="$2"
       shift 2
       ;;
@@ -91,16 +95,27 @@ done
 
 load_models_env "${MLX_MODELS_ENV}"
 # Profile load replaces MLX_RECOMMENDED_CONTEXT with the composed default.
-# Reject a bad config value first so it cannot pass the toolkit boundary.
+# An empty or malformed config value is invalid and fails here, before that
+# replacement. Unset still means "use the composed default".
 if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
   require_positive_integer "MLX_RECOMMENDED_CONTEXT" "${MLX_RECOMMENDED_CONTEXT}"
 fi
-MAX_TOKENS="${MAX_TOKENS:-${MLX_MAX_TOKENS:-}}"
-TEMP="${TEMP:-${MLX_TEMPERATURE:-}}"
-if [[ -n "${MAX_TOKENS}" ]]; then
+# Empty CLI values are rejected in the parser. An empty models.env assignment
+# is invalid too; only an unset key falls back to the default or is omitted.
+if [[ -z "${MAX_TOKENS}" ]]; then
+  if [[ -n "${MLX_MAX_TOKENS+x}" ]]; then
+    require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${MLX_MAX_TOKENS}"
+    MAX_TOKENS="${MLX_MAX_TOKENS}"
+  fi
+else
   require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${MAX_TOKENS}"
 fi
-if [[ -n "${TEMP}" ]]; then
+if [[ -z "${TEMP}" ]]; then
+  if [[ -n "${MLX_TEMPERATURE+x}" ]]; then
+    require_nonnegative_number "MLX_TEMPERATURE/--temp" "${MLX_TEMPERATURE}"
+    TEMP="${MLX_TEMPERATURE}"
+  fi
+else
   require_nonnegative_number "MLX_TEMPERATURE/--temp" "${TEMP}"
 fi
 if ((${#PASSTHRU[@]} > 0)); then

@@ -31,7 +31,7 @@ scripts/serve-mlx.sh
 
 `generate-mlx-text.sh` passes `--max-kv-size` from `MLX_RECOMMENDED_CONTEXT` unless you override it. Direct `mlx_lm.generate` / `mlx_lm.server` remain available and do not apply the 8 GB cache cap. Wrappers parse `MLX_*` assignments (they do not execute `config/models.env`).
 
-Max tokens and KV size must be positive integers. Temperature, when set, must be a finite non-negative number (`0`, `0.7`). The server port must be an integer from 1 to 65535. A bad `config/models.env` value or flag fails in the wrapper before mlx-lm starts.
+Max tokens and KV size must be positive integers. Temperature, when set, must be a finite non-negative number (`0`, `0.7`, `.5`, `5.`). The server port must be an integer from 1 to 65535. An empty assignment or flag is invalid. A bad `config/models.env` value or flag, including one passed after `--`, fails in the wrapper before mlx-lm starts. A malformed configured `MLX_RECOMMENDED_CONTEXT` fails before the composed default replaces it; that composed default still sets the KV cap unless `--max-kv-size` is passed.
 
 Example client call:
 
