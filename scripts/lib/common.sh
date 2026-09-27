@@ -74,6 +74,39 @@ is_truthy() {
   esac
 }
 
+# Positive decimal integer with no sign and no leading zero: 1, 2, 2048.
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+    die "${name} must be a positive integer (got '${value}')"
+  fi
+}
+
+# Finite non-negative decimal: 0, 0.7, 10, .5, 1.
+# Signs, exponents, nan, and inf are rejected.
+require_nonnegative_number() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]]; then
+    die "${name} must be a finite non-negative number (got '${value}')"
+  fi
+}
+
+# Integer TCP port in 1..65535. Leading zeros are rejected.
+require_tcp_port() {
+  local name="$1"
+  local value="$2"
+  local port
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]] || (( ${#value} > 5 )); then
+    die "${name} must be an integer TCP port from 1 to 65535 (got '${value}')"
+  fi
+  port=$((10#${value}))
+  if (( port < 1 || port > 65535 )); then
+    die "${name} must be an integer TCP port from 1 to 65535 (got '${value}')"
+  fi
+}
+
 bytes_to_gib() {
   # Convert bytes to whole GiB (floor).
   local bytes="$1"

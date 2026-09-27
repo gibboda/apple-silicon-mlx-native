@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `generate-mlx-text.sh` and `serve-mlx.sh` reject invalid max tokens, KV size, temperature, and server port before launch. Max tokens and KV size must be positive integers, temperature must be a finite non-negative number when set, and the port must be an integer from 1 to 65535
+
 ## [0.2.7] - 2026-09-26
 
 ### Added

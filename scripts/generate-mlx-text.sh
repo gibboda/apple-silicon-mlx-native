@@ -46,6 +46,8 @@ Options:
   -h, --help          Show this help
 
 config/models.env is parsed as MLX_* assignments (not executed).
+Max tokens and KV size must be positive integers. Temperature, when set,
+must be a finite non-negative number. Invalid values fail before launch.
 EOF
 }
 
@@ -88,6 +90,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_models_env "${MLX_MODELS_ENV}"
+# Profile load replaces MLX_RECOMMENDED_CONTEXT with the composed default.
+# Reject a bad config value first so it cannot pass the toolkit boundary.
+if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+  require_positive_integer "MLX_RECOMMENDED_CONTEXT" "${MLX_RECOMMENDED_CONTEXT}"
+fi
 if (( DUMP_PLAN == 1 )); then
   MLX_SKIP_DEVICE_PROBE=1
 fi
@@ -97,6 +104,13 @@ MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llam
 MAX_TOKENS="${MAX_TOKENS:-${MLX_MAX_TOKENS:-}}"
 MAX_KV="${MAX_KV:-${MLX_RECOMMENDED_CONTEXT:-2048}}"
 TEMP="${TEMP:-${MLX_TEMPERATURE:-}}"
+if [[ -n "${MAX_TOKENS}" ]]; then
+  require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${MAX_TOKENS}"
+fi
+require_positive_integer "MLX_RECOMMENDED_CONTEXT/--max-kv-size" "${MAX_KV}"
+if [[ -n "${TEMP}" ]]; then
+  require_nonnegative_number "MLX_TEMPERATURE/--temp" "${TEMP}"
+fi
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"

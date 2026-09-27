@@ -319,6 +319,123 @@ else
   fail "python3 is required to check mlx_launch.py"
 fi
 
+num_dir="$(mktemp -d "${TMPDIR:-/tmp}/mlx-numeric.XXXXXX")"
+empty_env="${num_dir}/empty.env"
+: >"${empty_env}"
+
+reject_plan() {
+  local label="$1"
+  local needle="$2"
+  local script="$3"
+  shift 3
+  local out rc
+  set +e
+  out="$(
+    env -u MLX_MAX_TOKENS -u MLX_TEMPERATURE -u MLX_RECOMMENDED_CONTEXT -u MLX_SERVER_PORT \
+      MLX_MODELS_ENV="${empty_env}" \
+      "${script}" --dump-plan "$@" 2>&1
+  )"
+  rc=$?
+  set -e
+  if [[ "${rc}" -eq 0 ]]; then
+    fail "${label} (expected non-zero exit)"
+    return
+  fi
+  expect_contains "${label}" "${needle}" "${out}"
+}
+
+reject_models_env() {
+  local label="$1"
+  local needle="$2"
+  local script="$3"
+  local body="$4"
+  local env_file="${num_dir}/case.env"
+  local out rc
+  printf '%s\n' "${body}" >"${env_file}"
+  set +e
+  out="$(
+    env -u MLX_MAX_TOKENS -u MLX_TEMPERATURE -u MLX_RECOMMENDED_CONTEXT -u MLX_SERVER_PORT \
+      MLX_MODELS_ENV="${env_file}" \
+      "${script}" --dump-plan 2>&1
+  )"
+  rc=$?
+  set -e
+  if [[ "${rc}" -eq 0 ]]; then
+    fail "${label} (expected non-zero exit)"
+    return
+  fi
+  expect_contains "${label}" "${needle}" "${out}"
+}
+
+TEXT="${ROOT}/scripts/generate-mlx-text.sh"
+SERVE="${ROOT}/scripts/serve-mlx.sh"
+
+reject_plan "CLI max tokens 0" "positive integer" "${TEXT}" --max-tokens 0
+reject_plan "CLI max tokens negative" "positive integer" "${TEXT}" --max-tokens -1
+reject_plan "CLI max tokens non-numeric" "positive integer" "${TEXT}" --max-tokens nope
+reject_plan "CLI max kv 0" "positive integer" "${TEXT}" --max-kv-size 0
+reject_plan "CLI max kv negative" "positive integer" "${TEXT}" --max-kv-size -4
+reject_plan "CLI max kv non-numeric" "positive integer" "${TEXT}" --max-kv-size wide
+reject_plan "CLI temp negative" "non-negative" "${TEXT}" --temp -1
+reject_plan "CLI temp non-numeric" "non-negative" "${TEXT}" --temp nope
+reject_plan "CLI temp nan" "non-negative" "${TEXT}" --temp nan
+reject_plan "CLI temp inf" "non-negative" "${TEXT}" --temp inf
+
+reject_models_env "env max tokens 0" "positive integer" "${TEXT}" "MLX_MAX_TOKENS=0"
+reject_models_env "env max tokens negative" "positive integer" "${TEXT}" "MLX_MAX_TOKENS=-2"
+reject_models_env "env max tokens non-numeric" "positive integer" "${TEXT}" "MLX_MAX_TOKENS=nope"
+reject_models_env "env context 0" "positive integer" "${TEXT}" "MLX_RECOMMENDED_CONTEXT=0"
+reject_models_env "env context negative" "positive integer" "${TEXT}" "MLX_RECOMMENDED_CONTEXT=-1"
+reject_models_env "env context non-numeric" "positive integer" "${TEXT}" "MLX_RECOMMENDED_CONTEXT=wide"
+reject_models_env "env temp negative" "non-negative" "${TEXT}" "MLX_TEMPERATURE=-0.2"
+reject_models_env "env temp non-numeric" "non-negative" "${TEXT}" "MLX_TEMPERATURE=warm"
+
+reject_plan "CLI port 0" "TCP port" "${SERVE}" --port 0
+reject_plan "CLI port 65536" "TCP port" "${SERVE}" --port 65536
+reject_plan "CLI port non-numeric" "TCP port" "${SERVE}" --port nope
+reject_models_env "env port 0" "TCP port" "${SERVE}" "MLX_SERVER_PORT=0"
+reject_models_env "env port 65536" "TCP port" "${SERVE}" "MLX_SERVER_PORT=65536"
+reject_models_env "env port non-numeric" "TCP port" "${SERVE}" "MLX_SERVER_PORT=abc"
+
+boundary="$(
+  env -u MLX_MAX_TOKENS -u MLX_TEMPERATURE -u MLX_RECOMMENDED_CONTEXT -u MLX_SERVER_PORT \
+    MLX_MODELS_ENV="${empty_env}" \
+    "${TEXT}" --dump-plan --max-tokens 1 --max-kv-size 1 --temp 0
+)"
+expect_contains "boundary max tokens" "max_tokens=1" "${boundary}"
+expect_contains "boundary max kv" "max_kv_size=1" "${boundary}"
+expect_contains "boundary temp zero" "temp=0" "${boundary}"
+
+printf '%s\n' "MLX_MAX_TOKENS=1" "MLX_TEMPERATURE=0.0" "MLX_RECOMMENDED_CONTEXT=1" "MLX_SERVER_PORT=1" >"${num_dir}/boundary.env"
+env_boundary="$(
+  env -u MLX_MAX_TOKENS -u MLX_TEMPERATURE -u MLX_RECOMMENDED_CONTEXT -u MLX_SERVER_PORT \
+    MLX_MODELS_ENV="${num_dir}/boundary.env" \
+    "${TEXT}" --dump-plan
+)"
+expect_contains "env boundary max tokens" "max_tokens=1" "${env_boundary}"
+expect_contains "env boundary temp" "temp=0.0" "${env_boundary}"
+
+port_low="$(
+  env -u MLX_MAX_TOKENS -u MLX_TEMPERATURE -u MLX_RECOMMENDED_CONTEXT -u MLX_SERVER_PORT \
+    MLX_MODELS_ENV="${empty_env}" \
+    "${SERVE}" --dump-plan --port 1
+)"
+expect_contains "boundary port 1" "port=1" "${port_low}"
+port_high="$(
+  env -u MLX_MAX_TOKENS -u MLX_TEMPERATURE -u MLX_RECOMMENDED_CONTEXT -u MLX_SERVER_PORT \
+    MLX_MODELS_ENV="${empty_env}" \
+    "${SERVE}" --dump-plan --port 65535
+)"
+expect_contains "boundary port 65535" "port=65535" "${port_high}"
+env_port="$(
+  env -u MLX_MAX_TOKENS -u MLX_TEMPERATURE -u MLX_RECOMMENDED_CONTEXT -u MLX_SERVER_PORT \
+    MLX_MODELS_ENV="${num_dir}/boundary.env" \
+    "${SERVE}" --dump-plan
+)"
+expect_contains "env boundary port" "port=1" "${env_port}"
+
+rm -rf "${num_dir}"
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1

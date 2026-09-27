@@ -42,6 +42,7 @@ Options:
 
 mlx-lm 0.31.3 server has no --max-kv-size flag. Cap client context to
 MLX_RECOMMENDED_CONTEXT. config/models.env is parsed as MLX_* assignments.
+The port must be an integer from 1 to 65535. Invalid values fail before launch.
 EOF
 }
 
@@ -82,6 +83,7 @@ load_runtime_profile
 MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}}}"
 HOST="${HOST:-${MLX_SERVER_HOST:-127.0.0.1}}"
 PORT="${PORT:-${MLX_SERVER_PORT:-8080}}"
+require_tcp_port "MLX_SERVER_PORT/--port" "${PORT}"
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"

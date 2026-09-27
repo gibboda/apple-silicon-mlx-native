@@ -140,7 +140,7 @@ JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throu
 
 ## LLM inference
 
-On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap.
+On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap. Max tokens and KV size must be positive integers, and temperature must be a finite non-negative number when set; invalid values fail before launch. The server port must be an integer from 1 to 65535.
 
 ```bash
 make generate-text PROMPT="Hello from MLX"
