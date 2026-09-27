@@ -57,6 +57,11 @@ else
   pass "argv_has_flag rejects a missing flag"
 fi
 
+mapfile -t port_vals < <(argv_flag_values --port --host 127.0.0.1 --port 8080 --port=9090)
+expect_eq "argv_flag_values bare and equals" "${#port_vals[@]}" "2"
+expect_eq "argv_flag_values bare value" "${port_vals[0]}" "8080"
+expect_eq "argv_flag_values equals value" "${port_vals[1]}" "9090"
+
 plan_field() {
   local field="$1"
   local text="$2"
@@ -393,6 +398,11 @@ reject_models_env "env temp non-numeric" "non-negative" "${TEXT}" "MLX_TEMPERATU
 reject_plan "CLI port 0" "TCP port" "${SERVE}" --port 0
 reject_plan "CLI port 65536" "TCP port" "${SERVE}" --port 65536
 reject_plan "CLI port non-numeric" "TCP port" "${SERVE}" --port nope
+reject_plan "passthru port 0" "TCP port" "${SERVE}" -- --port 0
+reject_plan "passthru port 65536" "TCP port" "${SERVE}" -- --port=65536
+reject_plan "passthru max tokens 0" "positive integer" "${TEXT}" -- --max-tokens 0
+reject_plan "passthru max kv negative" "positive integer" "${TEXT}" -- --max-kv-size=-1
+reject_plan "passthru temp nan" "non-negative" "${TEXT}" -- --temp=nan
 reject_models_env "env port 0" "TCP port" "${SERVE}" "MLX_SERVER_PORT=0"
 reject_models_env "env port 65536" "TCP port" "${SERVE}" "MLX_SERVER_PORT=65536"
 reject_models_env "env port non-numeric" "TCP port" "${SERVE}" "MLX_SERVER_PORT=abc"

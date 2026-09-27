@@ -75,6 +75,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_models_env "${MLX_MODELS_ENV}"
+PORT="${PORT:-${MLX_SERVER_PORT:-8080}}"
+require_tcp_port "MLX_SERVER_PORT/--port" "${PORT}"
+if ((${#PASSTHRU[@]} > 0)); then
+  while IFS= read -r pt_port; do
+    require_tcp_port "MLX_SERVER_PORT/--port" "${pt_port}"
+  done < <(argv_flag_values --port "${PASSTHRU[@]}")
+fi
 if (( DUMP_PLAN == 1 )); then
   MLX_SKIP_DEVICE_PROBE=1
 fi
@@ -82,8 +89,6 @@ load_runtime_profile
 
 MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}}}"
 HOST="${HOST:-${MLX_SERVER_HOST:-127.0.0.1}}"
-PORT="${PORT:-${MLX_SERVER_PORT:-8080}}"
-require_tcp_port "MLX_SERVER_PORT/--port" "${PORT}"
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"

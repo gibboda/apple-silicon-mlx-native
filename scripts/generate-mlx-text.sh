@@ -95,22 +95,33 @@ load_models_env "${MLX_MODELS_ENV}"
 if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
   require_positive_integer "MLX_RECOMMENDED_CONTEXT" "${MLX_RECOMMENDED_CONTEXT}"
 fi
+MAX_TOKENS="${MAX_TOKENS:-${MLX_MAX_TOKENS:-}}"
+TEMP="${TEMP:-${MLX_TEMPERATURE:-}}"
+if [[ -n "${MAX_TOKENS}" ]]; then
+  require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${MAX_TOKENS}"
+fi
+if [[ -n "${TEMP}" ]]; then
+  require_nonnegative_number "MLX_TEMPERATURE/--temp" "${TEMP}"
+fi
+if ((${#PASSTHRU[@]} > 0)); then
+  while IFS= read -r pt_val; do
+    require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${pt_val}"
+  done < <(argv_flag_values --max-tokens "${PASSTHRU[@]}")
+  while IFS= read -r pt_val; do
+    require_positive_integer "MLX_RECOMMENDED_CONTEXT/--max-kv-size" "${pt_val}"
+  done < <(argv_flag_values --max-kv-size "${PASSTHRU[@]}")
+  while IFS= read -r pt_val; do
+    require_nonnegative_number "MLX_TEMPERATURE/--temp" "${pt_val}"
+  done < <(argv_flag_values --temp "${PASSTHRU[@]}")
+fi
 if (( DUMP_PLAN == 1 )); then
   MLX_SKIP_DEVICE_PROBE=1
 fi
 load_runtime_profile
 
 MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}}}"
-MAX_TOKENS="${MAX_TOKENS:-${MLX_MAX_TOKENS:-}}"
 MAX_KV="${MAX_KV:-${MLX_RECOMMENDED_CONTEXT:-2048}}"
-TEMP="${TEMP:-${MLX_TEMPERATURE:-}}"
-if [[ -n "${MAX_TOKENS}" ]]; then
-  require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${MAX_TOKENS}"
-fi
 require_positive_integer "MLX_RECOMMENDED_CONTEXT/--max-kv-size" "${MAX_KV}"
-if [[ -n "${TEMP}" ]]; then
-  require_nonnegative_number "MLX_TEMPERATURE/--temp" "${TEMP}"
-fi
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"

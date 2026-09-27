@@ -401,6 +401,30 @@ argv_has_flag() {
   return 1
 }
 
+# Print each value bound to FLAG in argv (--flag VALUE and --flag=VALUE).
+argv_flag_values() {
+  local flag="$1"
+  shift
+  local argc=$#
+  local i=1
+  local arg
+  while (( i <= argc )); do
+    arg="${!i}"
+    if [[ "${arg}" == "${flag}" ]]; then
+      (( i++ ))
+      if (( i <= argc )); then
+        printf '%s\n' "${!i}"
+      fi
+      (( i++ ))
+      continue
+    fi
+    if [[ "${arg}" == "${flag}="* ]]; then
+      printf '%s\n' "${arg#"${flag}="}"
+    fi
+    (( i++ ))
+  done
+}
+
 # Probe mx.set_wired_limit / set_memory_limit / set_cache_limit from the Metal working set.
 # Limits are process-local: this subprocess cannot enforce them on later CLI processes.
 # Used by validate-mlx.sh as an API/working-set check. Constrained never exceeds
