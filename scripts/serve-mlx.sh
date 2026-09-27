@@ -42,6 +42,8 @@ Options:
 
 mlx-lm 0.31.3 server has no --max-kv-size flag. Cap client context to
 MLX_RECOMMENDED_CONTEXT. config/models.env is parsed as MLX_* assignments.
+The port must be an integer from 1 to 65535. An empty value is invalid.
+Invalid values, including flags after --, fail before launch.
 EOF
 }
 
@@ -59,6 +61,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --port)
       [[ $# -ge 2 ]] || die "--port requires PORT"
+      [[ -n "$2" ]] || die "MLX_SERVER_PORT/--port must be an integer TCP port from 1 to 65535 (got '')"
       PORT="$2"
       shift 2
       ;;
@@ -74,6 +77,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_models_env "${MLX_MODELS_ENV}"
+# Empty CLI values are rejected in the parser. An empty models.env assignment
+# is invalid; only an unset MLX_SERVER_PORT falls back to 8080.
+if [[ -z "${PORT}" ]]; then
+  if [[ -n "${MLX_SERVER_PORT+x}" ]]; then
+    PORT="${MLX_SERVER_PORT}"
+  else
+    PORT=8080
+  fi
+fi
+require_tcp_port "MLX_SERVER_PORT/--port" "${PORT}"
+if ((${#PASSTHRU[@]} > 0)); then
+  while IFS= read -r pt_port; do
+    require_tcp_port "MLX_SERVER_PORT/--port" "${pt_port}"
+  done < <(argv_flag_values --port "${PASSTHRU[@]}")
+fi
 if (( DUMP_PLAN == 1 )); then
   MLX_SKIP_DEVICE_PROBE=1
 fi
@@ -81,7 +99,6 @@ load_runtime_profile
 
 MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}}}"
 HOST="${HOST:-${MLX_SERVER_HOST:-127.0.0.1}}"
-PORT="${PORT:-${MLX_SERVER_PORT:-8080}}"
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"

@@ -74,6 +74,40 @@ is_truthy() {
   esac
 }
 
+# Positive decimal integer with no sign and no leading zero: 1, 2, 2048.
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+    die "${name} must be a positive integer (got '${value}')"
+  fi
+}
+
+# Finite non-negative decimal: 0, 0.7, 10, .5, 5., 1.
+# Signs, exponents, nan, inf, and strings longer than 16 characters are
+# rejected so Python cannot turn the value into infinity.
+require_nonnegative_number() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]] || (( ${#value} > 16 )); then
+    die "${name} must be a finite non-negative number (got '${value}')"
+  fi
+}
+
+# Integer TCP port in 1..65535. Leading zeros are rejected.
+require_tcp_port() {
+  local name="$1"
+  local value="$2"
+  local port
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]] || (( ${#value} > 5 )); then
+    die "${name} must be an integer TCP port from 1 to 65535 (got '${value}')"
+  fi
+  port=$((10#${value}))
+  if (( port < 1 || port > 65535 )); then
+    die "${name} must be an integer TCP port from 1 to 65535 (got '${value}')"
+  fi
+}
+
 bytes_to_gib() {
   # Convert bytes to whole GiB (floor).
   local bytes="$1"
@@ -366,6 +400,30 @@ argv_has_flag() {
     fi
   done
   return 1
+}
+
+# Print each value bound to FLAG in argv (--flag VALUE and --flag=VALUE).
+argv_flag_values() {
+  local flag="$1"
+  shift
+  local argc=$#
+  local i=1
+  local arg
+  while (( i <= argc )); do
+    arg="${!i}"
+    if [[ "${arg}" == "${flag}" ]]; then
+      (( i++ ))
+      if (( i <= argc )); then
+        printf '%s\n' "${!i}"
+      fi
+      (( i++ ))
+      continue
+    fi
+    if [[ "${arg}" == "${flag}="* ]]; then
+      printf '%s\n' "${arg#"${flag}="}"
+    fi
+    (( i++ ))
+  done
 }
 
 # Probe mx.set_wired_limit / set_memory_limit / set_cache_limit from the Metal working set.

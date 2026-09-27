@@ -46,6 +46,9 @@ Options:
   -h, --help          Show this help
 
 config/models.env is parsed as MLX_* assignments (not executed).
+Max tokens and KV size must be positive integers. Temperature, when set,
+must be a finite non-negative number. An empty value is invalid. Invalid
+values, including flags after --, fail before launch.
 EOF
 }
 
@@ -63,16 +66,19 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-tokens)
       [[ $# -ge 2 ]] || die "--max-tokens requires N"
+      [[ -n "$2" ]] || die "MLX_MAX_TOKENS/--max-tokens must be a positive integer (got '')"
       MAX_TOKENS="$2"
       shift 2
       ;;
     --max-kv-size)
       [[ $# -ge 2 ]] || die "--max-kv-size requires N"
+      [[ -n "$2" ]] || die "MLX_RECOMMENDED_CONTEXT/--max-kv-size must be a positive integer (got '')"
       MAX_KV="$2"
       shift 2
       ;;
     --temp)
       [[ $# -ge 2 ]] || die "--temp requires T"
+      [[ -n "$2" ]] || die "MLX_TEMPERATURE/--temp must be a finite non-negative number (got '')"
       TEMP="$2"
       shift 2
       ;;
@@ -88,15 +94,49 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_models_env "${MLX_MODELS_ENV}"
+# Profile load replaces MLX_RECOMMENDED_CONTEXT with the composed default.
+# An empty or malformed config value is invalid and fails here, before that
+# replacement. Unset still means "use the composed default".
+if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+  require_positive_integer "MLX_RECOMMENDED_CONTEXT" "${MLX_RECOMMENDED_CONTEXT}"
+fi
+# Empty CLI values are rejected in the parser. An empty models.env assignment
+# is invalid too; only an unset key falls back to the default or is omitted.
+if [[ -z "${MAX_TOKENS}" ]]; then
+  if [[ -n "${MLX_MAX_TOKENS+x}" ]]; then
+    require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${MLX_MAX_TOKENS}"
+    MAX_TOKENS="${MLX_MAX_TOKENS}"
+  fi
+else
+  require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${MAX_TOKENS}"
+fi
+if [[ -z "${TEMP}" ]]; then
+  if [[ -n "${MLX_TEMPERATURE+x}" ]]; then
+    require_nonnegative_number "MLX_TEMPERATURE/--temp" "${MLX_TEMPERATURE}"
+    TEMP="${MLX_TEMPERATURE}"
+  fi
+else
+  require_nonnegative_number "MLX_TEMPERATURE/--temp" "${TEMP}"
+fi
+if ((${#PASSTHRU[@]} > 0)); then
+  while IFS= read -r pt_val; do
+    require_positive_integer "MLX_MAX_TOKENS/--max-tokens" "${pt_val}"
+  done < <(argv_flag_values --max-tokens "${PASSTHRU[@]}")
+  while IFS= read -r pt_val; do
+    require_positive_integer "MLX_RECOMMENDED_CONTEXT/--max-kv-size" "${pt_val}"
+  done < <(argv_flag_values --max-kv-size "${PASSTHRU[@]}")
+  while IFS= read -r pt_val; do
+    require_nonnegative_number "MLX_TEMPERATURE/--temp" "${pt_val}"
+  done < <(argv_flag_values --temp "${PASSTHRU[@]}")
+fi
 if (( DUMP_PLAN == 1 )); then
   MLX_SKIP_DEVICE_PROBE=1
 fi
 load_runtime_profile
 
 MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}}}"
-MAX_TOKENS="${MAX_TOKENS:-${MLX_MAX_TOKENS:-}}"
 MAX_KV="${MAX_KV:-${MLX_RECOMMENDED_CONTEXT:-2048}}"
-TEMP="${TEMP:-${MLX_TEMPERATURE:-}}"
+require_positive_integer "MLX_RECOMMENDED_CONTEXT/--max-kv-size" "${MAX_KV}"
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"
