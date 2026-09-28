@@ -91,7 +91,7 @@ case "${MODE}" in
     print_composed_profile
     ;;
   list)
-    print_recommended_model_list
+    print_recommended_model_list "$@"
     ;;
   json)
     DETECT_ARCH="${MLX_ARCH}" \
