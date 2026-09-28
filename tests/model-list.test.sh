@@ -42,6 +42,101 @@ list_column() {
   printf '%s\n' "${text}" | awk -F '\t' -v id="${model}" -v col="${column}" '$3 == id { print $col; exit }'
 }
 
+model_list_catalog_id_handled() {
+  case "${1:-}" in
+    mlx-community/Llama-3.2-3B-Instruct-4bit|\
+    mlx-community/Llama-3.2-1B-Instruct-4bit|\
+    mlx-community/Phi-3.5-mini-instruct-4bit|\
+    mlx-community/Qwen2.5-3B-Instruct-4bit|\
+    mlx-community/Mistral-7B-Instruct-v0.3-4bit|\
+    mlx-community/Meta-Llama-3.1-8B-Instruct-4bit|\
+    mlx-community/Qwen2.5-14B-Instruct-4bit|\
+    mlx-community/Qwen2.5-32B-Instruct-4bit)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+catalog_id_in_list() {
+  local want="$1"
+  local id
+  for id in "${catalog_ids[@]}"; do
+    [[ "${id}" == "${want}" ]] && return 0
+  done
+  return 1
+}
+
+catalog_ids=()
+while IFS='|' read -r row_id _ _; do
+  [[ -n "${row_id}" ]] || continue
+  catalog_ids+=("${row_id}")
+done < <(model_catalog_rows)
+
+for catalog_id in "${catalog_ids[@]}"; do
+  if model_list_catalog_id_handled "${catalog_id}"; then
+    pass "catalog id handled in model_list_fit (${catalog_id})"
+  else
+    fail "catalog id handled in model_list_fit (${catalog_id})"
+  fi
+done
+expect_eq "unhandled catalog id falls through to poor" \
+  "$(model_list_fit mlx-community/__not-in-catalog__ standard fast cooled)" \
+  "poor"
+
+matrix_tiers=(constrained standard high workstation large)
+matrix_throughputs=(slow moderate fast very_fast extreme unknown)
+matrix_thermals=(fanless cooled "")
+matrix_profiles=0
+for matrix_tier in "${matrix_tiers[@]}"; do
+  for matrix_throughput in "${matrix_throughputs[@]}"; do
+    for matrix_thermal in "${matrix_thermals[@]}"; do
+      matrix_profiles=$((matrix_profiles + 1))
+      profile_label="tier=${matrix_tier} throughput=${matrix_throughput:-empty} thermal=${matrix_thermal:-empty}"
+      default_id="$(recommended_model_for_profile "${matrix_tier}" "${matrix_throughput}" "${matrix_thermal}" 0)"
+      if catalog_id_in_list "${default_id}"; then
+        pass "matrix recommended model in catalog (${profile_label})"
+      else
+        fail "matrix recommended model in catalog (${profile_label}) (got '${default_id}')"
+      fi
+      default_fit="$(model_list_fit "${default_id}" "${matrix_tier}" "${matrix_throughput}" "${matrix_thermal}")"
+      expect_eq "matrix recommended row is default (${profile_label})" \
+        "${default_fit}" "default"
+      default_count=0
+      for catalog_id in "${catalog_ids[@]}"; do
+        fit="$(model_list_fit "${catalog_id}" "${matrix_tier}" "${matrix_throughput}" "${matrix_thermal}")"
+        case "${fit}" in
+          default|fits|tight|poor) ;;
+          *)
+            fail "matrix fit label valid (${profile_label} ${catalog_id}) (got '${fit}')"
+            ;;
+        esac
+        if [[ "${fit}" == "default" ]]; then
+          default_count=$((default_count + 1))
+        fi
+      done
+      expect_eq "matrix exactly one default (${profile_label})" \
+        "${default_count}" "1"
+    done
+  done
+done
+pass "matrix invariants over ${matrix_profiles} profiles"
+
+expect_eq "unknown throughput standard default is 3B" \
+  "$(recommended_model_for_profile standard unknown cooled 0)" \
+  "mlx-community/Llama-3.2-3B-Instruct-4bit"
+expect_eq "unknown throughput standard 7B is tight" \
+  "$(model_list_fit mlx-community/Mistral-7B-Instruct-v0.3-4bit standard unknown cooled)" \
+  "tight"
+expect_eq "16 GB fanless fast default stays 3B" \
+  "$(recommended_model_for_profile standard fast fanless 0)" \
+  "mlx-community/Llama-3.2-3B-Instruct-4bit"
+expect_eq "16 GB fanless fast 7B is tight" \
+  "$(model_list_fit mlx-community/Mistral-7B-Instruct-v0.3-4bit standard fast fanless)" \
+  "tight"
+
 expect_eq "8 GB fanless default is 3B" \
   "$(model_list_fit mlx-community/Llama-3.2-3B-Instruct-4bit constrained slow fanless)" \
   "default"
