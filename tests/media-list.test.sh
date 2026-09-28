@@ -332,6 +332,29 @@ expect_eq "LTX mlx snapshot is cached" \
   "$(HF_HUB_CACHE="${cache_dir}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
   "yes"
 
+partial_ltx_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-ltx.XXXXXX")"
+partial_ltx="${partial_ltx_cache}/models--prince-canuma--LTX-2-distilled/snapshots/partial"
+mkdir -p "${partial_ltx}"
+printf '{}\n' >"${partial_ltx}/config.json"
+cat >"${partial_ltx}/model.safetensors.index.json" <<'EOF'
+{"weight_map":{"layer.a":"model-00001-of-00002.safetensors","layer.b":"model-00002-of-00002.safetensors"}}
+EOF
+printf 'shard1\n' >"${partial_ltx}/model-00001-of-00002.safetensors"
+expect_eq "LTX index missing a shard is not cached" \
+  "$(HF_HUB_CACHE="${partial_ltx_cache}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
+  "no"
+ln -sf /nonexistent "${partial_ltx}/model-00002-of-00002.safetensors"
+expect_eq "LTX index with a dangling shard is not cached" \
+  "$(HF_HUB_CACHE="${partial_ltx_cache}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
+  "no"
+partial_video="$(
+  HF_HUB_CACHE="${partial_ltx_cache}" MLX_WORKSPACE="${empty_ws}" \
+    print_recommended_video_list constrained slow fanless "Apple M1" 8 1 base constrained 8
+)"
+expect_eq "printed partial LTX index is not cached" \
+  "$(list_column "${MLX_VIDEO_LTX_REPO}" 2 "${partial_video}")" "no"
+rm -rf "${partial_ltx_cache}"
+
 cached_image="$(
   HF_HUB_CACHE="${cache_dir}" MLX_WORKSPACE="${empty_ws}" \
     print_recommended_image_list constrained slow fanless "Apple M1" 8 1 base constrained

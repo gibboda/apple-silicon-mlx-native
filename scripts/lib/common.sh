@@ -665,7 +665,9 @@ hub_repo_download_incomplete() {
 
 # True when a snapshot has model_index.json or config.json plus at least one
 # real safetensors file. Diffusers trees (mflux presets) keep weights in
-# subfolders, so this is broader than model_weights_cached. No network.
+# subfolders, so this is broader than model_weights_cached. A snapshot that
+# has model.safetensors.index.json must include every indexed shard; one
+# leftover file is not enough. No network.
 hub_repo_has_weights() {
   local repo_id="${1:-}"
   local cache folder snap nullglob_state path
@@ -679,6 +681,13 @@ hub_repo_has_weights() {
   nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
   shopt -s nullglob
   for snap in "${folder}/snapshots"/*/; do
+    if [[ -f "${snap}model.safetensors.index.json" ]]; then
+      if hub_snapshot_weights_complete "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
+      continue
+    fi
     if [[ -f "${snap}model_index.json" || -f "${snap}config.json" ]]; then
       while IFS= read -r path; do
         [[ -n "${path}" ]] || continue
@@ -693,8 +702,9 @@ hub_repo_has_weights() {
   return 1
 }
 
-# MLX snapshot (config.json + weight shards) or a diffusers tree with weights.
-# An incomplete blob means not cached. Does not contact the network.
+# MLX snapshot (config.json + every indexed weight shard) or a diffusers tree
+# with weights. An incomplete blob or a partial shard index is not cached.
+# Does not contact the network.
 media_repo_cached() {
   local repo_id="${1:-}"
   if hub_repo_download_incomplete "${repo_id}"; then
@@ -2323,7 +2333,7 @@ Generate:         ${generate_label}
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
 cached is yes for Wan when models/video/${MLX_VIDEO_WAN_MODEL_NAME} has config.json,
 model.safetensors, t5_encoder.safetensors, and vae.safetensors, and for LTX when
-the Hugging Face cache holds that repo. Nothing is downloaded.
+the Hugging Face cache holds config.json and every weight shard. Nothing is downloaded.
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'
