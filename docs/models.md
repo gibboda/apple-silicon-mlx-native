@@ -57,7 +57,7 @@ Figures are **approximate** and intended for planning. Measure on your machine b
 | `mlx-community/Llama-3.2-1B-Instruct-4bit` | 4-bit | ~0.8–1.2 GB | Low | constrained+ | 2k–4k | Very low | Ultra-light prompts, classification |
 | `mlx-community/Phi-3.5-mini-instruct-4bit` | 4-bit | ~2.2–2.8 GB | Low–moderate | constrained+ | 1k–2k on 8 GB | Low–moderate | Compact instruct / coding assist |
 | `mlx-community/Qwen2.5-3B-Instruct-4bit` | 4-bit | ~2.0–2.6 GB | Low–moderate | constrained+ | 1k–2k on 8 GB | Low | Multilingual / general chat |
-| `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4-bit | ~4.0–5.0 GB | Moderate | standard+ on **fast cooled** chips (tight on 8 GB / 16 GB slow/moderate) | ≤1k on 8 GB only if measured; 2k–4k on 16 GB+ | **High on 8 GB**; tight on 16 GB M1–M4 base | Default on 16 GB M5-class; optional on 16 GB slow/moderate |
+| `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4-bit | ~4.0–5.0 GB | Moderate | standard+ on **fast cooled** chips ( **`poor` on 8 GB** in `make list`; tight on 16 GB slow/moderate) | ≤1k on 8 GB only if measured; 2k–4k on 16 GB+ | **High on 8 GB**; tight on 16 GB M1–M4 base | Default on 16 GB M5-class; optional on 16 GB slow/moderate |
 | `mlx-community/Meta-Llama-3.1-8B-Instruct-4bit` | 4-bit | ~4.5–5.5 GB | Moderate | standard+ fast cooled | 2k–4k on 16 GB+ | High on 8 GB; moderate on 16 GB | General 8B workloads |
 | `mlx-community/Qwen2.5-14B-Instruct-4bit` | 4-bit | ~8–10 GB | Moderate–high | high+ **very_fast** (Max 32 GB) | 2k–8k | High below 24 GB | Heavier reasoning / coding |
 | `mlx-community/Qwen2.5-32B-Instruct-4bit` | 4-bit | ~18–20 GB | High | workstation+ / large | 2k–8k | Severe below 36 GB | Large single-model server |
@@ -82,6 +82,12 @@ Print a fresh profile without writing `models.env`:
 ```bash
 make recommend
 scripts/detect-apple-silicon.sh --json
+```
+
+List every **text LLM** in the catalog against this Mac (not image or video models; those stay on `make recommend` / `--json`). `default` is the composed choice. `fits` is a reasonable alternative. `tight` can run only if you measure it. `poor` is past the RAM fence (for example 7B on 8 GB). `cached` is `yes` when the Hugging Face cache holds `config.json` and every weight file as a regular file (`model*.safetensors`, or every shard listed in `model.safetensors.index.json`). Nothing is downloaded.
+
+```bash
+make list
 ```
 
 ## 8 GB limitations

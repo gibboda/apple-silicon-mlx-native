@@ -8,6 +8,7 @@
 #   scripts/detect-apple-silicon.sh --json
 #   scripts/detect-apple-silicon.sh --env
 #   scripts/detect-apple-silicon.sh --recommend
+#   scripts/detect-apple-silicon.sh --list
 #   scripts/detect-apple-silicon.sh --quiet   # exit 0 on Darwin arm64, 1 otherwise
 #
 # shellcheck source=scripts/lib/common.sh
@@ -22,7 +23,7 @@ MODE="human"
 
 usage() {
   cat <<'EOF'
-Usage: detect-apple-silicon.sh [--human|--json|--env|--recommend|--quiet] [-h|--help]
+Usage: detect-apple-silicon.sh [--human|--json|--env|--recommend|--list|--quiet] [-h|--help]
 
 Detect Apple Silicon hardware characteristics for MLX workstation defaults.
 
@@ -31,6 +32,7 @@ Detect Apple Silicon hardware characteristics for MLX workstation defaults.
   --env         KEY=value lines suitable for eval/sourcing
                 (MLX_TIER_ID is policy; MLX_PHYSICAL_TIER_ID is detected RAM)
   --recommend   Print a fresh composed profile only (does not write models.env)
+  --list        List catalog text models with fit for this Mac (does not download)
   --quiet       Exit 0 if Darwin arm64, else exit 1 (no output)
   -h            Show this help
 
@@ -56,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --json)  MODE="json"; shift ;;
     --env)   MODE="env"; shift ;;
     --recommend) MODE="recommend"; shift ;;
+    --list) MODE="list"; shift ;;
     --quiet) MODE="quiet"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown argument: $1" ;;
@@ -86,6 +89,11 @@ case "${MODE}" in
     ;;
   recommend)
     print_composed_profile
+    ;;
+  list)
+    # Flag parser consumes all args; no positional passthrough to the list renderer.
+    # shellcheck disable=SC2119
+    print_recommended_model_list
     ;;
   json)
     DETECT_ARCH="${MLX_ARCH}" \

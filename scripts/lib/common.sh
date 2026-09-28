@@ -565,6 +565,78 @@ huggingface_hub_cache_dir() {
   printf '%s\n' "${HF_HUB_CACHE:-${hf_home}/hub}"
 }
 
+# Return 0 when snap holds config.json and loadable weight files (regular
+# files only). Sharded repos must have every shard from weight_map. This
+# does not contact the network.
+hub_snapshot_weights_complete() {
+  local snap="${1%/}/"
+  local index="${snap}model.safetensors.index.json"
+  local nullglob_state shard w
+  local -a shards weights
+  [[ -f "${snap}config.json" ]] || return 1
+  if [[ -f "${index}" ]]; then
+    mapfile -t shards < <(python3 - "${index}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    weight_map = json.load(fh).get("weight_map") or {}
+seen = sorted({name for name in weight_map.values() if name})
+for name in seen:
+    print(name)
+PY
+)
+    if ((${#shards[@]} == 0)); then
+      return 1
+    fi
+    for shard in "${shards[@]}"; do
+      [[ -f "${snap}${shard}" ]] || return 1
+    done
+    return 0
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${snap}model"*.safetensors )
+  if [[ -n "${nullglob_state}" ]]; then
+    eval "${nullglob_state}"
+  else
+    shopt -u nullglob
+  fi
+  ((${#weights[@]} == 0)) && return 1
+  for w in "${weights[@]}"; do
+    [[ -f "${w}" ]] || return 1
+  done
+  return 0
+}
+
+# yes when the hub cache holds a complete MLX snapshot for this repo id.
+model_weights_cached() {
+  local repo_id="${1:-}"
+  local cache folder snap nullglob_state
+  [[ -n "${repo_id}" ]] || return 1
+  cache="$(huggingface_hub_cache_dir)"
+  folder="${cache}/models--${repo_id//\//--}"
+  [[ -d "${folder}/snapshots" ]] || return 1
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  for snap in "${folder}/snapshots"/*/; do
+    if hub_snapshot_weights_complete "${snap}"; then
+      if [[ -n "${nullglob_state}" ]]; then
+        eval "${nullglob_state}"
+      else
+        shopt -u nullglob
+      fi
+      return 0
+    fi
+  done
+  if [[ -n "${nullglob_state}" ]]; then
+    eval "${nullglob_state}"
+  else
+    shopt -u nullglob
+  fi
+  return 1
+}
+
 # mflux downloads a preset name or Hugging Face repo into the hub cache.
 # A local checkpoint is an absolute path, a ./ ../ or ~ path, or any path
 # that already exists. Those generates write a PNG and do not download weights.
@@ -1497,6 +1569,151 @@ recommended_model_for_profile() {
       recommended_model_for_tier "${tier}"
       ;;
   esac
+}
+
+# Catalog rows from docs/models.md. id|approx weights|use
+# Fit labels are computed for the composed profile, not stored here.
+model_catalog_rows() {
+  cat <<'EOF'
+mlx-community/Llama-3.2-3B-Instruct-4bit|~2.0-2.5 GB|Default chat on 8 GB and slow or moderate 16 GB
+mlx-community/Llama-3.2-1B-Instruct-4bit|~0.8-1.2 GB|Ultra-light prompts and classification
+mlx-community/Phi-3.5-mini-instruct-4bit|~2.2-2.8 GB|Compact instruct and coding assist
+mlx-community/Qwen2.5-3B-Instruct-4bit|~2.0-2.6 GB|Multilingual and general chat
+mlx-community/Mistral-7B-Instruct-v0.3-4bit|~4.0-5.0 GB|Default on fast cooled 16 GB; high swap risk on 8 GB
+mlx-community/Meta-Llama-3.1-8B-Instruct-4bit|~4.5-5.5 GB|General 8B work on fast cooled 16 GB and up
+mlx-community/Qwen2.5-14B-Instruct-4bit|~8-10 GB|Heavier reasoning on very_fast 24 GB and up
+mlx-community/Qwen2.5-32B-Instruct-4bit|~18-20 GB|Large single-model server at 36 GB and up
+EOF
+}
+
+# 7B and 8B: poor on <=8 GB, tight on a 16 GB Air or slow/moderate chip, fits when cooled and fast.
+_model_list_fit_7b_8b() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  case "${tier}" in
+    constrained|"") printf '%s\n' poor; return ;;
+  esac
+  if [[ "${thermal}" == "fanless" ]]; then
+    if [[ "${tier}" == "standard" ]]; then
+      printf '%s\n' tight
+    else
+      printf '%s\n' fits
+    fi
+    return
+  fi
+  if [[ "${tier}" == "standard" ]] && ! throughput_at_least "${throughput}" fast; then
+    printf '%s\n' tight
+    return
+  fi
+  printf '%s\n' fits
+}
+
+# default | fits | tight | poor for one catalog id on a composed profile.
+# default always matches recommended_model_for_profile.
+model_list_fit() {
+  local id="${1:-}"
+  local tier="${2:-}"
+  local throughput="${3:-unknown}"
+  local thermal="${4:-}"
+  local default
+  default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
+  if [[ "${id}" == "${default}" ]]; then
+    printf '%s\n' default
+    return
+  fi
+  case "${id}" in
+    mlx-community/Llama-3.2-3B-Instruct-4bit|\
+    mlx-community/Llama-3.2-1B-Instruct-4bit|\
+    mlx-community/Phi-3.5-mini-instruct-4bit|\
+    mlx-community/Qwen2.5-3B-Instruct-4bit)
+      printf '%s\n' fits
+      ;;
+    mlx-community/Mistral-7B-Instruct-v0.3-4bit|\
+    mlx-community/Meta-Llama-3.1-8B-Instruct-4bit)
+      _model_list_fit_7b_8b "${tier}" "${throughput}" "${thermal}"
+      ;;
+    mlx-community/Qwen2.5-14B-Instruct-4bit)
+      case "${tier}" in
+        workstation|large)
+          printf '%s\n' fits
+          ;;
+        high)
+          if [[ "${thermal}" != "fanless" ]] && throughput_at_least "${throughput}" very_fast; then
+            printf '%s\n' fits
+          else
+            printf '%s\n' tight
+          fi
+          ;;
+        *)
+          printf '%s\n' poor
+          ;;
+      esac
+      ;;
+    mlx-community/Qwen2.5-32B-Instruct-4bit)
+      case "${tier}" in
+        workstation|large) printf '%s\n' fits ;;
+        *) printf '%s\n' poor ;;
+      esac
+      ;;
+    *)
+      printf '%s\n' poor
+      ;;
+  esac
+}
+
+# Human list for this Mac. Args override the composed profile so tests can
+# pass a fixture without sysctl. Empty args use the loaded MLX_* policy.
+print_recommended_model_list() {
+  local tier="${1:-${MLX_TIER_ID:-}}"
+  local throughput="${2:-${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-unknown}}}"
+  local thermal="${3:-${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}}"
+  local chip="${4:-${MLX_CHIP:-unknown}}"
+  local mem_gib="${5:-${MLX_MEM_GIB:-?}}"
+  local context family sku physical chip_family_label
+  local default row id weights use fit cached
+  if [[ -n "${6:-}" ]]; then
+    context="${6}"
+  else
+    context="$(recommended_context_for_profile "${tier}" "${throughput}" "${thermal}")"
+  fi
+  family="${7:-${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-?}}}"
+  sku="${8:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
+  physical="${9:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
+  default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
+  chip_family_label="Chip family/SKU:"
+  if [[ -n "${OVERRIDE_MEMORY_TIER:-}" || -n "${OVERRIDE_CHIP_FAMILY:-}" || -n "${OVERRIDE_CHIP_SKU:-}" \
+    || -n "${OVERRIDE_GPU_CORES:-}" || -n "${OVERRIDE_THERMAL_CLASS:-}" ]]; then
+    chip_family_label="Chip family/SKU (policy):"
+  fi
+  cat <<EOF
+Apple chip:       ${chip}
+${chip_family_label}  ${family} ${sku}
+Memory:           ${mem_gib} GiB
+Memory tier:      ${tier:-unknown} (physical ${physical})
+Thermal class:    ${thermal:-unknown}
+Throughput class: ${throughput:-unknown}
+Default model:    ${default}
+Default context:  ${context}
+
+Weights are not total unified memory. KV cache, runtime, and macOS sit on top.
+fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
+cached is yes when that repo has config.json and every weight file on disk
+(including all shards listed in model.safetensors.index.json when present).
+
+EOF
+  printf 'fit\tcached\tmodel\tweights\tuse\n'
+  while IFS= read -r row; do
+    [[ -z "${row}" || "${row}" == \#* ]] && continue
+    IFS='|' read -r id weights use <<<"${row}"
+    fit="$(model_list_fit "${id}" "${tier}" "${throughput}" "${thermal}")"
+    cached=no
+    if model_weights_cached "${id}"; then
+      cached=yes
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "${fit}" "${cached}" "${id}" "${weights}" "${use}"
+  done < <(model_catalog_rows)
+  printf '\nOne model at a time: scripts/serve-mlx.sh --model MODEL\n'
 }
 
 # Fanless Airs keep the conservative 2k context even on later chips.

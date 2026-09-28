@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `make list` (`detect-apple-silicon.sh --list`) prints this Mac's chip, RAM tier, and composed default, then labels each catalog **text** model `default`, `fits`, `tight`, or `poor`, and `cached` `yes` or `no` when the Hugging Face cache holds `config.json` and every on-disk weight shard for that repo. It does not download weights or write `config/models.env`. Image and video defaults remain on `make recommend` only
+
+### Changed
+
+- Docs and help text describe `make list` as the full text catalog with fit labels (including `poor`), not only models that fit. The models matrix notes that 7B is `poor` on 8 GB in `make list`, matching the RAM fence
+
 ## [0.2.8] - 2026-09-27
 
 ### Fixed
