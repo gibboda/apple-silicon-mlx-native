@@ -1670,18 +1670,25 @@ print_recommended_model_list() {
   local thermal="${3:-${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}}"
   local chip="${4:-${MLX_CHIP:-unknown}}"
   local mem_gib="${5:-${MLX_MEM_GIB:-?}}"
-  local context="${6:-${MLX_RECOMMENDED_CONTEXT:-}}"
-  local family="${7:-${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-?}}}"
-  local sku="${8:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
-  local physical="${9:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
+  local context family sku physical chip_family_label
   local default row id weights use fit cached
-  default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
-  if [[ -z "${context}" ]]; then
+  if [[ -n "${6:-}" ]]; then
+    context="${6}"
+  else
     context="$(recommended_context_for_profile "${tier}" "${throughput}" "${thermal}")"
+  fi
+  family="${7:-${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-?}}}"
+  sku="${8:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
+  physical="${9:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
+  default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
+  chip_family_label="Chip family/SKU:"
+  if [[ -n "${OVERRIDE_MEMORY_TIER:-}" || -n "${OVERRIDE_CHIP_FAMILY:-}" || -n "${OVERRIDE_CHIP_SKU:-}" \
+    || -n "${OVERRIDE_GPU_CORES:-}" || -n "${OVERRIDE_THERMAL_CLASS:-}" ]]; then
+    chip_family_label="Chip family/SKU (policy):"
   fi
   cat <<EOF
 Apple chip:       ${chip}
-Chip family/SKU:  ${family} ${sku}
+${chip_family_label}  ${family} ${sku}
 Memory:           ${mem_gib} GiB
 Memory tier:      ${tier:-unknown} (physical ${physical})
 Thermal class:    ${thermal:-unknown}

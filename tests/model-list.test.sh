@@ -228,6 +228,17 @@ expect_contains "list names constrained tier" "Memory tier:      constrained (ph
 expect_contains "list names fanless" "Thermal class:    fanless" "${air}"
 expect_contains "list default model" "Default model:    mlx-community/Llama-3.2-3B-Instruct-4bit" "${air}"
 expect_contains "list default context" "Default context:  2048" "${air}"
+policy_air="$(
+  OVERRIDE_MEMORY_TIER=standard \
+    HF_HUB_CACHE="${empty_cache}" \
+    print_recommended_model_list constrained slow fanless "Apple M1" 8 '' 1 base constrained
+)"
+expect_contains "override labels chip family policy" \
+  "Chip family/SKU (policy):" "${policy_air}"
+expect_contains "list composes default context not models.env" \
+  "Default context:  2048" \
+  "$(MLX_RECOMMENDED_CONTEXT=8192 HF_HUB_CACHE="${empty_cache}" \
+    print_recommended_model_list constrained slow fanless "Apple M1" 8 '' 1 base constrained)"
 expect_eq "printed 8 GB 7B row is poor" \
   "$(list_column mlx-community/Mistral-7B-Instruct-v0.3-4bit 1 "${air}")" \
   "poor"
