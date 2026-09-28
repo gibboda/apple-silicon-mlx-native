@@ -11,7 +11,7 @@ SCRIPTS := scripts
 # Single-quote a Make value so the recipe shell does not evaluate metacharacters.
 sq = '$(subst ','\'',$(1))'
 
-.PHONY: help detect recommend list install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
+.PHONY: help detect recommend list list-image list-video install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
 
 help: ## Show available targets
 	@printf '%s\n' \
@@ -19,6 +19,8 @@ help: ## Show available targets
 		'make detect    — detect Apple Silicon hardware, chip class, and memory tier' \
 		'make recommend — print composed LLM/image/video defaults (does not write models.env)' \
 		'make list      — list catalog text models with fit for this Mac (does not download)' \
+		'make list-image — list catalog image models with fit for this Mac (does not download)' \
+		'make list-video — list catalog video models with fit for this Mac (does not download)' \
 		'make install   — initial MLX-native bootstrap (Homebrew + venv + packages)' \
 		'make rebuild   — recreate .venv and reinstall MLX packages' \
 		'make validate  — validate mlx / mlx-lm and run a fast computation check' \
@@ -44,6 +46,12 @@ recommend: ## Print composed defaults for this Mac (does not write models.env)
 
 list: ## List catalog text models with fit for this Mac (does not download)
 	@$(SCRIPTS)/detect-apple-silicon.sh --list
+
+list-image: ## List catalog image models with fit for this Mac (does not download)
+	@$(SCRIPTS)/detect-apple-silicon.sh --list-image
+
+list-video: ## List catalog video models with fit for this Mac (does not download)
+	@$(SCRIPTS)/detect-apple-silicon.sh --list-video
 
 install: ## Bootstrap MLX-native environment
 	@$(SCRIPTS)/initial-build-mlx-native-media.sh

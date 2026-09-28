@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `make list` (`detect-apple-silicon.sh --list`) prints this Mac's chip, RAM tier, and composed default, then labels each catalog **text** model `default`, `fits`, `tight`, or `poor`, and `cached` `yes` or `no` when the Hugging Face cache holds `config.json` and every on-disk weight shard for that repo. It does not download weights or write `config/models.env`. Image and video defaults remain on `make recommend` only
+- `make list` (`detect-apple-silicon.sh --list`) prints this Mac's chip, RAM tier, and composed default, then labels each catalog **text** model `default`, `fits`, `tight`, or `poor`, and `cached` `yes` or `no` when the Hugging Face cache holds `config.json` and every on-disk weight shard for that repo. It does not download weights or write `config/models.env`
+- `make list-image` and `make list-video` (`--list-image`, `--list-video`) do the same for the image and video catalogs. `default` is the composed checkpoint. Image `cached` is the preset's upstream Hugging Face repo (a `model_index.json` or `config.json` plus a safetensors file, and no incomplete blob). Wan `cached` is the converted `models/video/` directory. LTX `cached` is that Hugging Face repo. Nothing is downloaded and `config/models.env` is not written
 
 ### Changed
 

@@ -101,6 +101,12 @@ OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
 
 `--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mflux flags go after `--` (e.g. `GENERATE_IMAGE_ARGS='-- --vae-tiling'`). `GENERATE_IMAGE_ARGS` is split on whitespace and is not a shell command, so `;`, pipes, and quotes stay literal flag text. On constrained and standard memory tiers (and fanless), the generate wrapper adds `--vae-tiling` automatically unless you already pass it. Custom `--output` paths must resolve under `MLX_WORKSPACE`. PNGs land in `outputs/images/` (gitignored).
 
+List the image catalog against this Mac. `default` is the composed checkpoint (`flux2-klein-4b` or `z-image-turbo`). `fits` is a reasonable alternative. `tight` means measure first (for example `z-image-turbo` on 16–18 GB, or on a 24–32 GB Air). `poor` is past the RAM fence (`z-image-turbo` and `schnell` on 8 GB). `cached` is `yes` when the Hugging Face cache holds that preset's upstream repo (`model_index.json` or `config.json`, a safetensors file, and no incomplete blob). Nothing is downloaded.
+
+```bash
+make list-image
+```
+
 Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current `mflux` still depends on `torch` for checkpoint loading (`safetensors.torch`); it does not use PyTorch/MPS to denoise. This toolkit does not install Diffusers+MPS image stacks.
 
 ---
@@ -178,6 +184,12 @@ OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
 ```
 
 `--dump-plan` uses detected RAM/chip when `sysctl` works, honors `OVERRIDE_*` when set, and falls back to constrained / RAM-only when detection is unavailable (Linux CI). Extra mlx-video flags go after `--` (e.g. `GENERATE_VIDEO_ARGS='-- --scheduler unipc'`). `GENERATE_VIDEO_ARGS` is split on whitespace and is not a shell command. Custom `--output` and `--image` paths must exist (for `--image`) and resolve under `MLX_WORKSPACE`. MP4s land in `outputs/videos/` (gitignored).
+
+List the video catalog against this Mac. `default` is the composed checkpoint (Wan until cooled 36 GB, then LTX-2 distilled). `fits` is a reasonable alternative (Wan, once LTX is the default). `tight` means measure first (LTX on a fanless workstation, where the composed clip stays the short Wan profile). `poor` is past the RAM fence (LTX below 36 GB). On 8 GB, 16 GB slow/moderate base chips, and fanless Airs the header says generate is refused unless `--force`, and Wan is still `default` because that is the composed checkpoint. `cached` is `yes` for Wan when `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`, and for LTX when the Hugging Face cache holds `prince-canuma/LTX-2-distilled`. Nothing is downloaded.
+
+```bash
+make list-video
+```
 
 Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.19.1`).
 

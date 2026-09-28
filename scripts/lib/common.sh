@@ -637,6 +637,75 @@ model_weights_cached() {
   return 1
 }
 
+# Restore a `shopt -p nullglob` snapshot. Empty means nullglob was unset.
+_restore_nullglob() {
+  local state="${1:-}"
+  if [[ -n "${state}" ]]; then
+    eval "${state}"
+  else
+    shopt -u nullglob
+  fi
+}
+
+# True when this hub repo still has an incomplete blob (download in progress).
+hub_repo_download_incomplete() {
+  local repo_id="${1:-}"
+  local cache folder nullglob_state
+  local -a incomplete
+  [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
+  cache="$(huggingface_hub_cache_dir)"
+  folder="${cache}/models--${repo_id//\//--}"
+  [[ -d "${folder}/blobs" ]] || return 1
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  incomplete=( "${folder}/blobs/"*.incomplete )
+  _restore_nullglob "${nullglob_state}"
+  ((${#incomplete[@]} > 0))
+}
+
+# True when a snapshot has model_index.json or config.json plus at least one
+# real safetensors file. Diffusers trees (mflux presets) keep weights in
+# subfolders, so this is broader than model_weights_cached. No network.
+hub_repo_has_weights() {
+  local repo_id="${1:-}"
+  local cache folder snap nullglob_state path
+  [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
+  if hub_repo_download_incomplete "${repo_id}"; then
+    return 1
+  fi
+  cache="$(huggingface_hub_cache_dir)"
+  folder="${cache}/models--${repo_id//\//--}"
+  [[ -d "${folder}/snapshots" ]] || return 1
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  for snap in "${folder}/snapshots"/*/; do
+    if [[ -f "${snap}model_index.json" || -f "${snap}config.json" ]]; then
+      while IFS= read -r path; do
+        [[ -n "${path}" ]] || continue
+        if [[ -f "${path}" ]]; then
+          _restore_nullglob "${nullglob_state}"
+          return 0
+        fi
+      done < <(find "${snap}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
+    fi
+  done
+  _restore_nullglob "${nullglob_state}"
+  return 1
+}
+
+# MLX snapshot (config.json + weight shards) or a diffusers tree with weights.
+# An incomplete blob means not cached. Does not contact the network.
+media_repo_cached() {
+  local repo_id="${1:-}"
+  if hub_repo_download_incomplete "${repo_id}"; then
+    return 1
+  fi
+  if model_weights_cached "${repo_id}"; then
+    return 0
+  fi
+  hub_repo_has_weights "${repo_id}"
+}
+
 # mflux downloads a preset name or Hugging Face repo into the hub cache.
 # A local checkpoint is an absolute path, a ./ ../ or ~ path, or any path
 # that already exists. Those generates write a PNG and do not download weights.
@@ -1977,4 +2046,297 @@ wan_model_dir_ready() {
   local dir="${1:-}"
   [[ -n "${dir}" && -d "${dir}" ]] || return 1
   [[ -f "${dir}/config.json" && -f "${dir}/model.safetensors" && -f "${dir}/t5_encoder.safetensors" && -f "${dir}/vae.safetensors" ]]
+}
+
+# mflux preset id for a generate --family. Empty model in an image profile
+# means this checkpoint (z-image-turbo's composed profile leaves model blank).
+default_image_model_for_family() {
+  case "$1" in
+    flux2) echo "flux2-klein-4b" ;;
+    z-image-turbo) echo "z-image-turbo" ;;
+    schnell) echo "schnell" ;;
+    *) echo "" ;;
+  esac
+}
+
+model_list_chip_family_label() {
+  if [[ -n "${OVERRIDE_MEMORY_TIER:-}" || -n "${OVERRIDE_CHIP_FAMILY:-}" || -n "${OVERRIDE_CHIP_SKU:-}" \
+    || -n "${OVERRIDE_GPU_CORES:-}" || -n "${OVERRIDE_THERMAL_CLASS:-}" ]]; then
+    printf '%s\n' "Chip family/SKU (policy):"
+  else
+    printf '%s\n' "Chip family/SKU:"
+  fi
+}
+
+# Catalog rows for make list-image. id|family|upstream repo|weights|use
+# Upstream repos are what mflux downloads for that preset. Fit is computed.
+image_catalog_rows() {
+  cat <<'EOF'
+flux2-klein-4b|flux2|black-forest-labs/FLUX.2-klein-4B|4B, 4-bit or 8-bit|Floor image model; default through 18 GB and on every fanless Air
+z-image-turbo|z-image-turbo|Tongyi-MAI/Z-Image-Turbo|8-bit, wants 24 GB+|Quality default on cooled 24 GB and up
+schnell|schnell|black-forest-labs/FLUX.1-schnell|FLUX.1 schnell|Optional FLUX.1 path; not a composed default
+EOF
+}
+
+# Checkpoint id from the composed image profile (empty model → family default).
+image_list_default_id() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  local chip_family="${4:-0}"
+  local profile fam model
+  profile="$(recommended_image_profile_for_profile "${tier}" "${throughput}" "${thermal}" "${chip_family}")"
+  IFS='|' read -r fam model _ <<<"${profile}"
+  if [[ -z "${model}" ]]; then
+    model="$(default_image_model_for_family "${fam}")"
+  fi
+  printf '%s\n' "${model}"
+}
+
+# default | fits | tight | poor. default matches image_list_default_id.
+# z-image-turbo is the >=24 GB cooled default. Below that it is tight on
+# 16-18 GB and on a 24-32 GB Air, and poor on <=8 GB. schnell is never default.
+image_list_fit() {
+  local id="${1:-}"
+  local tier="${2:-}"
+  local throughput="${3:-unknown}"
+  local thermal="${4:-}"
+  local chip_family="${5:-0}"
+  local default
+  default="$(image_list_default_id "${tier}" "${throughput}" "${thermal}" "${chip_family}")"
+  if [[ "${id}" == "${default}" ]]; then
+    printf '%s\n' default
+    return
+  fi
+  case "${id}" in
+    flux2-klein-4b)
+      printf '%s\n' fits
+      ;;
+    z-image-turbo)
+      case "${tier}" in
+        constrained|"") printf '%s\n' poor ;;
+        standard|high) printf '%s\n' tight ;;
+        workstation|large) printf '%s\n' fits ;;
+        *) printf '%s\n' poor ;;
+      esac
+      ;;
+    schnell)
+      case "${tier}" in
+        constrained|"") printf '%s\n' poor ;;
+        standard) printf '%s\n' tight ;;
+        high|workstation|large) printf '%s\n' fits ;;
+        *) printf '%s\n' poor ;;
+      esac
+      ;;
+    *)
+      printf '%s\n' poor
+      ;;
+  esac
+}
+
+# Human image list. Args override the composed profile so tests skip sysctl.
+print_recommended_image_list() {
+  local tier="${1:-${MLX_TIER_ID:-}}"
+  local throughput="${2:-${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-unknown}}}"
+  local thermal="${3:-${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}}"
+  local chip="${4:-${MLX_CHIP:-unknown}}"
+  local mem_gib="${5:-${MLX_MEM_GIB:-?}}"
+  local chip_family="${6:-${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-?}}}"
+  local sku="${7:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
+  local physical="${8:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
+  local profile fam model quant steps width height low_ram
+  local low_label quant_label chip_family_label row id locator weights use fit cached
+  profile="$(recommended_image_profile_for_profile "${tier}" "${throughput}" "${thermal}" "${chip_family}")"
+  IFS='|' read -r fam model quant steps width height low_ram <<<"${profile}"
+  if [[ -z "${model}" ]]; then
+    model="$(default_image_model_for_family "${fam}")"
+  fi
+  case "${low_ram}" in
+    1) low_label="yes" ;;
+    0) low_label="no" ;;
+    *) low_label="${low_ram:-no}" ;;
+  esac
+  if [[ -n "${quant}" ]]; then
+    quant_label="${quant}-bit"
+  else
+    quant_label="package default"
+  fi
+  chip_family_label="$(model_list_chip_family_label)"
+  cat <<EOF
+Apple chip:       ${chip}
+${chip_family_label}  ${chip_family} ${sku}
+Memory:           ${mem_gib} GiB
+Memory tier:      ${tier:-unknown} (physical ${physical})
+Thermal class:    ${thermal:-unknown}
+Throughput class: ${throughput:-unknown}
+Default image:    ${model}
+Family:           ${fam}
+Quantize:         ${quant_label}
+Size:             ${width}x${height}
+Steps:            ${steps}
+Low RAM:          ${low_label}
+
+fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
+cached is yes when the Hugging Face cache holds that preset's upstream repo
+(model_index.json or config.json, plus a safetensors file, and no incomplete blob).
+Nothing is downloaded.
+
+EOF
+  printf 'fit\tcached\tmodel\tweights\tuse\n'
+  while IFS= read -r row; do
+    [[ -z "${row}" || "${row}" == \#* ]] && continue
+    IFS='|' read -r id _ locator weights use <<<"${row}"
+    fit="$(image_list_fit "${id}" "${tier}" "${throughput}" "${thermal}" "${chip_family}")"
+    cached=no
+    if media_repo_cached "${locator}"; then
+      cached=yes
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "${fit}" "${cached}" "${id}" "${weights}" "${use}"
+  done < <(image_catalog_rows)
+  printf '\nOne image at a time: make image IMAGE_PROMPT="..."\n'
+}
+
+# Catalog rows for make list-video. id|family|locator|weights|use
+# locator is "local" (converted Wan dir) or "hub" (Hugging Face repo id).
+video_catalog_rows() {
+  printf '%s\n' \
+    "${MLX_VIDEO_WAN_MODEL_NAME}|wan21|local|UMT5 encoder ~11 GB|Wan2.1 T2V 1.3B 4-bit; convert once with make prepare-video" \
+    "${MLX_VIDEO_LTX_REPO}|ltx2|hub|distilled, 36 GB+|Quality path on cooled 36 GB and up"
+}
+
+video_list_default_id() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  local chip_family="${4:-0}"
+  local gpu_cores="${5:-0}"
+  local profile fam model
+  profile="$(recommended_video_profile_for_profile "${tier}" "${throughput}" "${thermal}" "${chip_family}" "${gpu_cores}")"
+  IFS='|' read -r fam model _ <<<"${profile}"
+  if [[ -z "${model}" ]]; then
+    model="$(default_video_model_for_family "${fam}")"
+  fi
+  printf '%s\n' "${model}"
+}
+
+# default | fits | tight | poor. default matches video_list_default_id.
+# LTX is the cooled workstation/large default. It is poor below 36 GB.
+# On a fanless workstation the composed clip stays Wan, so LTX is tight.
+# Wan is fits when LTX is the composed default.
+video_list_fit() {
+  local id="${1:-}"
+  local tier="${2:-}"
+  local throughput="${3:-unknown}"
+  local thermal="${4:-}"
+  local chip_family="${5:-0}"
+  local gpu_cores="${6:-0}"
+  local default
+  default="$(video_list_default_id "${tier}" "${throughput}" "${thermal}" "${chip_family}" "${gpu_cores}")"
+  if [[ "${id}" == "${default}" ]]; then
+    printf '%s\n' default
+    return
+  fi
+  case "${id}" in
+    "${MLX_VIDEO_WAN_MODEL_NAME}")
+      printf '%s\n' fits
+      ;;
+    "${MLX_VIDEO_LTX_REPO}")
+      case "${tier}" in
+        workstation|large)
+          if [[ "${thermal}" == "fanless" ]]; then
+            printf '%s\n' tight
+          else
+            printf '%s\n' fits
+          fi
+          ;;
+        *)
+          printf '%s\n' poor
+          ;;
+      esac
+      ;;
+    *)
+      printf '%s\n' poor
+      ;;
+  esac
+}
+
+video_catalog_cached() {
+  local id="${1:-}"
+  local locator="${2:-}"
+  case "${locator}" in
+    local)
+      wan_model_dir_ready "$(default_wan_model_dir)"
+      ;;
+    hub)
+      media_repo_cached "${id}"
+      ;;
+    *)
+      media_repo_cached "${locator}"
+      ;;
+  esac
+}
+
+# Human video list. Args override the composed profile so tests skip sysctl.
+print_recommended_video_list() {
+  local tier="${1:-${MLX_TIER_ID:-}}"
+  local throughput="${2:-${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-unknown}}}"
+  local thermal="${3:-${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}}"
+  local chip="${4:-${MLX_CHIP:-unknown}}"
+  local mem_gib="${5:-${MLX_MEM_GIB:-?}}"
+  local chip_family="${6:-${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-?}}}"
+  local sku="${7:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
+  local physical="${8:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
+  local gpu_cores="${9:-${MLX_POLICY_GPU_CORES:-${MLX_GPU_CORES:-0}}}"
+  local profile fam model width height frames steps _tiling
+  local steps_label generate_label chip_family_label row id locator weights use fit cached
+  [[ "${gpu_cores}" =~ ^[0-9]+$ ]] || gpu_cores=0
+  profile="$(recommended_video_profile_for_profile "${tier}" "${throughput}" "${thermal}" "${chip_family}" "${gpu_cores}")"
+  IFS='|' read -r fam model width height frames steps _tiling <<<"${profile}"
+  if [[ -z "${model}" ]]; then
+    model="$(default_video_model_for_family "${fam}")"
+  fi
+  if [[ -n "${steps}" ]]; then
+    steps_label="${steps}"
+  else
+    steps_label="pipeline default"
+  fi
+  if video_force_required_for_profile "${tier}" "${throughput}" "${thermal}"; then
+    generate_label="refused unless --force (UMT5 ~11 GB)"
+  else
+    generate_label="allowed"
+  fi
+  chip_family_label="$(model_list_chip_family_label)"
+  cat <<EOF
+Apple chip:       ${chip}
+${chip_family_label}  ${chip_family} ${sku}
+Memory:           ${mem_gib} GiB
+Memory tier:      ${tier:-unknown} (physical ${physical})
+Thermal class:    ${thermal:-unknown}
+Throughput class: ${throughput:-unknown}
+Default video:    ${model}
+Family:           ${fam}
+Size:             ${width}x${height}
+Frames:           ${frames}
+Steps:            ${steps_label}
+Generate:         ${generate_label}
+
+fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
+cached is yes for Wan when models/video/${MLX_VIDEO_WAN_MODEL_NAME} has config.json,
+model.safetensors, t5_encoder.safetensors, and vae.safetensors, and for LTX when
+the Hugging Face cache holds that repo. Nothing is downloaded.
+
+EOF
+  printf 'fit\tcached\tmodel\tweights\tuse\n'
+  while IFS= read -r row; do
+    [[ -z "${row}" || "${row}" == \#* ]] && continue
+    IFS='|' read -r id _ locator weights use <<<"${row}"
+    fit="$(video_list_fit "${id}" "${tier}" "${throughput}" "${thermal}" "${chip_family}" "${gpu_cores}")"
+    cached=no
+    if video_catalog_cached "${id}" "${locator}"; then
+      cached=yes
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "${fit}" "${cached}" "${id}" "${weights}" "${use}"
+  done < <(video_catalog_rows)
+  printf '\nOne clip at a time: make video VIDEO_PROMPT="..."\n'
+  printf 'Wan convert (once): make prepare-video\n'
 }

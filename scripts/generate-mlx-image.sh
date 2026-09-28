@@ -70,15 +70,6 @@ image_cli_for_family() {
   esac
 }
 
-default_image_model_for_family() {
-  case "$1" in
-    flux2) echo "flux2-klein-4b" ;;
-    z-image-turbo) echo "z-image-turbo" ;;
-    schnell) echo "schnell" ;;
-    *) echo "" ;;
-  esac
-}
-
 # True when model is a known alias of a different family (do not pass it through).
 image_model_conflicts_with_family() {
   local family="$1"
