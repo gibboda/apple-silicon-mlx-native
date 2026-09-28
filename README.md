@@ -132,7 +132,7 @@ Checks native arm64 Python, `mlx` / `mlx-lm` imports, versions, basic array comp
 ```bash
 make detect
 make recommend          # composed LLM/image/video defaults; does not write models.env
-make list               # catalog text models that fit this Mac; does not download
+make list               # catalog text models with fit for this Mac; does not download
 scripts/detect-apple-silicon.sh --json
 scripts/detect-apple-silicon.sh --env
 ```
@@ -291,7 +291,7 @@ apple-silicon-mlx-native/
 | `make help` | Describe commands |
 | `make detect` | Hardware detection (chip + RAM) |
 | `make recommend` | Print composed defaults (does not write `models.env`) |
-| `make list` | List catalog text models that fit this Mac (does not download) |
+| `make list` | List catalog text models with fit for this Mac (text LLM catalog only; image/video on `make recommend`) |
 | `make install` | Initial bootstrap |
 | `make rebuild` | Recreate `.venv` |
 | `make validate` | MLX validation |

@@ -18,7 +18,7 @@ help: ## Show available targets
 		'make help      — show this help' \
 		'make detect    — detect Apple Silicon hardware, chip class, and memory tier' \
 		'make recommend — print composed LLM/image/video defaults (does not write models.env)' \
-		'make list      — list text models that fit this Mac (does not download)' \
+		'make list      — list catalog text models with fit for this Mac (does not download)' \
 		'make install   — initial MLX-native bootstrap (Homebrew + venv + packages)' \
 		'make rebuild   — recreate .venv and reinstall MLX packages' \
 		'make validate  — validate mlx / mlx-lm and run a fast computation check' \
@@ -42,7 +42,7 @@ detect: ## Detect Apple Silicon hardware
 recommend: ## Print composed defaults for this Mac (does not write models.env)
 	@$(SCRIPTS)/detect-apple-silicon.sh --recommend
 
-list: ## List text models that fit this Mac (does not download)
+list: ## List catalog text models with fit for this Mac (does not download)
 	@$(SCRIPTS)/detect-apple-silicon.sh --list
 
 install: ## Bootstrap MLX-native environment

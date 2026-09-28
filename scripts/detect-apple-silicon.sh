@@ -32,7 +32,7 @@ Detect Apple Silicon hardware characteristics for MLX workstation defaults.
   --env         KEY=value lines suitable for eval/sourcing
                 (MLX_TIER_ID is policy; MLX_PHYSICAL_TIER_ID is detected RAM)
   --recommend   Print a fresh composed profile only (does not write models.env)
-  --list        List catalog text models that fit this Mac (does not download)
+  --list        List catalog text models with fit for this Mac (does not download)
   --quiet       Exit 0 if Darwin arm64, else exit 1 (no output)
   -h            Show this help
 
@@ -91,7 +91,9 @@ case "${MODE}" in
     print_composed_profile
     ;;
   list)
-    print_recommended_model_list "$@"
+    # Flag parser consumes all args; no positional passthrough to the list renderer.
+    # shellcheck disable=SC2119
+    print_recommended_model_list
     ;;
   json)
     DETECT_ARCH="${MLX_ARCH}" \
