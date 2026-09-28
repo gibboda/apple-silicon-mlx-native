@@ -565,27 +565,75 @@ huggingface_hub_cache_dir() {
   printf '%s\n' "${HF_HUB_CACHE:-${hf_home}/hub}"
 }
 
+# Return 0 when snap holds config.json and loadable weight files (regular
+# files only). Sharded repos must have every shard from weight_map. This
+# does not contact the network.
+hub_snapshot_weights_complete() {
+  local snap="${1%/}/"
+  local index="${snap}model.safetensors.index.json"
+  local nullglob_state shard w
+  local -a shards weights
+  [[ -f "${snap}config.json" ]] || return 1
+  if [[ -f "${index}" ]]; then
+    mapfile -t shards < <(python3 - "${index}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    weight_map = json.load(fh).get("weight_map") or {}
+seen = sorted({name for name in weight_map.values() if name})
+for name in seen:
+    print(name)
+PY
+)
+    if ((${#shards[@]} == 0)); then
+      return 1
+    fi
+    for shard in "${shards[@]}"; do
+      [[ -f "${snap}${shard}" ]] || return 1
+    done
+    return 0
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${snap}model"*.safetensors )
+  if [[ -n "${nullglob_state}" ]]; then
+    eval "${nullglob_state}"
+  else
+    shopt -u nullglob
+  fi
+  ((${#weights[@]} == 0)) && return 1
+  for w in "${weights[@]}"; do
+    [[ -f "${w}" ]] || return 1
+  done
+  return 0
+}
+
 # yes when the hub cache holds a complete MLX snapshot for this repo id.
-# config.json plus at least one model*.safetensors file. An incomplete
-# download does not count. This does not contact the network.
 model_weights_cached() {
   local repo_id="${1:-}"
-  local cache folder snap
-  local -a weights
+  local cache folder snap nullglob_state
   [[ -n "${repo_id}" ]] || return 1
   cache="$(huggingface_hub_cache_dir)"
   folder="${cache}/models--${repo_id//\//--}"
   [[ -d "${folder}/snapshots" ]] || return 1
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
   shopt -s nullglob
   for snap in "${folder}/snapshots"/*/; do
-    [[ -f "${snap}config.json" ]] || continue
-    weights=( "${snap}model"*.safetensors )
-    if (( ${#weights[@]} > 0 )); then
-      shopt -u nullglob
+    if hub_snapshot_weights_complete "${snap}"; then
+      if [[ -n "${nullglob_state}" ]]; then
+        eval "${nullglob_state}"
+      else
+        shopt -u nullglob
+      fi
       return 0
     fi
   done
-  shopt -u nullglob
+  if [[ -n "${nullglob_state}" ]]; then
+    eval "${nullglob_state}"
+  else
+    shopt -u nullglob
+  fi
   return 1
 }
 
@@ -1643,7 +1691,8 @@ Default context:  ${context}
 
 Weights are not total unified memory. KV cache, runtime, and macOS sit on top.
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
-cached is yes when that repo's weights are already in the Hugging Face cache.
+cached is yes when that repo has config.json and every weight file on disk
+(including all shards listed in model.safetensors.index.json when present).
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'

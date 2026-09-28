@@ -165,6 +165,35 @@ expect_eq "incomplete snapshot is not cached" \
 expect_eq "missing repo is not cached" \
   "$(list_column mlx-community/Mistral-7B-Instruct-v0.3-4bit 2 "${cached_list}")" \
   "no"
+
+broken="${cache_dir}/models--mlx-community--Meta-Llama-3.1-8B-Instruct-4bit/snapshots/broken"
+sharded="${cache_dir}/models--mlx-community--Qwen2.5-14B-Instruct-4bit/snapshots/sharded"
+partial_sharded="${cache_dir}/models--mlx-community--Qwen2.5-32B-Instruct-4bit/snapshots/partial"
+mkdir -p "${broken}" "${sharded}" "${partial_sharded}"
+printf '{}\n' >"${broken}/config.json"
+ln -sf /nonexistent "${broken}/model.safetensors"
+printf '{}\n' >"${sharded}/config.json"
+cat >"${sharded}/model.safetensors.index.json" <<'EOF'
+{"weight_map":{"layer.a":"model-00001-of-00002.safetensors","layer.b":"model-00002-of-00002.safetensors"}}
+EOF
+printf 'shard1\n' >"${sharded}/model-00001-of-00002.safetensors"
+printf 'shard2\n' >"${sharded}/model-00002-of-00002.safetensors"
+printf '{}\n' >"${partial_sharded}/config.json"
+cat >"${partial_sharded}/model.safetensors.index.json" <<'EOF'
+{"weight_map":{"layer.a":"model-00001-of-00002.safetensors","layer.b":"model-00002-of-00002.safetensors"}}
+EOF
+printf 'shard1\n' >"${partial_sharded}/model-00001-of-00002.safetensors"
+ln -sf /nonexistent "${partial_sharded}/model-00002-of-00002.safetensors"
+
+expect_eq "dangling weight symlink is not cached" \
+  "$(HF_HUB_CACHE="${cache_dir}" model_weights_cached mlx-community/Meta-Llama-3.1-8B-Instruct-4bit && echo yes || echo no)" \
+  "no"
+expect_eq "all index shards present is cached" \
+  "$(HF_HUB_CACHE="${cache_dir}" model_weights_cached mlx-community/Qwen2.5-14B-Instruct-4bit && echo yes || echo no)" \
+  "yes"
+expect_eq "missing index shard is not cached" \
+  "$(HF_HUB_CACHE="${cache_dir}" model_weights_cached mlx-community/Qwen2.5-32B-Instruct-4bit && echo yes || echo no)" \
+  "no"
 rm -rf "${empty_cache}" "${cache_dir}"
 
 help_out="$("${ROOT}/scripts/detect-apple-silicon.sh" --help)"
