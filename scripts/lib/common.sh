@@ -1499,6 +1499,138 @@ recommended_model_for_profile() {
   esac
 }
 
+# Catalog rows from docs/models.md. id|approx weights|use
+# Fit labels are computed for the composed profile, not stored here.
+model_catalog_rows() {
+  cat <<'EOF'
+mlx-community/Llama-3.2-3B-Instruct-4bit|~2.0-2.5 GB|Default chat on 8 GB and slow or moderate 16 GB
+mlx-community/Llama-3.2-1B-Instruct-4bit|~0.8-1.2 GB|Ultra-light prompts and classification
+mlx-community/Phi-3.5-mini-instruct-4bit|~2.2-2.8 GB|Compact instruct and coding assist
+mlx-community/Qwen2.5-3B-Instruct-4bit|~2.0-2.6 GB|Multilingual and general chat
+mlx-community/Mistral-7B-Instruct-v0.3-4bit|~4.0-5.0 GB|Default on fast cooled 16 GB; high swap risk on 8 GB
+mlx-community/Meta-Llama-3.1-8B-Instruct-4bit|~4.5-5.5 GB|General 8B work on fast cooled 16 GB and up
+mlx-community/Qwen2.5-14B-Instruct-4bit|~8-10 GB|Heavier reasoning on very_fast 24 GB and up
+mlx-community/Qwen2.5-32B-Instruct-4bit|~18-20 GB|Large single-model server at 36 GB and up
+EOF
+}
+
+# 7B and 8B: poor on <=8 GB, tight on a 16 GB Air or slow/moderate chip, fits when cooled and fast.
+_model_list_fit_7b_8b() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  case "${tier}" in
+    constrained|"") printf '%s\n' poor; return ;;
+  esac
+  if [[ "${thermal}" == "fanless" ]]; then
+    if [[ "${tier}" == "standard" ]]; then
+      printf '%s\n' tight
+    else
+      printf '%s\n' fits
+    fi
+    return
+  fi
+  if [[ "${tier}" == "standard" ]] && ! throughput_at_least "${throughput}" fast; then
+    printf '%s\n' tight
+    return
+  fi
+  printf '%s\n' fits
+}
+
+# default | fits | tight | poor for one catalog id on a composed profile.
+# default always matches recommended_model_for_profile.
+model_list_fit() {
+  local id="${1:-}"
+  local tier="${2:-}"
+  local throughput="${3:-unknown}"
+  local thermal="${4:-}"
+  local default
+  default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
+  if [[ "${id}" == "${default}" ]]; then
+    printf '%s\n' default
+    return
+  fi
+  case "${id}" in
+    mlx-community/Llama-3.2-3B-Instruct-4bit|\
+    mlx-community/Llama-3.2-1B-Instruct-4bit|\
+    mlx-community/Phi-3.5-mini-instruct-4bit|\
+    mlx-community/Qwen2.5-3B-Instruct-4bit)
+      printf '%s\n' fits
+      ;;
+    mlx-community/Mistral-7B-Instruct-v0.3-4bit|\
+    mlx-community/Meta-Llama-3.1-8B-Instruct-4bit)
+      _model_list_fit_7b_8b "${tier}" "${throughput}" "${thermal}"
+      ;;
+    mlx-community/Qwen2.5-14B-Instruct-4bit)
+      case "${tier}" in
+        workstation|large)
+          printf '%s\n' fits
+          ;;
+        high)
+          if [[ "${thermal}" != "fanless" ]] && throughput_at_least "${throughput}" very_fast; then
+            printf '%s\n' fits
+          else
+            printf '%s\n' tight
+          fi
+          ;;
+        *)
+          printf '%s\n' poor
+          ;;
+      esac
+      ;;
+    mlx-community/Qwen2.5-32B-Instruct-4bit)
+      case "${tier}" in
+        workstation|large) printf '%s\n' fits ;;
+        *) printf '%s\n' poor ;;
+      esac
+      ;;
+    *)
+      printf '%s\n' poor
+      ;;
+  esac
+}
+
+# Human list for this Mac. Args override the composed profile so tests can
+# pass a fixture without sysctl. Empty args use the loaded MLX_* policy.
+print_recommended_model_list() {
+  local tier="${1:-${MLX_TIER_ID:-}}"
+  local throughput="${2:-${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-unknown}}}"
+  local thermal="${3:-${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}}"
+  local chip="${4:-${MLX_CHIP:-unknown}}"
+  local mem_gib="${5:-${MLX_MEM_GIB:-?}}"
+  local context="${6:-${MLX_RECOMMENDED_CONTEXT:-}}"
+  local family="${7:-${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-?}}}"
+  local sku="${8:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
+  local physical="${9:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
+  local default row id weights use fit
+  default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
+  if [[ -z "${context}" ]]; then
+    context="$(recommended_context_for_profile "${tier}" "${throughput}" "${thermal}")"
+  fi
+  cat <<EOF
+Apple chip:       ${chip}
+Chip family/SKU:  ${family} ${sku}
+Memory:           ${mem_gib} GiB
+Memory tier:      ${tier:-unknown} (physical ${physical})
+Thermal class:    ${thermal:-unknown}
+Throughput class: ${throughput:-unknown}
+Default model:    ${default}
+Default context:  ${context}
+
+Weights are not total unified memory. KV cache, runtime, and macOS sit on top.
+fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
+
+EOF
+  printf 'fit\tmodel\tweights\tuse\n'
+  while IFS= read -r row; do
+    [[ -z "${row}" || "${row}" == \#* ]] && continue
+    IFS='|' read -r id weights use <<<"${row}"
+    fit="$(model_list_fit "${id}" "${tier}" "${throughput}" "${thermal}")"
+    printf '%s\t%s\t%s\t%s\n' "${fit}" "${id}" "${weights}" "${use}"
+  done < <(model_catalog_rows)
+  printf '\nOne model at a time: scripts/serve-mlx.sh --model MODEL\n'
+}
+
 # Fanless Airs keep the conservative 2k context even on later chips.
 # Unknown throughput on standard matches slow/moderate (2048), not the fast 4096 path.
 recommended_context_for_profile() {

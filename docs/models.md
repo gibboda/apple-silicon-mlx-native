@@ -84,6 +84,12 @@ make recommend
 scripts/detect-apple-silicon.sh --json
 ```
 
+List every catalog text model against this Mac. `default` is the composed choice. `fits` is a reasonable alternative. `tight` can run only if you measure it. `poor` is past the RAM fence. Nothing is downloaded.
+
+```bash
+make list
+```
+
 ## 8 GB limitations
 
 - Prefer **3B–4B 4-bit** unless your own measurements support something larger.

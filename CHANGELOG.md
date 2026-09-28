@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `make list` (`detect-apple-silicon.sh --list`) prints this Mac's chip, RAM tier, and composed default, then labels each catalog text model `default`, `fits`, `tight`, or `poor`. It does not download weights or write `config/models.env`
+
 ## [0.2.8] - 2026-09-27
 
 ### Fixed
