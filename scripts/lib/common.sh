@@ -565,6 +565,30 @@ huggingface_hub_cache_dir() {
   printf '%s\n' "${HF_HUB_CACHE:-${hf_home}/hub}"
 }
 
+# yes when the hub cache holds a complete MLX snapshot for this repo id.
+# config.json plus at least one model*.safetensors file. An incomplete
+# download does not count. This does not contact the network.
+model_weights_cached() {
+  local repo_id="${1:-}"
+  local cache folder snap
+  local -a weights
+  [[ -n "${repo_id}" ]] || return 1
+  cache="$(huggingface_hub_cache_dir)"
+  folder="${cache}/models--${repo_id//\//--}"
+  [[ -d "${folder}/snapshots" ]] || return 1
+  shopt -s nullglob
+  for snap in "${folder}/snapshots"/*/; do
+    [[ -f "${snap}config.json" ]] || continue
+    weights=( "${snap}model"*.safetensors )
+    if (( ${#weights[@]} > 0 )); then
+      shopt -u nullglob
+      return 0
+    fi
+  done
+  shopt -u nullglob
+  return 1
+}
+
 # mflux downloads a preset name or Hugging Face repo into the hub cache.
 # A local checkpoint is an absolute path, a ./ ../ or ~ path, or any path
 # that already exists. Those generates write a PNG and do not download weights.
@@ -1602,7 +1626,7 @@ print_recommended_model_list() {
   local family="${7:-${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-?}}}"
   local sku="${8:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
   local physical="${9:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
-  local default row id weights use fit
+  local default row id weights use fit cached
   default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
   if [[ -z "${context}" ]]; then
     context="$(recommended_context_for_profile "${tier}" "${throughput}" "${thermal}")"
@@ -1619,14 +1643,19 @@ Default context:  ${context}
 
 Weights are not total unified memory. KV cache, runtime, and macOS sit on top.
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
+cached is yes when that repo's weights are already in the Hugging Face cache.
 
 EOF
-  printf 'fit\tmodel\tweights\tuse\n'
+  printf 'fit\tcached\tmodel\tweights\tuse\n'
   while IFS= read -r row; do
     [[ -z "${row}" || "${row}" == \#* ]] && continue
     IFS='|' read -r id weights use <<<"${row}"
     fit="$(model_list_fit "${id}" "${tier}" "${throughput}" "${thermal}")"
-    printf '%s\t%s\t%s\t%s\n' "${fit}" "${id}" "${weights}" "${use}"
+    cached=no
+    if model_weights_cached "${id}"; then
+      cached=yes
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "${fit}" "${cached}" "${id}" "${weights}" "${use}"
   done < <(model_catalog_rows)
   printf '\nOne model at a time: scripts/serve-mlx.sh --model MODEL\n'
 }

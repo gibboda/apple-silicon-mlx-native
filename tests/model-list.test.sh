@@ -35,10 +35,11 @@ expect_contains() {
   fi
 }
 
-list_fit() {
+list_column() {
   local model="$1"
-  local text="$2"
-  printf '%s\n' "${text}" | awk -F '\t' -v id="${model}" '$2 == id { print $1; exit }'
+  local column="$2"
+  local text="$3"
+  printf '%s\n' "${text}" | awk -F '\t' -v id="${model}" -v col="${column}" '$3 == id { print $col; exit }'
 }
 
 expect_eq "8 GB fanless default is 3B" \
@@ -121,7 +122,11 @@ expect_eq "fanless high default stays 7B" \
   "$(model_list_fit mlx-community/Mistral-7B-Instruct-v0.3-4bit high very_fast fanless)" \
   "default"
 
-air="$(print_recommended_model_list constrained slow fanless "Apple M1" 8 2048 1 base constrained)"
+empty_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-list-empty.XXXXXX")"
+air="$(
+  HF_HUB_CACHE="${empty_cache}" \
+    print_recommended_model_list constrained slow fanless "Apple M1" 8 2048 1 base constrained
+)"
 expect_contains "list names the chip" "Apple chip:       Apple M1" "${air}"
 expect_contains "list names 8 GiB" "Memory:           8 GiB" "${air}"
 expect_contains "list names constrained tier" "Memory tier:      constrained (physical constrained)" "${air}"
@@ -129,12 +134,38 @@ expect_contains "list names fanless" "Thermal class:    fanless" "${air}"
 expect_contains "list default model" "Default model:    mlx-community/Llama-3.2-3B-Instruct-4bit" "${air}"
 expect_contains "list default context" "Default context:  2048" "${air}"
 expect_eq "printed 8 GB 7B row is poor" \
-  "$(list_fit mlx-community/Mistral-7B-Instruct-v0.3-4bit "${air}")" \
+  "$(list_column mlx-community/Mistral-7B-Instruct-v0.3-4bit 1 "${air}")" \
   "poor"
 expect_eq "printed 8 GB 3B row is default" \
-  "$(list_fit mlx-community/Llama-3.2-3B-Instruct-4bit "${air}")" \
+  "$(list_column mlx-community/Llama-3.2-3B-Instruct-4bit 1 "${air}")" \
   "default"
+expect_eq "empty cache marks 3B not cached" \
+  "$(list_column mlx-community/Llama-3.2-3B-Instruct-4bit 2 "${air}")" \
+  "no"
 expect_contains "list tells how to serve one model" "scripts/serve-mlx.sh --model MODEL" "${air}"
+
+cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/mlx-list-cache.XXXXXX")"
+complete="${cache_dir}/models--mlx-community--Llama-3.2-3B-Instruct-4bit/snapshots/abc"
+partial="${cache_dir}/models--mlx-community--Qwen2.5-3B-Instruct-4bit/snapshots/abc"
+mkdir -p "${complete}" "${partial}"
+printf '{}\n' >"${complete}/config.json"
+printf 'weights\n' >"${complete}/model.safetensors"
+printf '{}\n' >"${partial}/config.json"
+printf 'partial\n' >"${partial}/model.safetensors.incomplete"
+cached_list="$(
+  HF_HUB_CACHE="${cache_dir}" \
+    print_recommended_model_list constrained slow fanless "Apple M1" 8 2048 1 base constrained
+)"
+expect_eq "complete snapshot is cached" \
+  "$(list_column mlx-community/Llama-3.2-3B-Instruct-4bit 2 "${cached_list}")" \
+  "yes"
+expect_eq "incomplete snapshot is not cached" \
+  "$(list_column mlx-community/Qwen2.5-3B-Instruct-4bit 2 "${cached_list}")" \
+  "no"
+expect_eq "missing repo is not cached" \
+  "$(list_column mlx-community/Mistral-7B-Instruct-v0.3-4bit 2 "${cached_list}")" \
+  "no"
+rm -rf "${empty_cache}" "${cache_dir}"
 
 help_out="$("${ROOT}/scripts/detect-apple-silicon.sh" --help)"
 expect_contains "detect help documents --list" "--list" "${help_out}"

@@ -198,7 +198,7 @@ On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) an
 | ≤64 GB workstation | 14B 4-bit | 14B 4-bit |
 | >64 GB large | 32B 4-bit | 32B 4-bit |
 
-Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and does not download weights.
+Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and whether it is already in the Hugging Face cache (`cached` `yes` or `no`). It does not download weights.
 
 ## 8 GB Apple Silicon limitations
 
