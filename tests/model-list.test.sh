@@ -6,6 +6,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DETECT="${ROOT}/scripts/detect-apple-silicon.sh"
 # shellcheck source=scripts/lib/common.sh
 source "${ROOT}/scripts/lib/common.sh"
 
@@ -32,6 +33,16 @@ expect_contains() {
     pass "${label}"
   else
     fail "${label} (missing ${needle})"
+  fi
+}
+
+expect_fail() {
+  local label="$1"
+  shift
+  if "$@" >/dev/null 2>&1; then
+    fail "${label} (expected non-zero exit)"
+  else
+    pass "${label}"
   fi
 }
 
@@ -302,8 +313,84 @@ expect_eq "missing index shard is not cached" \
   "no"
 rm -rf "${empty_cache}" "${cache_dir}"
 
-help_out="$("${ROOT}/scripts/detect-apple-silicon.sh" --help)"
+help_out="$("${DETECT}" --help)"
 expect_contains "detect help documents --list" "--list" "${help_out}"
+
+cli_tmp="$(mktemp -d "${TMPDIR:-/tmp}/mlx-list-cli.XXXXXX")"
+cli_bin="${cli_tmp}/bin"
+cli_ws="${cli_tmp}/ws"
+cli_hf="${cli_tmp}/hf"
+mkdir -p "${cli_bin}" "${cli_ws}" "${cli_hf}/hub"
+real_uname="$(command -v uname)"
+cat >"${cli_bin}/uname" <<EOF
+#!/usr/bin/env bash
+case "\${1:-}" in
+  -m) printf '%s\\n' "\${FAKE_UNAME_M:-arm64}" ;;
+  -s) printf '%s\\n' "\${FAKE_UNAME_S:-Darwin}" ;;
+  *) exec "${real_uname}" "\$@" ;;
+esac
+EOF
+chmod +x "${cli_bin}/uname"
+
+with_uname() {
+  local kernel="$1"
+  local arch="$2"
+  shift 2
+  FAKE_UNAME_S="${kernel}" FAKE_UNAME_M="${arch}" PATH="${cli_bin}:${PATH}" "$@"
+}
+
+cat >"${cli_bin}/sysctl" <<'EOF'
+#!/bin/sh
+if [ "$1" = "-n" ]; then
+  case "$2" in
+    hw.memsize) printf '%s\n' 8589934592 ;;
+    hw.ncpu) printf '%s\n' 8 ;;
+    hw.model) printf '%s\n' MacBookAir10,1 ;;
+    machdep.cpu.brand_string) printf '%s\n' 'Apple M1' ;;
+    *) printf '\n' ;;
+  esac
+fi
+exit 0
+EOF
+cat >"${cli_bin}/sw_vers" <<'EOF'
+#!/bin/sh
+printf '%s\n' 15.0
+EOF
+cat >"${cli_bin}/df" <<'EOF'
+#!/bin/sh
+printf '%s\n' "Filesystem 1G-blocks Used Available"
+printf '%s\n' "/dev/disk1 900 100 800"
+EOF
+chmod +x "${cli_bin}/sysctl" "${cli_bin}/sw_vers" "${cli_bin}/df"
+
+expect_fail "detect --list rejects Linux x86_64" \
+  with_uname Linux x86_64 "${DETECT}" --list
+
+cli_list_out="$(
+  with_uname Darwin arm64 \
+    env MLX_SKIP_DEVICE_PROBE=1 \
+      MLX_WORKSPACE="${cli_ws}" \
+      HF_HUB_CACHE="${cli_hf}/hub" \
+      OVERRIDE_MEMORY_TIER=standard \
+      PATH="${cli_bin}:${PATH}:/usr/bin:/bin" \
+      "${DETECT}" --list 2>/dev/null
+)"
+expect_contains "cli list prints fit table" $'fit\tcached\tmodel' "${cli_list_out}"
+expect_eq "cli list 3B row is default" \
+  "$(list_column mlx-community/Llama-3.2-3B-Instruct-4bit 1 "${cli_list_out}")" \
+  "default"
+expect_eq "cli list 7B row is tight with override standard" \
+  "$(list_column mlx-community/Mistral-7B-Instruct-v0.3-4bit 1 "${cli_list_out}")" \
+  "tight"
+expect_eq "cli list 14B row is poor" \
+  "$(list_column mlx-community/Qwen2.5-14B-Instruct-4bit 1 "${cli_list_out}")" \
+  "poor"
+if [[ ! -f "${cli_ws}/config/models.env" ]]; then
+  pass "cli list does not create models.env"
+else
+  fail "cli list does not create models.env (file exists)"
+fi
+rm -rf "${cli_tmp}"
 
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
