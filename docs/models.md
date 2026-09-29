@@ -84,7 +84,7 @@ make recommend
 scripts/detect-apple-silicon.sh --json
 ```
 
-List every **text LLM** in the catalog against this Mac (not image or video models; those stay on `make recommend` / `--json`). `default` is the composed choice. `fits` is a reasonable alternative. `tight` can run only if you measure it. `poor` is past the RAM fence (for example 7B on 8 GB). `cached` is `yes` when the Hugging Face cache holds `config.json` and every weight file as a regular file (`model*.safetensors`, or every shard listed in `model.safetensors.index.json`). Nothing is downloaded.
+List every **text LLM** in the catalog against this Mac. Image and video catalogs are `make list-image` and `make list-video` ([media.md](media.md)). `default` is the composed choice. `fits` is a reasonable alternative. `tight` can run only if you measure it. `poor` is past the RAM fence (for example 7B on 8 GB). `cached` is `yes` when the Hugging Face cache holds `config.json` and every weight file as a regular file (`model*.safetensors`, or every shard listed in `model.safetensors.index.json`). Nothing is downloaded.
 
 ```bash
 make list

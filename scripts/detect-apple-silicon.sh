@@ -9,6 +9,8 @@
 #   scripts/detect-apple-silicon.sh --env
 #   scripts/detect-apple-silicon.sh --recommend
 #   scripts/detect-apple-silicon.sh --list
+#   scripts/detect-apple-silicon.sh --list-image
+#   scripts/detect-apple-silicon.sh --list-video
 #   scripts/detect-apple-silicon.sh --quiet   # exit 0 on Darwin arm64, 1 otherwise
 #
 # shellcheck source=scripts/lib/common.sh
@@ -23,7 +25,7 @@ MODE="human"
 
 usage() {
   cat <<'EOF'
-Usage: detect-apple-silicon.sh [--human|--json|--env|--recommend|--list|--quiet] [-h|--help]
+Usage: detect-apple-silicon.sh [--human|--json|--env|--recommend|--list|--list-image|--list-video|--quiet] [-h|--help]
 
 Detect Apple Silicon hardware characteristics for MLX workstation defaults.
 
@@ -33,6 +35,8 @@ Detect Apple Silicon hardware characteristics for MLX workstation defaults.
                 (MLX_TIER_ID is policy; MLX_PHYSICAL_TIER_ID is detected RAM)
   --recommend   Print a fresh composed profile only (does not write models.env)
   --list        List catalog text models with fit for this Mac (does not download)
+  --list-image  List catalog image models with fit for this Mac (does not download)
+  --list-video  List catalog video models with fit for this Mac (does not download)
   --quiet       Exit 0 if Darwin arm64, else exit 1 (no output)
   -h            Show this help
 
@@ -58,6 +62,8 @@ while [[ $# -gt 0 ]]; do
     --json)  MODE="json"; shift ;;
     --env)   MODE="env"; shift ;;
     --recommend) MODE="recommend"; shift ;;
+    --list-image) MODE="list-image"; shift ;;
+    --list-video) MODE="list-video"; shift ;;
     --list) MODE="list"; shift ;;
     --quiet) MODE="quiet"; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -94,6 +100,14 @@ case "${MODE}" in
     # Flag parser consumes all args; no positional passthrough to the list renderer.
     # shellcheck disable=SC2119
     print_recommended_model_list
+    ;;
+  list-image)
+    # shellcheck disable=SC2119
+    print_recommended_image_list
+    ;;
+  list-video)
+    # shellcheck disable=SC2119
+    print_recommended_video_list
     ;;
   json)
     DETECT_ARCH="${MLX_ARCH}" \

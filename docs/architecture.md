@@ -62,7 +62,7 @@ Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** st
 
 | Script | Role |
 | --- | --- |
-| `detect-apple-silicon.sh` | Hardware facts, chip class, memory tier, composed defaults (`--recommend`) |
+| `detect-apple-silicon.sh` | Hardware facts, chip class, memory tier, composed defaults (`--recommend`, `--list`, `--list-image`, `--list-video`) |
 | `initial-build-mlx-native-media.sh` | First-time bootstrap; seeds `models.env` from the composed profile |
 | `rebuild-mlx-native-media.sh` | Recreate `.venv` safely; never clobbers existing `models.env` |
 | `install-mlx-image.sh` | Opt-in `mflux` into the existing venv |
