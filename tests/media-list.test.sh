@@ -188,6 +188,10 @@ expect_eq "fanless 24 GB image default stays klein" \
   "$(image_list_fit flux2-klein-4b high fast fanless)" "default"
 expect_eq "fanless 24 GB z-image is tight" \
   "$(image_list_fit z-image-turbo high fast fanless)" "tight"
+expect_eq "fanless 24 GB schnell is tight" \
+  "$(image_list_fit schnell high fast fanless)" "tight"
+expect_eq "fanless workstation schnell fits" \
+  "$(image_list_fit schnell workstation very_fast fanless)" "fits"
 expect_eq "fanless workstation z-image fits" \
   "$(image_list_fit z-image-turbo workstation very_fast fanless)" "fits"
 expect_eq "unknown throughput standard image stays klein" \
@@ -331,6 +335,54 @@ printf 'weights\n' >"${ltx}/model.safetensors"
 expect_eq "LTX mlx snapshot is cached" \
   "$(HF_HUB_CACHE="${cache_dir}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
   "yes"
+
+write_ltx_component() {
+  local dir="$1"
+  local shard="$2"
+  mkdir -p "${dir}"
+  printf '{}\n' >"${dir}/config.json"
+  printf 'w\n' >"${dir}/${shard}"
+  printf '{"weight_map":{"w":"%s"}}\n' "${shard}" >"${dir}/model.safetensors.index.json"
+}
+
+distilled_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-distilled.XXXXXX")"
+distilled="${distilled_cache}/models--prince-canuma--LTX-2-distilled/snapshots/distilled"
+write_ltx_component "${distilled}/transformer" "model-00001-of-00008.safetensors"
+write_ltx_component "${distilled}/text_encoder" "model-00001-of-00011.safetensors"
+write_ltx_component "${distilled}/vae/decoder" "model.safetensors"
+mkdir -p "${distilled}/text_projections"
+printf 'p\n' >"${distilled}/text_projections/model.safetensors"
+printf 'u\n' >"${distilled}/ltx-2-spatial-upscaler-x2-1.0.safetensors"
+expect_eq "distilled LTX snapshot is cached" \
+  "$(HF_HUB_CACHE="${distilled_cache}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
+  "yes"
+distilled_video="$(
+  HF_HUB_CACHE="${distilled_cache}" MLX_WORKSPACE="${empty_ws}" \
+    print_recommended_video_list workstation fast cooled "Apple M3 Ultra" 64 3 ultra workstation 60
+)"
+expect_eq "printed distilled LTX snapshot is cached" \
+  "$(list_column "${MLX_VIDEO_LTX_REPO}" 2 "${distilled_video}")" "yes"
+
+root_only_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-ltx-root.XXXXXX")"
+root_only="${root_only_cache}/models--prince-canuma--LTX-2-distilled/snapshots/root"
+mkdir -p "${root_only}"
+printf 'lora\n' >"${root_only}/ltx-2-19b-distilled-lora-384.safetensors"
+printf 'up\n' >"${root_only}/ltx-2-spatial-upscaler-x2-1.0.safetensors"
+expect_eq "root LTX safetensors alone are not cached" \
+  "$(HF_HUB_CACHE="${root_only_cache}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
+  "no"
+
+printf '{"weight_map":{"a":"model-00001-of-00008.safetensors","b":"model-00002-of-00008.safetensors"}}\n' \
+  >"${distilled}/transformer/model.safetensors.index.json"
+printf 'lora\n' >"${distilled}/ltx-2-19b-distilled-lora-384.safetensors"
+expect_eq "distilled LTX missing a transformer shard is not cached" \
+  "$(HF_HUB_CACHE="${distilled_cache}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
+  "no"
+ln -sf /nonexistent "${distilled}/transformer/model-00002-of-00008.safetensors"
+expect_eq "distilled LTX dangling transformer shard is not cached" \
+  "$(HF_HUB_CACHE="${distilled_cache}" media_repo_cached "${MLX_VIDEO_LTX_REPO}" && echo yes || echo no)" \
+  "no"
+rm -rf "${distilled_cache}" "${root_only_cache}"
 
 partial_ltx_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-ltx.XXXXXX")"
 partial_ltx="${partial_ltx_cache}/models--prince-canuma--LTX-2-distilled/snapshots/partial"

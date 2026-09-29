@@ -663,6 +663,76 @@ hub_repo_download_incomplete() {
   ((${#incomplete[@]} > 0))
 }
 
+# Print shard filenames from a safetensors index. No network.
+_index_shard_names() {
+  local index="${1:-}"
+  [[ -f "${index}" ]] || return 1
+  python3 - "${index}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    weight_map = json.load(fh).get("weight_map") or {}
+seen = sorted({name for name in weight_map.values() if isinstance(name, str) and name})
+for name in seen:
+    print(name)
+PY
+}
+
+# config.json plus every shard named by model.safetensors.index.json in this directory.
+_indexed_component_ready() {
+  local dir="${1%/}"
+  local index="${dir}/model.safetensors.index.json"
+  local shard="" saw=0
+  [[ -f "${dir}/config.json" && -f "${index}" ]] || return 1
+  while IFS= read -r shard; do
+    [[ -n "${shard}" ]] || continue
+    case "${shard}" in
+      /*|*..*) return 1 ;;
+    esac
+    [[ -f "${dir}/${shard}" ]] || return 1
+    saw=1
+  done < <(_index_shard_names "${index}")
+  (( saw == 1 ))
+}
+
+# True when dir holds at least one real safetensors file.
+_dir_has_safetensors() {
+  local dir="${1%/}"
+  local path=""
+  [[ -d "${dir}" ]] || return 1
+  while IFS= read -r path; do
+    [[ -n "${path}" ]] || continue
+    [[ -f "${path}" ]] && return 0
+  done < <(find "${dir}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
+  return 1
+}
+
+# prince-canuma/LTX-2-distilled layout that the pinned mlx-video distilled
+# pipeline opens: transformer, text encoder, and VAE decoder shards, text
+# projections, and a root spatial x2 upscaler. One root ltx-2-*.safetensors
+# file is not enough. The distilled pipeline does not open the root LoRA file.
+ltx_distilled_snapshot_ready() {
+  local snap="${1%/}"
+  local upscaler="" nullglob_state saw=0
+  local -a upscalers
+  _indexed_component_ready "${snap}/transformer" || return 1
+  _indexed_component_ready "${snap}/text_encoder" || return 1
+  _indexed_component_ready "${snap}/vae/decoder" || return 1
+  _dir_has_safetensors "${snap}/text_projections" || return 1
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  upscalers=( "${snap}/"*spatial-upscaler-x2*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  for upscaler in "${upscalers[@]}"; do
+    if [[ -f "${upscaler}" ]]; then
+      saw=1
+      break
+    fi
+  done
+  (( saw == 1 ))
+}
+
 # True when a snapshot has model_index.json or config.json plus at least one
 # real safetensors file. Diffusers trees (mflux presets) keep weights in
 # subfolders, so this is broader than model_weights_cached. A snapshot that
@@ -681,6 +751,13 @@ hub_repo_has_weights() {
   nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
   shopt -s nullglob
   for snap in "${folder}/snapshots"/*/; do
+    if [[ -f "${snap}transformer/model.safetensors.index.json" ]]; then
+      if ltx_distilled_snapshot_ready "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
+      continue
+    fi
     if [[ -f "${snap}model.safetensors.index.json" ]]; then
       if hub_snapshot_weights_complete "${snap}"; then
         _restore_nullglob "${nullglob_state}"
@@ -2106,6 +2183,8 @@ image_list_default_id() {
 # default | fits | tight | poor. default matches image_list_default_id.
 # z-image-turbo is the >=24 GB cooled default. Below that it is tight on
 # 16-18 GB and on a 24-32 GB Air, and poor on <=8 GB. schnell is never default.
+# On a fanless 24-32 GB Air, schnell is tight as well (12B is not a better fit
+# than 6B z-image). Cooled high and workstation/large keep schnell as fits.
 image_list_fit() {
   local id="${1:-}"
   local tier="${2:-}"
@@ -2134,7 +2213,14 @@ image_list_fit() {
       case "${tier}" in
         constrained|"") printf '%s\n' poor ;;
         standard) printf '%s\n' tight ;;
-        high|workstation|large) printf '%s\n' fits ;;
+        high)
+          if [[ "${thermal}" == "fanless" ]]; then
+            printf '%s\n' tight
+          else
+            printf '%s\n' fits
+          fi
+          ;;
+        workstation|large) printf '%s\n' fits ;;
         *) printf '%s\n' poor ;;
       esac
       ;;
@@ -2332,8 +2418,9 @@ Generate:         ${generate_label}
 
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
 cached is yes for Wan when models/video/${MLX_VIDEO_WAN_MODEL_NAME} has config.json,
-model.safetensors, t5_encoder.safetensors, and vae.safetensors, and for LTX when
-the Hugging Face cache holds config.json and every weight shard. Nothing is downloaded.
+model.safetensors, t5_encoder.safetensors, and vae.safetensors. LTX is cached when
+the distilled snapshot has every transformer, text-encoder, and VAE-decoder shard,
+text projections, and a spatial x2 upscaler. Nothing is downloaded.
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'
