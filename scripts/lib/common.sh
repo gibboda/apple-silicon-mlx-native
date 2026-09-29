@@ -565,78 +565,6 @@ huggingface_hub_cache_dir() {
   printf '%s\n' "${HF_HUB_CACHE:-${hf_home}/hub}"
 }
 
-# Return 0 when snap holds config.json and loadable weight files (regular
-# files only). Sharded repos must have every shard from weight_map. This
-# does not contact the network.
-hub_snapshot_weights_complete() {
-  local snap="${1%/}/"
-  local index="${snap}model.safetensors.index.json"
-  local nullglob_state shard w
-  local -a shards weights
-  [[ -f "${snap}config.json" ]] || return 1
-  if [[ -f "${index}" ]]; then
-    mapfile -t shards < <(python3 - "${index}" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as fh:
-    weight_map = json.load(fh).get("weight_map") or {}
-seen = sorted({name for name in weight_map.values() if name})
-for name in seen:
-    print(name)
-PY
-)
-    if ((${#shards[@]} == 0)); then
-      return 1
-    fi
-    for shard in "${shards[@]}"; do
-      [[ -f "${snap}${shard}" ]] || return 1
-    done
-    return 0
-  fi
-  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
-  shopt -s nullglob
-  weights=( "${snap}model"*.safetensors )
-  if [[ -n "${nullglob_state}" ]]; then
-    eval "${nullglob_state}"
-  else
-    shopt -u nullglob
-  fi
-  ((${#weights[@]} == 0)) && return 1
-  for w in "${weights[@]}"; do
-    [[ -f "${w}" ]] || return 1
-  done
-  return 0
-}
-
-# yes when the hub cache holds a complete MLX snapshot for this repo id.
-model_weights_cached() {
-  local repo_id="${1:-}"
-  local cache folder snap nullglob_state
-  [[ -n "${repo_id}" ]] || return 1
-  cache="$(huggingface_hub_cache_dir)"
-  folder="${cache}/models--${repo_id//\//--}"
-  [[ -d "${folder}/snapshots" ]] || return 1
-  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
-  shopt -s nullglob
-  for snap in "${folder}/snapshots"/*/; do
-    if hub_snapshot_weights_complete "${snap}"; then
-      if [[ -n "${nullglob_state}" ]]; then
-        eval "${nullglob_state}"
-      else
-        shopt -u nullglob
-      fi
-      return 0
-    fi
-  done
-  if [[ -n "${nullglob_state}" ]]; then
-    eval "${nullglob_state}"
-  else
-    shopt -u nullglob
-  fi
-  return 1
-}
-
 # Restore a `shopt -p nullglob` snapshot. Empty means nullglob was unset.
 _restore_nullglob() {
   local state="${1:-}"
@@ -647,23 +575,8 @@ _restore_nullglob() {
   fi
 }
 
-# True when this hub repo still has an incomplete blob (download in progress).
-hub_repo_download_incomplete() {
-  local repo_id="${1:-}"
-  local cache folder nullglob_state
-  local -a incomplete
-  [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
-  cache="$(huggingface_hub_cache_dir)"
-  folder="${cache}/models--${repo_id//\//--}"
-  [[ -d "${folder}/blobs" ]] || return 1
-  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
-  shopt -s nullglob
-  incomplete=( "${folder}/blobs/"*.incomplete )
-  _restore_nullglob "${nullglob_state}"
-  ((${#incomplete[@]} > 0))
-}
-
 # Print shard filenames from a safetensors index. No network.
+# Uses a line loop so macOS /bin/bash 3.2 (no mapfile) can read the index.
 _index_shard_names() {
   local index="${1:-}"
   [[ -f "${index}" ]] || return 1
@@ -694,6 +607,66 @@ _indexed_component_ready() {
     saw=1
   done < <(_index_shard_names "${index}")
   (( saw == 1 ))
+}
+
+# Return 0 when snap holds config.json and loadable weight files (regular
+# files only). Sharded repos must have every shard from weight_map. This
+# does not contact the network.
+hub_snapshot_weights_complete() {
+  local snap="${1%/}/"
+  local index="${snap}model.safetensors.index.json"
+  local nullglob_state w
+  local -a weights
+  [[ -f "${snap}config.json" ]] || return 1
+  if [[ -f "${index}" ]]; then
+    _indexed_component_ready "${snap%/}"
+    return
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${snap}model"*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  ((${#weights[@]} == 0)) && return 1
+  for w in "${weights[@]}"; do
+    [[ -f "${w}" ]] || return 1
+  done
+  return 0
+}
+
+# yes when the hub cache holds a complete MLX snapshot for this repo id.
+model_weights_cached() {
+  local repo_id="${1:-}"
+  local cache folder snap nullglob_state
+  [[ -n "${repo_id}" ]] || return 1
+  cache="$(huggingface_hub_cache_dir)"
+  folder="${cache}/models--${repo_id//\//--}"
+  [[ -d "${folder}/snapshots" ]] || return 1
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  for snap in "${folder}/snapshots"/*/; do
+    if hub_snapshot_weights_complete "${snap}"; then
+      _restore_nullglob "${nullglob_state}"
+      return 0
+    fi
+  done
+  _restore_nullglob "${nullglob_state}"
+  return 1
+}
+
+# True when this hub repo still has an incomplete blob (download in progress).
+hub_repo_download_incomplete() {
+  local repo_id="${1:-}"
+  local cache folder nullglob_state
+  local -a incomplete
+  [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
+  cache="$(huggingface_hub_cache_dir)"
+  folder="${cache}/models--${repo_id//\//--}"
+  [[ -d "${folder}/blobs" ]] || return 1
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  incomplete=( "${folder}/blobs/"*.incomplete )
+  _restore_nullglob "${nullglob_state}"
+  ((${#incomplete[@]} > 0))
 }
 
 # True when dir holds at least one real safetensors file.
@@ -737,14 +710,12 @@ ltx_distilled_snapshot_ready() {
 # real safetensors file. Diffusers trees (mflux presets) keep weights in
 # subfolders, so this is broader than model_weights_cached. A snapshot that
 # has model.safetensors.index.json must include every indexed shard; one
-# leftover file is not enough. No network.
+# leftover file is not enough. Incomplete blobs are rejected by
+# media_repo_cached before this runs. No network.
 hub_repo_has_weights() {
   local repo_id="${1:-}"
   local cache folder snap nullglob_state path
   [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
-  if hub_repo_download_incomplete "${repo_id}"; then
-    return 1
-  fi
   cache="$(huggingface_hub_cache_dir)"
   folder="${cache}/models--${repo_id//\//--}"
   [[ -d "${folder}/snapshots" ]] || return 1
@@ -1837,11 +1808,7 @@ print_recommended_model_list() {
   sku="${8:-${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-?}}}"
   physical="${9:-${MLX_PHYSICAL_TIER_ID:-${tier:-unknown}}}"
   default="$(recommended_model_for_profile "${tier}" "${throughput}" "${thermal}" 0)"
-  chip_family_label="Chip family/SKU:"
-  if [[ -n "${OVERRIDE_MEMORY_TIER:-}" || -n "${OVERRIDE_CHIP_FAMILY:-}" || -n "${OVERRIDE_CHIP_SKU:-}" \
-    || -n "${OVERRIDE_GPU_CORES:-}" || -n "${OVERRIDE_THERMAL_CLASS:-}" ]]; then
-    chip_family_label="Chip family/SKU (policy):"
-  fi
+  chip_family_label="$(model_list_chip_family_label)"
   cat <<EOF
 Apple chip:       ${chip}
 ${chip_family_label}  ${family} ${sku}

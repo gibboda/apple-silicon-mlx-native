@@ -94,7 +94,7 @@ rm -rf "${WS}/.venv"
 
 # 6. refuse non-interactive without --force
 make_venv "${MLX_VENV}"
-expect_fail "non-interactive without --force is rejected" "${CLEANUP}"
+expect_fail "non-interactive without --force is rejected" "${CLEANUP}" < /dev/null
 assert_exists "${MLX_VENV}/pyvenv.cfg"
 
 # 7. --purge removes config and workspace caches, not the example file

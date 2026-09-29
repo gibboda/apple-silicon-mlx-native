@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `make list-video` no longer reports a finished `prince-canuma/LTX-2-distilled` snapshot as not cached, and it does not treat one root `ltx-2-*.safetensors` file as a complete download
 - `make list-image` labels FLUX.1 schnell `tight` on a 24–32 GB fanless Air, the same as `z-image-turbo`
+- Catalog cache checks read safetensors index shards without `mapfile`, so a complete cache stays `cached yes` on macOS `/bin/bash` 3.2
 
 ### Changed
 
