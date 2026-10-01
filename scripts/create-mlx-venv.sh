@@ -123,9 +123,10 @@ log_ok "Using Python: ${BREW_PY} ($("${BREW_PY}" --version))"
 
 log_header "Python virtual environment"
 if [[ -d "${MLX_VENV}" ]]; then
+  assert_reusable_brew_venv_for_make_venv "${MLX_VENV}"
   log_warn "Existing venv found at ${MLX_VENV}; reusing. Use make rebuild to recreate."
 else
-  "${BREW_PY}" -m venv "${MLX_VENV}"
+  create_atomic_project_venv "${BREW_PY}" "${MLX_VENV}"
   log_ok "Created venv at ${MLX_VENV}"
 fi
 

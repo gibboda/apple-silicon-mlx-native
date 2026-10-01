@@ -197,6 +197,85 @@ fi
 expect_fail "require venv rejects outside workspace" \
   run_require_venv "${REQ}" "${TMP}/outside/.venv"
 
+run_reusable_brew_venv() {
+  env MLX_WORKSPACE="$1" MLX_VENV="$2" MLX_PYTHON_VERSION="${3:-3.12}" PATH="$4" bash -c \
+    "source \"${COMMON}\"; assert_reusable_brew_venv_for_make_venv"
+}
+
+run_atomic_venv() {
+  env MLX_WORKSPACE="$1" MLX_VENV="$2" ATOMIC_BREW_PY="$3" bash -c \
+    "source \"${COMMON}\"; create_atomic_project_venv \"\${ATOMIC_BREW_PY}\" \"\${MLX_VENV}\""
+}
+
+# --- broken interpreter symlink ---
+
+rm -rf "${WS}/.venv"
+mkdir -p "${WS}/.venv/bin"
+printf 'home = /opt/homebrew/opt/python@3.12/bin\nversion = 3.12.0\n' >"${WS}/.venv/pyvenv.cfg"
+ln -sf /nonexistent/interpreter "${WS}/.venv/bin/python"
+expect_fail "install paths refuse dangling interpreter symlink" run_install_paths "${WS}" "${WS}/.venv"
+broken_err="$(run_install_paths "${WS}" "${WS}/.venv" 2>&1)" || true
+expect_contains "broken symlink mentions rebuild" "make rebuild" "${broken_err}"
+expect_contains "broken symlink mentions interpreter" "interpreter symlink is broken" "${broken_err}"
+
+# --- make venv reuse identity (Homebrew python@MLX_PYTHON_VERSION + pip) ---
+
+FAKE_BREW="${TMP}/fakebrew"
+mkdir -p "${FAKE_BREW}/bin"
+cat >"${FAKE_BREW}/bin/brew" <<'EOF'
+#!/bin/sh
+case "$1" in
+  --prefix) echo /opt/homebrew ;;
+esac
+exit 0
+EOF
+chmod +x "${FAKE_BREW}/bin/brew"
+BREW_PATH="${FAKE_BREW}/bin:${BIN}:${PATH}"
+
+IDENT="${TMP}/ident"
+mkdir -p "${IDENT}"
+if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" >/dev/null 2>&1; then
+  rm -rf "${IDENT}/.venv-probe"
+  python3 -m venv "${IDENT}/.venv"
+  printf 'home = /opt/homebrew/opt/python@3.12/bin\ninclude-system-site-packages = false\nversion = 3.12.9\n' \
+    >"${IDENT}/.venv/pyvenv.cfg"
+  expect_ok "make venv reuse accepts matching Homebrew cfg" \
+    run_reusable_brew_venv "${IDENT}" "${IDENT}/.venv" 3.12 "${BREW_PATH}"
+
+  printf 'home = /usr/bin\ninclude-system-site-packages = false\nversion = 3.13.5\n' \
+    >"${IDENT}/.venv/pyvenv.cfg"
+  expect_fail "make venv reuse refuses foreign Python version" \
+    run_reusable_brew_venv "${IDENT}" "${IDENT}/.venv" 3.12 "${BREW_PATH}"
+  foreign_ver_err="$(run_reusable_brew_venv "${IDENT}" "${IDENT}/.venv" 3.12 "${BREW_PATH}" 2>&1)" || true
+  expect_contains "foreign version mentions make rebuild" "make rebuild" "${foreign_ver_err}"
+  expect_contains "foreign version mentions 3.13" "3.13" "${foreign_ver_err}"
+
+  printf 'home = /usr/bin\ninclude-system-site-packages = false\nversion = 3.12.9\n' \
+    >"${IDENT}/.venv/pyvenv.cfg"
+  expect_fail "make venv reuse refuses non-Homebrew pyvenv home" \
+    run_reusable_brew_venv "${IDENT}" "${IDENT}/.venv" 3.12 "${BREW_PATH}"
+  foreign_home_err="$(run_reusable_brew_venv "${IDENT}" "${IDENT}/.venv" 3.12 "${BREW_PATH}" 2>&1)" || true
+  expect_contains "foreign home mentions Homebrew prefix" "Homebrew prefix" "${foreign_home_err}"
+
+  ATOMIC="${TMP}/atomic"
+  mkdir -p "${ATOMIC}"
+  rm -rf "${ATOMIC}/.venv"
+  expect_ok "atomic venv create leaves a working tree" \
+    run_atomic_venv "${ATOMIC}" "${ATOMIC}/.venv" "$(command -v python3)"
+  if [[ -f "${ATOMIC}/.venv/pyvenv.cfg" && -x "${ATOMIC}/.venv/bin/python" ]]; then
+    pass "atomic venv has pyvenv.cfg and bin/python"
+  else
+    fail "atomic venv missing expected markers"
+  fi
+  if "${ATOMIC}/.venv/bin/python" -m pip --version >/dev/null 2>&1; then
+    pass "atomic venv pip works"
+  else
+    fail "atomic venv pip missing"
+  fi
+else
+  pass "skip venv identity tests (python3 -m venv unavailable)"
+fi
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1

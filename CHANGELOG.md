@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `make venv` creates `.venv` atomically (partial dir + pip check before rename), refuses to reuse a foreign or broken venv (wrong Python version, non-Homebrew `pyvenv.cfg` home, missing pip, or dangling `bin/python`), and reports broken interpreter symlinks with a `make rebuild` hint
 - `make list-video` no longer reports a finished `prince-canuma/LTX-2-distilled` snapshot as not cached, and it does not treat one root `ltx-2-*.safetensors` file as a complete download
 - `make list-image` labels FLUX.1 schnell `tight` on a 24–32 GB fanless Air, the same as `z-image-turbo`
 - Catalog cache checks read safetensors index shards without `mapfile`, so a complete cache stays `cached yes` on macOS `/bin/bash` 3.2

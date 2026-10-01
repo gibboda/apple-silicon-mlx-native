@@ -1162,6 +1162,103 @@ has_venv_interpreter() {
   [[ -f "${dir}/bin/python" || -f "${dir}/bin/python3" ]]
 }
 
+venv_project_python() {
+  echo "${1:-${MLX_VENV}}/bin/python"
+}
+
+# True when bin/python or bin/python3 is a dangling symlink.
+venv_interpreter_symlink_broken() {
+  local dir="${1:-${MLX_VENV}}"
+  local name py
+  for name in python python3; do
+    py="${dir}/bin/${name}"
+    if [[ -L "${py}" && ! -e "${py}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+pyvenv_cfg_value() {
+  local dir="$1"
+  local key="$2"
+  [[ -f "${dir}/pyvenv.cfg" ]] || return 1
+  awk -v k="${key}" -F' = ' '$1 == k { sub(/^ +| +$/, "", $2); print $2; exit }' "${dir}/pyvenv.cfg"
+}
+
+venv_python_has_pip() {
+  local dir="${1:-${MLX_VENV}}"
+  local py
+  py="$(venv_project_python "${dir}")"
+  [[ -x "${py}" ]] || return 1
+  "${py}" -m pip --version >/dev/null 2>&1
+}
+
+venv_version_matches_expected() {
+  local dir="${1:-${MLX_VENV}}"
+  local cfg_ver
+  cfg_ver="$(pyvenv_cfg_value "${dir}" version)" || return 1
+  [[ -n "${cfg_ver}" ]] || return 1
+  [[ "${cfg_ver}" == "${MLX_PYTHON_VERSION}"* ]]
+}
+
+venv_home_under_homebrew() {
+  local dir="${1:-${MLX_VENV}}"
+  local prefix cfg_home
+  prefix="$(homebrew_prefix)"
+  [[ -n "${prefix}" ]] || return 1
+  cfg_home="$(pyvenv_cfg_value "${dir}" home)" || return 1
+  [[ -n "${cfg_home}" ]] || return 1
+  [[ "${cfg_home}" == "${prefix}"* ]]
+}
+
+# make venv reuse: Homebrew python@MLX_PYTHON_VERSION with a working pip.
+assert_reusable_brew_venv_for_make_venv() {
+  local dir="${1:-${MLX_VENV}}"
+  local cfg_ver cfg_home prefix
+  if venv_interpreter_symlink_broken "${dir}"; then
+    die "Refusing to reuse broken venv (interpreter symlink is broken): ${dir}. Run: make rebuild"
+  fi
+  [[ -x "$(venv_project_python "${dir}")" ]] || die "Refusing to reuse incomplete venv at ${dir}. Run: make rebuild"
+  if ! venv_python_has_pip "${dir}"; then
+    die "Refusing to reuse incomplete venv (pip is missing or broken) at ${dir}. Run: make rebuild"
+  fi
+  if ! venv_version_matches_expected "${dir}"; then
+    cfg_ver="$(pyvenv_cfg_value "${dir}" version || echo unknown)"
+    die "Refusing to reuse venv (Python ${cfg_ver} does not match expected ${MLX_PYTHON_VERSION}): ${dir}. Run: make rebuild"
+  fi
+  prefix="$(homebrew_prefix)"
+  if ! venv_home_under_homebrew "${dir}"; then
+    cfg_home="$(pyvenv_cfg_value "${dir}" home || echo unknown)"
+    die "Refusing to reuse venv (pyvenv.cfg home ${cfg_home} is not under Homebrew prefix ${prefix}): ${dir}. Run: make rebuild"
+  fi
+}
+
+# Create .venv atomically: build in a sibling temp dir, verify pip, then mv.
+create_atomic_project_venv() {
+  local brew_py="$1"
+  local dest="$2"
+  local partial py
+
+  [[ -n "${brew_py}" && -x "${brew_py}" ]] || die "Refusing to create venv without a Python interpreter"
+  [[ -n "${dest}" ]] || die "Refusing to create venv with an empty destination"
+  [[ ! -e "${dest}" ]] || die "Refusing to overwrite existing path: ${dest}"
+
+  partial="${dest}.partial.$$"
+  cleanup_partial() {
+    rm -rf "${partial}"
+  }
+
+  trap cleanup_partial EXIT INT TERM
+  rm -rf "${partial}"
+  "${brew_py}" -m venv "${partial}"
+  py="${partial}/bin/python"
+  [[ -x "${py}" ]] || die "Venv creation failed: ${py} is not executable"
+  "${py}" -m pip --version >/dev/null || die "Venv creation failed: pip is not available in ${partial}"
+  mv "${partial}" "${dest}"
+  trap - EXIT INT TERM
+}
+
 # Callers mkdir -p the workspace first. Missing .venv is OK (create). An
 # existing path must be a complete venv under the workspace — never reuse a
 # random dir or a half-created tree (cfg or interpreter alone is not enough).
@@ -1171,6 +1268,9 @@ assert_install_venv_paths() {
   if [[ -e "${MLX_VENV}" ]]; then
     if [[ ! -d "${MLX_VENV}" ]]; then
       die "MLX_VENV exists but is not a directory: ${MLX_VENV}"
+    fi
+    if [[ -f "${MLX_VENV}/pyvenv.cfg" ]] && venv_interpreter_symlink_broken "${MLX_VENV}"; then
+      die "Refusing to reuse broken venv (interpreter symlink is broken): ${MLX_VENV}. Run: make rebuild"
     fi
     if [[ -f "${MLX_VENV}/pyvenv.cfg" ]] && has_venv_interpreter "${MLX_VENV}"; then
       return 0
