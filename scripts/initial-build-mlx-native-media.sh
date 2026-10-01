@@ -9,13 +9,14 @@
 #
 # Usage:
 #   scripts/initial-build-mlx-native-media.sh
-#   MLX_INSTALL_HOMEBREW=1 scripts/initial-build-mlx-native-media.sh
 #   MLX_SKIP_MEDIA=1 scripts/initial-build-mlx-native-media.sh
+# Homebrew on a fresh machine is installed by make venv, not this script.
+# MLX_INSTALL_HOMEBREW=1 here only helps when .venv already exists.
 #
 # Environment:
 #   MLX_WORKSPACE           Workspace root (default: repository root)
 #   MLX_PYTHON_VERSION      Homebrew Python formula version (default: 3.12)
-#   MLX_INSTALL_HOMEBREW    If 1, install Homebrew non-interactively when missing
+#   MLX_INSTALL_HOMEBREW    If 1, install Homebrew when missing (requires an existing .venv)
 #   MLX_SKIP_MEDIA          If 1, skip selected media packages (mlx-audio)
 #   MLX_INSTALL_IMAGE       If 1, optionally install mflux (Pure MLX image; high memory)
 #   MLX_INSTALL_VIDEO       If 1, optionally install mlx-video (Pure MLX video; high memory)
@@ -108,37 +109,9 @@ else
   die "Aborting until Xcode CLT are installed."
 fi
 
-ensure_homebrew_in_path
-if [[ -z "$(homebrew_prefix)" ]]; then
-  if is_truthy "${MLX_INSTALL_HOMEBREW}"; then
-    log_info "Installing Homebrew (NONINTERACTIVE=1)..."
-    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    ensure_homebrew_in_path
-  else
-    cat <<'EOF'
-Homebrew was not found.
-
-Install Homebrew (Apple Silicon default prefix /opt/homebrew), then re-run:
-
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-
-Or allow this script to install it:
-
-  MLX_INSTALL_HOMEBREW=1 scripts/initial-build-mlx-native-media.sh
-EOF
-    die "Homebrew is required."
-  fi
-fi
-
-require_cmd brew
-brew_arch="$(brew config 2>/dev/null | awk -F': ' '/CPU:/{print $2; exit}')"
-log_ok "Homebrew at $(homebrew_prefix) (CPU: ${brew_arch:-unknown})"
-
-# Reject Intel/Rosetta Homebrew on Apple Silicon hosts before installing.
-if [[ "$(homebrew_prefix)" == "/usr/local" ]]; then
-  die "Homebrew prefix is /usr/local (Intel/Rosetta). Install Apple Silicon Homebrew at /opt/homebrew, then re-run."
-fi
+# A fresh machine never reaches this step: require_install_venv runs first.
+# MLX_INSTALL_HOMEBREW here is only for an existing .venv whose Homebrew is missing.
+ensure_homebrew_ready "MLX_INSTALL_HOMEBREW=1 make venv"
 
 log_header "Homebrew packages"
 for pkg in "${MLX_HOMEBREW_PACKAGES[@]}"; do

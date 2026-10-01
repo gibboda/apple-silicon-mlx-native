@@ -164,7 +164,7 @@ fi
 assert_apple_silicon
 py="$(venv_python)"
 if [[ ! -x "${py}" ]]; then
-  die "Python venv not found at ${MLX_VENV}. Run: make install"
+  die "Python venv not found at ${MLX_VENV}. Run: make venv && make install"
 fi
 
 args=(--model "${MODEL}" --prompt "${PROMPT}")

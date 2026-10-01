@@ -183,7 +183,7 @@ IMAGE="${IMAGE:-${MLX_VIDEO_IMAGE:-}}"
 if (( DUMP_PLAN == 0 )); then
   PY="$(venv_python)"
   if [[ ! -x "${PY}" ]]; then
-    die "Python venv not found at ${MLX_VENV}. Run: make install && make install-video"
+    die "Python venv not found at ${MLX_VENV}. Run: make venv && make install && make install-video"
   fi
   assert_apple_silicon
 fi

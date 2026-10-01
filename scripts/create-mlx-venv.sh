@@ -13,6 +13,7 @@
 #
 # Environment:
 #   MLX_WORKSPACE           Workspace root (default: repository root)
+#   MLX_VENV                Venv path (default: $MLX_WORKSPACE/.venv; must stay under the workspace)
 #   MLX_PYTHON_VERSION      Homebrew Python formula version (default: 3.12)
 #   MLX_INSTALL_HOMEBREW    If 1, install Homebrew non-interactively when missing
 
@@ -72,36 +73,7 @@ else
   die "Aborting until Xcode CLT are installed."
 fi
 
-ensure_homebrew_in_path
-if [[ -z "$(homebrew_prefix)" ]]; then
-  if is_truthy "${MLX_INSTALL_HOMEBREW}"; then
-    log_info "Installing Homebrew (NONINTERACTIVE=1)..."
-    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    ensure_homebrew_in_path
-  else
-    cat <<'EOF'
-Homebrew was not found.
-
-Install Homebrew (Apple Silicon default prefix /opt/homebrew), then re-run:
-
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-
-Or allow this script to install it:
-
-  MLX_INSTALL_HOMEBREW=1 scripts/create-mlx-venv.sh
-EOF
-    die "Homebrew is required."
-  fi
-fi
-
-require_cmd brew
-brew_arch="$(brew config 2>/dev/null | awk -F': ' '/CPU:/{print $2; exit}')"
-log_ok "Homebrew at $(homebrew_prefix) (CPU: ${brew_arch:-unknown})"
-
-if [[ "$(homebrew_prefix)" == "/usr/local" ]]; then
-  die "Homebrew prefix is /usr/local (Intel/Rosetta). Install Apple Silicon Homebrew at /opt/homebrew, then re-run."
-fi
+ensure_homebrew_ready "MLX_INSTALL_HOMEBREW=1 make venv"
 
 python_formula="python@${MLX_PYTHON_VERSION}"
 log_header "Homebrew Python"
@@ -112,13 +84,7 @@ else
   brew install "${python_formula}"
 fi
 
-BREW_PY="$(homebrew_prefix)/opt/python@${MLX_PYTHON_VERSION}/bin/python${MLX_PYTHON_VERSION}"
-if [[ ! -x "${BREW_PY}" ]]; then
-  BREW_PY="$(command -v "python${MLX_PYTHON_VERSION}" || true)"
-fi
-if [[ -z "${BREW_PY}" || ! -x "${BREW_PY}" ]]; then
-  die "Python ${MLX_PYTHON_VERSION} not found after Homebrew install."
-fi
+BREW_PY="$(resolve_homebrew_python)"
 log_ok "Using Python: ${BREW_PY} ($("${BREW_PY}" --version))"
 
 log_header "Python virtual environment"

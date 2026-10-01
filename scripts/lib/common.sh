@@ -1044,7 +1044,12 @@ export_pip_build_constraint() {
 install_packaging_tools() {
   local py
   py="$(venv_python)"
-  [[ -x "${py}" ]] || die "Python venv not found at ${py}. Run: make venv"
+  if [[ ! -x "${py}" ]]; then
+    if [[ -d "${MLX_VENV}" ]]; then
+      die "Python venv at ${MLX_VENV} is not usable. Run: make rebuild"
+    fi
+    die "Python venv not found at ${py}. Run: make venv && make install"
+  fi
   log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
   # Silence "you should upgrade pip" for this process, including later installs.
   export PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -1235,54 +1240,124 @@ assert_reusable_brew_venv_for_make_venv() {
 }
 
 # Create .venv atomically: build in a sibling temp dir, verify pip, then mv.
+# The partial path is baked into the EXIT trap so a failed create does not
+# leave a half-built tree for the next run to reuse.
 create_atomic_project_venv() {
   local brew_py="$1"
   local dest="$2"
-  local partial py
+  local partial py quoted
 
   [[ -n "${brew_py}" && -x "${brew_py}" ]] || die "Refusing to create venv without a Python interpreter"
   [[ -n "${dest}" ]] || die "Refusing to create venv with an empty destination"
   [[ ! -e "${dest}" ]] || die "Refusing to overwrite existing path: ${dest}"
 
   partial="${dest}.partial.$$"
-  cleanup_partial() {
-    rm -rf "${partial}"
-  }
-
-  trap cleanup_partial EXIT INT TERM
-  rm -rf "${partial}"
+  quoted="$(printf '%q' "${partial}")"
+  # Path is fixed at registration; the trap must not depend on a nested function.
+  # shellcheck disable=SC2064
+  trap "rm -rf -- ${quoted}" EXIT
+  rm -rf -- "${partial}"
   "${brew_py}" -m venv "${partial}"
   py="${partial}/bin/python"
   [[ -x "${py}" ]] || die "Venv creation failed: ${py} is not executable"
   "${py}" -m pip --version >/dev/null || die "Venv creation failed: pip is not available in ${partial}"
   mv "${partial}" "${dest}"
-  trap - EXIT INT TERM
+  trap - EXIT
+}
+
+# Homebrew python@MLX_PYTHON_VERSION on arm64. No PATH fallback.
+resolve_homebrew_python() {
+  local py mach prefix
+  prefix="$(homebrew_prefix)"
+  [[ -n "${prefix}" ]] || die "Homebrew not found. Run: make venv"
+  py="${prefix}/opt/python@${MLX_PYTHON_VERSION}/bin/python${MLX_PYTHON_VERSION}"
+  if [[ ! -x "${py}" ]]; then
+    die "Python ${MLX_PYTHON_VERSION} not found at ${py}. Install via: brew install python@${MLX_PYTHON_VERSION}"
+  fi
+  mach="$("${py}" -c 'import platform; print(platform.machine())')" || die "Could not read the architecture of ${py}"
+  if [[ "${mach}" != "arm64" ]]; then
+    die "Homebrew Python at ${py} reports ${mach}, not arm64."
+  fi
+  printf '%s\n' "${py}"
+}
+
+# Detect Homebrew, optionally install it, and reject an Intel prefix.
+# rerun_cmd is printed when Homebrew is missing.
+ensure_homebrew_ready() {
+  local rerun_cmd="$1"
+  local brew_arch
+  ensure_homebrew_in_path
+  if [[ -z "$(homebrew_prefix)" ]]; then
+    if is_truthy "${MLX_INSTALL_HOMEBREW:-0}"; then
+      log_info "Installing Homebrew (NONINTERACTIVE=1)..."
+      NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      ensure_homebrew_in_path
+    else
+      cat <<EOF
+Homebrew was not found.
+
+Install Homebrew (Apple Silicon default prefix /opt/homebrew), then re-run:
+
+  /bin/bash -c "\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  eval "\$(/opt/homebrew/bin/brew shellenv)"
+
+Or allow the venv step to install it:
+
+  ${rerun_cmd}
+EOF
+      die "Homebrew is required."
+    fi
+  fi
+
+  require_cmd brew
+  brew_arch="$(brew config 2>/dev/null | awk -F': ' '/CPU:/{print $2; exit}')"
+  log_ok "Homebrew at $(homebrew_prefix) (CPU: ${brew_arch:-unknown})"
+  if [[ "$(homebrew_prefix)" == "/usr/local" ]]; then
+    die "Homebrew prefix is /usr/local (Intel/Rosetta). Install Apple Silicon Homebrew at /opt/homebrew, then re-run."
+  fi
+}
+
+# True when install can use this tree: pyvenv.cfg, executable bin/python, and pip.
+venv_install_ready() {
+  local dir="${1:-${MLX_VENV}}"
+  [[ -f "${dir}/pyvenv.cfg" ]] || return 1
+  [[ -x "$(venv_project_python "${dir}")" ]] || return 1
+  venv_python_has_pip "${dir}"
 }
 
 # Callers mkdir -p the workspace first. Missing .venv is OK (create). An
-# existing path must be a complete venv under the workspace — never reuse a
-# random dir or a half-created tree (cfg or interpreter alone is not enough).
+# existing path must be install-ready under the workspace. bin/python3 alone,
+# a non-executable bin/python, or a venv without pip is not enough.
 assert_install_venv_paths() {
+  local py
   assert_workspace_safe
   assert_venv_under_workspace
-  if [[ -e "${MLX_VENV}" ]]; then
-    if [[ ! -d "${MLX_VENV}" ]]; then
-      die "MLX_VENV exists but is not a directory: ${MLX_VENV}"
-    fi
-    if [[ -f "${MLX_VENV}/pyvenv.cfg" ]] && venv_interpreter_symlink_broken "${MLX_VENV}"; then
-      die "Refusing to reuse broken venv (interpreter symlink is broken): ${MLX_VENV}. Run: make rebuild"
-    fi
-    if [[ -f "${MLX_VENV}/pyvenv.cfg" ]] && has_venv_interpreter "${MLX_VENV}"; then
-      return 0
-    fi
-    if [[ -f "${MLX_VENV}/pyvenv.cfg" ]]; then
-      die "Refusing to reuse incomplete venv (missing bin/python): ${MLX_VENV}. Remove or rename it, then re-run make venv."
-    fi
-    if has_venv_interpreter "${MLX_VENV}"; then
-      die "Refusing to reuse incomplete venv (missing pyvenv.cfg): ${MLX_VENV}. Remove or rename it, then re-run make venv."
-    fi
-    die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove or rename it, then re-run make venv."
+  if [[ ! -e "${MLX_VENV}" ]]; then
+    return 0
   fi
+  if [[ ! -d "${MLX_VENV}" ]]; then
+    die "MLX_VENV exists but is not a directory: ${MLX_VENV}"
+  fi
+  if venv_interpreter_symlink_broken "${MLX_VENV}"; then
+    die "Refusing to reuse broken venv (interpreter symlink is broken): ${MLX_VENV}. Run: make rebuild"
+  fi
+  if venv_install_ready "${MLX_VENV}"; then
+    return 0
+  fi
+  py="$(venv_project_python "${MLX_VENV}")"
+  if [[ -f "${MLX_VENV}/pyvenv.cfg" && -e "${py}" && ! -x "${py}" ]]; then
+    die "Refusing to reuse incomplete venv (bin/python is not executable): ${MLX_VENV}. Run: make rebuild"
+  fi
+  if [[ -f "${MLX_VENV}/pyvenv.cfg" && -x "${py}" ]]; then
+    die "Refusing to reuse incomplete venv (pip is missing or broken): ${MLX_VENV}. Run: make rebuild"
+  fi
+  if [[ -f "${MLX_VENV}/pyvenv.cfg" ]]; then
+    die "Refusing to reuse incomplete venv (missing bin/python): ${MLX_VENV}. Remove or rename it, then run: make rebuild"
+  fi
+  if has_venv_interpreter "${MLX_VENV}"; then
+    die "Refusing to reuse incomplete venv (missing pyvenv.cfg): ${MLX_VENV}. Remove or rename it, then run: make rebuild"
+  fi
+  die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove or rename it."
 }
 
 # Install paths must already have a complete venv. Does not create one.

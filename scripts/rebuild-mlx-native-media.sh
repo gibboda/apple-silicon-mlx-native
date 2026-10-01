@@ -57,7 +57,7 @@ log_info "Detected chip: ${MLX_CHIP} (family=${MLX_CHIP_FAMILY:-unknown} sku=${M
 log_info "Throughput: ${MLX_THROUGHPUT_CLASS:-unknown} thermal=${MLX_THERMAL_CLASS:-unknown} policy_tier=${MLX_TIER_ID}"
 
 ensure_homebrew_in_path
-[[ -n "$(homebrew_prefix)" ]] || die "Homebrew not found. Run the initial build script first."
+[[ -n "$(homebrew_prefix)" ]] || die "Homebrew not found. Run: make venv"
 require_cmd brew
 if [[ "$(homebrew_prefix)" == "/usr/local" ]]; then
   die "Homebrew prefix is /usr/local (Intel/Rosetta). Install Apple Silicon Homebrew at /opt/homebrew, then re-run."
@@ -74,11 +74,7 @@ log_ok "Workspace validated: ${MLX_WORKSPACE}"
 mkdir -p "${MLX_CONFIG_DIR}"
 seed_models_env_if_missing
 
-BREW_PY="$(homebrew_prefix)/opt/python@${MLX_PYTHON_VERSION}/bin/python${MLX_PYTHON_VERSION}"
-if [[ ! -x "${BREW_PY}" ]]; then
-  BREW_PY="$(command -v "python${MLX_PYTHON_VERSION}" || true)"
-fi
-[[ -n "${BREW_PY}" && -x "${BREW_PY}" ]] || die "Python ${MLX_PYTHON_VERSION} not found. Install via: brew install python@${MLX_PYTHON_VERSION}"
+BREW_PY="$(resolve_homebrew_python)"
 
 # Remove / recreate venv
 if [[ -e "${MLX_VENV}" ]]; then
@@ -101,7 +97,7 @@ if [[ -e "${MLX_VENV}" ]]; then
 fi
 
 log_info "Creating venv with ${BREW_PY}"
-"${BREW_PY}" -m venv "${MLX_VENV}"
+create_atomic_project_venv "${BREW_PY}" "${MLX_VENV}"
 
 PY="$(venv_python)"
 PIP="$(venv_pip)"

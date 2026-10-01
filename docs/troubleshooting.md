@@ -125,7 +125,7 @@ GitHub merge commits are exempt by default. See `scripts/conventional-commits-au
 
 ## Install refused to reuse `.venv`
 
-`make venv` creates `.venv` only when that path is missing. `make venv`, `make install`, `make install-image`, and `make install-video` will not reuse a directory that is not a complete virtualenv. A complete venv has both `pyvenv.cfg` and `bin/python` (or `bin/python3`). A half-created tree — for example after a crashed `python -m venv` — may have only one of those markers; remove or rename that path, then re-run `make venv`. `make install` does not create the venv. `make rebuild` and `make clean` still use the looser `looks_like_venv` check (either marker is enough to identify a venv for removal).
+`make venv` creates `.venv` only when that path is missing. A venv that install can use has `pyvenv.cfg`, an executable `bin/python`, and a working `pip` module. `bin/python3` alone, a non-executable `bin/python`, or a tree left behind when `python -m venv` dies before `ensurepip` is not enough. Remove or rename that path, or run `make rebuild` (it accepts either marker via `looks_like_venv`). `make venv` will not repair it. `make install` does not create the venv. Fresh clones run `make venv` once before `make install`. An existing complete `.venv` does not need that extra step.
 
 A venv must resolve under `MLX_WORKSPACE`. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory (and optionally `MLX_VENV` under it). `MLX_VENV` alone pointing outside the workspace is rejected.
 

@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `make install`, `make install-image`, and `make install-video` refuse to install unless a complete `.venv` already exists under the workspace (`pyvenv.cfg` and `bin/python` or `bin/python3`). They do not create the venv and do not require the shell to be activated. Pip still runs as `.venv/bin/pip`. Run `make venv` first
+- `make install`, `make install-image`, and `make install-video` refuse to install unless `.venv` already has `pyvenv.cfg`, an executable `bin/python`, and pip. They do not create the venv and do not require the shell to be activated. Pip still runs as `.venv/bin/pip`. Fresh clones run `make venv` once before `make install`. An existing complete `.venv` is unchanged
 - Pin bootstrap packaging tools to `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PIP_PACKAGE`, `MLX_SETUPTOOLS_PACKAGE`, `MLX_WHEEL_PACKAGE`, `MLX_PACKAGING_LIB_PACKAGE`). Install, rebuild, and image/video installers share those pins and export `PIP_BUILD_CONSTRAINT` so PEP 517 isolated builds (for example git `mlx-video`) use the same specs. `make validate` reports the installed versions and warns only when an exact pin does not match
 - Pin `actions/checkout` to the v7.0.1 commit SHA in GitHub workflows (Node 24 runtime; persisted credentials now live under `$RUNNER_TEMP`)
 - Docs and help text describe `make list` as the full text catalog with fit labels (including `poor`), not only models that fit. The models matrix notes that 7B is `poor` on 8 GB in `make list`, matching the RAM fence

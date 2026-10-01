@@ -64,7 +64,7 @@ make install
 # equivalent: scripts/initial-build-mlx-native-media.sh
 ```
 
-`make venv` verifies Darwin `arm64`, validates workspace/venv paths, ensures Homebrew `python@3.12`, and creates `.venv` only under `MLX_WORKSPACE`. A missing `.venv` is created. An existing path must already be a complete venv (`pyvenv.cfg` and `bin/python` or `bin/python3`); anything else is left in place and refused. It does not install MLX packages or seed `config/models.env`.
+`make venv` verifies Darwin `arm64`, validates workspace/venv paths, ensures Homebrew `python@3.12`, and creates `.venv` only under `MLX_WORKSPACE`. A missing `.venv` is created. An existing path is reused only when it is a Homebrew `python@3.12` venv with `pyvenv.cfg`, an executable `bin/python`, and pip. Anything else is left in place and refused. It does not install MLX packages or seed `config/models.env`. If you already have that `.venv`, skip to `make install`. A fresh clone runs `make venv` once first.
 
 `make install` refuses to run unless that complete `.venv` already exists. It does not create the venv and does not require `source .venv/bin/activate`. It then ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), seeds `config/models.env` from the composed profile once, installs pinned `mlx`, `mlx-lm`, and selected `mlx-audio` with `.venv/bin/pip`, and validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory; `MLX_VENV` must remain under it. Rebuild preserves an existing `config/models.env`.
 

@@ -187,7 +187,7 @@ mkdir -p "${REQ}/.venv"
 printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${REQ}/.venv/pyvenv.cfg"
 expect_fail "require venv rejects incomplete venv" run_require_venv "${REQ}" "${REQ}/.venv"
 req_incomplete="$(run_require_venv "${REQ}" "${REQ}/.venv" 2>&1)" || true
-expect_contains "require incomplete mentions make venv" "make venv" "${req_incomplete}"
+expect_contains "require incomplete mentions make rebuild" "make rebuild" "${req_incomplete}"
 if [[ -f "${REQ}/.venv/pyvenv.cfg" && ! -f "${REQ}/.venv/bin/python" ]]; then
   pass "require incomplete venv directory left in place"
 else
@@ -260,8 +260,11 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   ATOMIC="${TMP}/atomic"
   mkdir -p "${ATOMIC}"
   rm -rf "${ATOMIC}/.venv"
-  expect_ok "atomic venv create leaves a working tree" \
-    run_atomic_venv "${ATOMIC}" "${ATOMIC}/.venv" "$(command -v python3)"
+  if run_atomic_venv "${ATOMIC}" "${ATOMIC}/.venv" "$(command -v python3)"; then
+    pass "atomic venv create leaves a working tree"
+  else
+    fail "atomic venv create leaves a working tree"
+  fi
   if [[ -f "${ATOMIC}/.venv/pyvenv.cfg" && -x "${ATOMIC}/.venv/bin/python" ]]; then
     pass "atomic venv has pyvenv.cfg and bin/python"
   else
@@ -274,6 +277,137 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   fi
 else
   pass "skip venv identity tests (python3 -m venv unavailable)"
+fi
+
+# --- real install / venv scripts (stubs; no live Homebrew) ---
+
+SCRIPT_STUB="${TMP}/script-stub"
+mkdir -p "${SCRIPT_STUB}"
+cat >"${SCRIPT_STUB}/uname" <<'EOF'
+#!/bin/sh
+case "${1:-}" in
+  -m) printf '%s\n' arm64 ;;
+  -s) printf '%s\n' Darwin ;;
+  *) printf '%s\n' arm64 ;;
+esac
+EOF
+cat >"${SCRIPT_STUB}/sysctl" <<'EOF'
+#!/bin/sh
+key="${2:-$1}"
+case "${key}" in
+  hw.memsize) printf '%s\n' 8589934592 ;;
+  hw.ncpu) printf '%s\n' 8 ;;
+  hw.model) printf '%s\n' MacBookAir10,1 ;;
+  machdep.cpu.brand_string) printf '%s\n' "Apple M1" ;;
+  hw.perflevel0.physicalcpu) printf '%s\n' 4 ;;
+  hw.perflevel1.physicalcpu) printf '%s\n' 4 ;;
+  *) printf '\n' ;;
+esac
+EOF
+cat >"${SCRIPT_STUB}/sw_vers" <<'EOF'
+#!/bin/sh
+printf '%s\n' 15.0
+EOF
+cat >"${SCRIPT_STUB}/df" <<'EOF'
+#!/bin/sh
+printf '%s\n' "Filesystem 1G-blocks Used Available"
+printf '%s\n' "/dev/disk1 100 50 40"
+EOF
+cat >"${SCRIPT_STUB}/xcode-select" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = "-p" ]; then
+  printf '%s\n' /Library/Developer/CommandLineTools
+  exit 0
+fi
+exit 1
+EOF
+cat >"${SCRIPT_STUB}/ioreg" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "${SCRIPT_STUB}/uname" "${SCRIPT_STUB}/sysctl" "${SCRIPT_STUB}/sw_vers" \
+  "${SCRIPT_STUB}/df" "${SCRIPT_STUB}/xcode-select" "${SCRIPT_STUB}/ioreg"
+
+run_stubbed() {
+  local ws="$1"
+  shift
+  env -u MLX_INSTALL_HOMEBREW \
+    MLX_WORKSPACE="${ws}" MLX_VENV="${ws}/.venv" MLX_SKIP_DEVICE_PROBE=1 \
+    PATH="${SCRIPT_STUB}:${PATH}" "$@"
+}
+
+FRESH="${TMP}/fresh-install"
+mkdir -p "${FRESH}"
+fresh_canon="$(cd "${FRESH}" && pwd -P)"
+fresh_status=0
+fresh_out="$(run_stubbed "${FRESH}" "${ROOT}/scripts/initial-build-mlx-native-media.sh" 2>&1)" || fresh_status=$?
+if [[ "${fresh_status}" -ne 0 ]]; then
+  pass "fresh install exits non-zero"
+else
+  fail "fresh install exits non-zero (got ${fresh_status})"
+fi
+expect_contains "fresh install names the missing venv" \
+  "Python venv not found at ${fresh_canon}/.venv. Run: make venv" "${fresh_out}"
+if [[ ! -e "${FRESH}/config/models.env" ]]; then
+  pass "fresh install does not write models.env"
+else
+  fail "fresh install wrote models.env"
+fi
+
+LOOP="${TMP}/loop"
+mkdir -p "${LOOP}/.venv/bin"
+printf 'home = /opt/homebrew/opt/python@3.12/bin\nversion = 3.12.0\n' >"${LOOP}/.venv/pyvenv.cfg"
+printf '#!/bin/sh\nexit 0\n' >"${LOOP}/.venv/bin/python3"
+chmod +x "${LOOP}/.venv/bin/python3"
+loop_out="$(run_stubbed "${LOOP}" "${ROOT}/scripts/create-mlx-venv.sh" 2>&1)" || true
+expect_contains "python3-only venv is not ready" "missing bin/python" "${loop_out}"
+expect_contains "python3-only venv points at rebuild" "make rebuild" "${loop_out}"
+if [[ "${loop_out}" == *"Venv ready"* ]]; then
+  fail "python3-only venv was reported ready"
+else
+  pass "python3-only venv was not reported ready"
+fi
+install_loop="$(run_stubbed "${LOOP}" "${ROOT}/scripts/initial-build-mlx-native-media.sh" 2>&1)" || true
+expect_contains "install does not send python3-only back to make venv" "make rebuild" "${install_loop}"
+if [[ "${install_loop}" == *"Run: make venv"* ]]; then
+  fail "install told a python3-only venv to run make venv"
+else
+  pass "install did not tell a python3-only venv to run make venv"
+fi
+
+rm -rf "${LOOP}/.venv"
+mkdir -p "${LOOP}/.venv/bin"
+printf 'home = /opt/homebrew/opt/python@3.12/bin\nversion = 3.12.0\n' >"${LOOP}/.venv/pyvenv.cfg"
+printf '#!/bin/sh\nexit 0\n' >"${LOOP}/.venv/bin/python"
+chmod a-x "${LOOP}/.venv/bin/python"
+nox_out="$(run_stubbed "${LOOP}" "${ROOT}/scripts/initial-build-mlx-native-media.sh" 2>&1)" || true
+expect_contains "non-executable python points at rebuild" "not executable" "${nox_out}"
+expect_contains "non-executable python mentions rebuild" "make rebuild" "${nox_out}"
+
+rm -rf "${LOOP}/.venv"
+mkdir -p "${LOOP}/.venv/bin"
+printf 'home = /opt/homebrew/opt/python@3.12/bin\nversion = 3.12.0\n' >"${LOOP}/.venv/pyvenv.cfg"
+cat >"${LOOP}/.venv/bin/python" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ]; then
+  printf '%s\n' "No module named pip" >&2
+  exit 1
+fi
+exit 0
+EOF
+chmod +x "${LOOP}/.venv/bin/python"
+nopip_out="$(run_stubbed "${LOOP}" "${ROOT}/scripts/initial-build-mlx-native-media.sh" 2>&1)" || true
+expect_contains "pip-less venv points at rebuild" "pip is missing or broken" "${nopip_out}"
+
+CFG_ONLY="${TMP}/cfg-only-script"
+mkdir -p "${CFG_ONLY}/.venv"
+printf 'home = /opt/homebrew/opt/python@3.12/bin\nversion = 3.12.0\n' >"${CFG_ONLY}/.venv/pyvenv.cfg"
+cfg_script_out="$(run_stubbed "${CFG_ONLY}" "${ROOT}/scripts/create-mlx-venv.sh" 2>&1)" || true
+expect_contains "script refuses cfg-only venv" "missing bin/python" "${cfg_script_out}"
+if [[ -f "${CFG_ONLY}/.venv/pyvenv.cfg" && ! -e "${CFG_ONLY}/.venv/bin/python" ]]; then
+  pass "script left cfg-only venv in place"
+else
+  fail "script modified cfg-only venv"
 fi
 
 if (( failures > 0 )); then
