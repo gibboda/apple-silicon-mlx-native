@@ -11,17 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `make venv` (`scripts/create-mlx-venv.sh`) creates `.venv` with Homebrew `python@3.12` only. It does not install MLX packages, `git`, or `ffmpeg`, and it does not seed `config/models.env`
 - `make list` (`detect-apple-silicon.sh --list`) prints this Mac's chip, RAM tier, and composed default, then labels each catalog **text** model `default`, `fits`, `tight`, or `poor`, and `cached` `yes` or `no` when the Hugging Face cache holds `config.json` and every on-disk weight shard for that repo. It does not download weights or write `config/models.env`
 - `make list-image` and `make list-video` (`--list-image`, `--list-video`) do the same for the image and video catalogs. `default` is the composed checkpoint. Image `cached` is the preset's upstream Hugging Face repo (a `model_index.json` or `config.json` plus a safetensors file, and no incomplete blob). Wan `cached` is the converted `models/video/` directory. LTX `cached` is the distilled snapshot: every transformer, text-encoder, and VAE-decoder shard, text projections, and a spatial x2 upscaler. Nothing is downloaded and `config/models.env` is not written
 
 ### Fixed
 
+- `make venv` creates `.venv` atomically (partial dir + pip check before rename), refuses to reuse a foreign or broken venv (wrong Python version, non-Homebrew `pyvenv.cfg` home, missing pip, or dangling `bin/python`), and reports broken interpreter symlinks with a `make rebuild` hint
 - `make list-video` no longer reports a finished `prince-canuma/LTX-2-distilled` snapshot as not cached, and it does not treat one root `ltx-2-*.safetensors` file as a complete download
 - `make list-image` labels FLUX.1 schnell `tight` on a 24–32 GB fanless Air, the same as `z-image-turbo`
 - Catalog cache checks read safetensors index shards without `mapfile`, so a complete cache stays `cached yes` on macOS `/bin/bash` 3.2
 
 ### Changed
 
+- `make install`, `make install-image`, and `make install-video` refuse to install unless `.venv` already has `pyvenv.cfg`, an executable `bin/python`, and pip. They do not create the venv and do not require the shell to be activated. Pip still runs as `.venv/bin/pip`. Fresh clones run `make venv` once before `make install`. An existing complete `.venv` is unchanged
 - Pin bootstrap packaging tools to `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PIP_PACKAGE`, `MLX_SETUPTOOLS_PACKAGE`, `MLX_WHEEL_PACKAGE`, `MLX_PACKAGING_LIB_PACKAGE`). Install, rebuild, and image/video installers share those pins and export `PIP_BUILD_CONSTRAINT` so PEP 517 isolated builds (for example git `mlx-video`) use the same specs. `make validate` reports the installed versions and warns only when an exact pin does not match
 - Pin `actions/checkout` to the v7.0.1 commit SHA in GitHub workflows (Node 24 runtime; persisted credentials now live under `$RUNNER_TEMP`)
 - Docs and help text describe `make list` as the full text catalog with fit labels (including `poor`), not only models that fit. The models matrix notes that 7B is `poor` on 8 GB in `make list`, matching the RAM fence

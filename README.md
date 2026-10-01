@@ -50,6 +50,7 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 git clone https://github.com/gibboda/apple-silicon-mlx-native.git
 cd apple-silicon-mlx-native
 make detect
+make venv
 make install
 make validate
 ```
@@ -57,11 +58,15 @@ make validate
 ## Initial installation
 
 ```bash
+make venv
+# equivalent: scripts/create-mlx-venv.sh
 make install
 # equivalent: scripts/initial-build-mlx-native-media.sh
 ```
 
-The bootstrap script verifies Darwin `arm64`, detects chip family/SKU, throughput class, thermal class, and memory tier, validates workspace/venv paths before Homebrew, ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), creates `.venv` only under `MLX_WORKSPACE` (and refuses to reuse a directory that is not a venv), installs pinned `mlx`, `mlx-lm`, and selected `mlx-audio`, then validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory; `MLX_VENV` must remain under it. `config/models.env` is seeded from the composed profile once and preserved on rebuild.
+`make venv` verifies Darwin `arm64`, validates workspace/venv paths, ensures Homebrew `python@3.12`, and creates `.venv` only under `MLX_WORKSPACE`. A missing `.venv` is created. An existing path is reused only when it is a Homebrew `python@3.12` venv with `pyvenv.cfg`, an executable `bin/python`, and pip. Anything else is left in place and refused. It does not install MLX packages or seed `config/models.env`. If you already have that `.venv`, skip to `make install`. A fresh clone runs `make venv` once first.
+
+`make install` refuses to run unless that complete `.venv` already exists. It does not create the venv and does not require `source .venv/bin/activate`. It then ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), seeds `config/models.env` from the composed profile once, installs pinned `mlx`, `mlx-lm`, and selected `mlx-audio` with `.venv/bin/pip`, and validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory; `MLX_VENV` must remain under it. Rebuild preserves an existing `config/models.env`.
 
 Default pins live in `scripts/lib/common.sh`: `mlx==0.32.2`, `mlx-lm==0.31.3`, `mlx-audio==0.5.5` (same pattern as `MLX_IMAGE_PACKAGE` / `MLX_VIDEO_PACKAGE`). Override a spec, or drop the `==` pin to track upstream:
 
@@ -78,7 +83,7 @@ MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel ML
 Optional:
 
 ```bash
-MLX_INSTALL_HOMEBREW=1 make install   # install Homebrew if missing
+MLX_INSTALL_HOMEBREW=1 make venv      # install Homebrew if missing, then create .venv
 MLX_SKIP_MEDIA=1 make install         # skip mlx-audio
 MLX_INSTALL_IMAGE=1 make install      # also install mflux during bootstrap
 make install-image                    # install mflux into an existing .venv
@@ -259,6 +264,7 @@ apple-silicon-mlx-native/
 │   └── troubleshooting.md
 ├── scripts/
 │   ├── lib/common.sh
+│   ├── create-mlx-venv.sh
 │   ├── initial-build-mlx-native-media.sh
 │   ├── rebuild-mlx-native-media.sh
 │   ├── install-mlx-image.sh
@@ -302,7 +308,8 @@ apple-silicon-mlx-native/
 | `make list` | List catalog text models with fit for this Mac (does not download) |
 | `make list-image` | List catalog image models with fit for this Mac (does not download) |
 | `make list-video` | List catalog video models with fit for this Mac (does not download) |
-| `make install` | Initial bootstrap |
+| `make venv` | Create `.venv` only (Homebrew Python; no MLX packages) |
+| `make install` | Install MLX packages into an existing `.venv` |
 | `make rebuild` | Recreate `.venv` |
 | `make validate` | MLX validation |
 | `make install-image` | Install `mflux` into `.venv` |

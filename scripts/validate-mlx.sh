@@ -57,7 +57,7 @@ fi
 
 python_bin="$(venv_python)"
 if [[ ! -x "${python_bin}" ]]; then
-  fail "Python not found at ${python_bin}. Run: make install"
+  fail "Python not found at ${python_bin}. Run: make venv && make install"
   echo "VALIDATION_RESULT=fail"
   exit 1
 fi

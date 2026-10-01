@@ -171,7 +171,7 @@ SEED="${SEED:-${MLX_IMAGE_SEED:-}}"
 
 if (( DUMP_PLAN == 0 )); then
   if [[ ! -x "$(venv_python)" ]]; then
-    die "Python venv not found at ${MLX_VENV}. Run: make install && make install-image"
+    die "Python venv not found at ${MLX_VENV}. Run: make venv && make install && make install-image"
   fi
   assert_apple_silicon
 fi
