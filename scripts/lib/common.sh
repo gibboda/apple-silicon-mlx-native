@@ -1044,7 +1044,7 @@ export_pip_build_constraint() {
 install_packaging_tools() {
   local py
   py="$(venv_python)"
-  [[ -x "${py}" ]] || die "Python venv not found at ${py}. Run: make install"
+  [[ -x "${py}" ]] || die "Python venv not found at ${py}. Run: make venv"
   log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
   # Silence "you should upgrade pip" for this process, including later installs.
   export PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -1176,12 +1176,20 @@ assert_install_venv_paths() {
       return 0
     fi
     if [[ -f "${MLX_VENV}/pyvenv.cfg" ]]; then
-      die "Refusing to reuse incomplete venv (missing bin/python): ${MLX_VENV}. Remove or rename it, then re-run make install."
+      die "Refusing to reuse incomplete venv (missing bin/python): ${MLX_VENV}. Remove or rename it, then re-run make venv."
     fi
     if has_venv_interpreter "${MLX_VENV}"; then
-      die "Refusing to reuse incomplete venv (missing pyvenv.cfg): ${MLX_VENV}. Remove or rename it, then re-run make install."
+      die "Refusing to reuse incomplete venv (missing pyvenv.cfg): ${MLX_VENV}. Remove or rename it, then re-run make venv."
     fi
-    die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove or rename it, then re-run make install."
+    die "Refusing to reuse path that does not look like a venv: ${MLX_VENV}. Remove or rename it, then re-run make venv."
+  fi
+}
+
+# Install paths must already have a complete venv. Does not create one.
+require_install_venv() {
+  assert_install_venv_paths
+  if [[ ! -d "${MLX_VENV}" ]]; then
+    die "Python venv not found at ${MLX_VENV}. Run: make venv"
   fi
 }
 

@@ -74,6 +74,10 @@ run_install_paths() {
   env MLX_WORKSPACE="$1" MLX_VENV="$2" bash -c "source \"${COMMON}\"; assert_install_venv_paths"
 }
 
+run_require_venv() {
+  env MLX_WORKSPACE="$1" MLX_VENV="$2" bash -c "source \"${COMMON}\"; require_install_venv"
+}
+
 # --- Darwin arm64 is required; Linux ARM must not look like Apple Silicon ---
 
 expect_ok "quiet Darwin arm64" with_uname Darwin arm64 "${DETECT}" --quiet
@@ -162,6 +166,36 @@ expect_fail "install paths refuse venv outside workspace" \
 rm -rf "${WS}/.venv"
 printf 'not a directory\n' >"${WS}/.venv"
 expect_fail "install paths refuse a venv file" run_install_paths "${WS}" "${WS}/.venv"
+
+# --- require_install_venv (install must not create a missing venv) ---
+
+REQ="${TMP}/req"
+mkdir -p "${REQ}"
+
+req_missing="$(run_require_venv "${REQ}" "${REQ}/.venv" 2>&1)" || true
+expect_fail "require venv rejects missing" run_require_venv "${REQ}" "${REQ}/.venv"
+expect_contains "missing venv mentions make venv" "make venv" "${req_missing}"
+
+mkdir -p "${REQ}/.venv/bin"
+printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${REQ}/.venv/pyvenv.cfg"
+printf '#!/bin/sh\nexit 0\n' >"${REQ}/.venv/bin/python"
+chmod +x "${REQ}/.venv/bin/python"
+expect_ok "require venv accepts a complete venv" run_require_venv "${REQ}" "${REQ}/.venv"
+
+rm -rf "${REQ}/.venv"
+mkdir -p "${REQ}/.venv"
+printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${REQ}/.venv/pyvenv.cfg"
+expect_fail "require venv rejects incomplete venv" run_require_venv "${REQ}" "${REQ}/.venv"
+req_incomplete="$(run_require_venv "${REQ}" "${REQ}/.venv" 2>&1)" || true
+expect_contains "require incomplete mentions make venv" "make venv" "${req_incomplete}"
+if [[ -f "${REQ}/.venv/pyvenv.cfg" && ! -f "${REQ}/.venv/bin/python" ]]; then
+  pass "require incomplete venv directory left in place"
+else
+  fail "require incomplete venv directory was modified"
+fi
+
+expect_fail "require venv rejects outside workspace" \
+  run_require_venv "${REQ}" "${TMP}/outside/.venv"
 
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2

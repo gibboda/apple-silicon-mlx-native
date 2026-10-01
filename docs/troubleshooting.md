@@ -18,12 +18,12 @@ ERROR: Apple Silicon macOS (Darwin arm64) required.
 
 ## Homebrew missing
 
-Install Apple Silicon Homebrew (`/opt/homebrew`), then re-run `make install`.
+Install Apple Silicon Homebrew (`/opt/homebrew`), then re-run `make venv` (and `make install` when you are installing packages).
 
-To let the bootstrap script install Homebrew:
+To let the venv script install Homebrew:
 
 ```bash
-MLX_INSTALL_HOMEBREW=1 make install
+MLX_INSTALL_HOMEBREW=1 make venv
 ```
 
 If `brew` resolves to `/usr/local` on an arm64 Mac, you may be on an Intel Homebrew prefix (often via Rosetta). Prefer `/opt/homebrew`.
@@ -34,7 +34,7 @@ If `brew` resolves to `/usr/local` on an arm64 Mac, you may be on an Intel Homeb
 xcode-select --install
 ```
 
-Re-run `make install` after the installer finishes.
+Re-run `make venv` after the installer finishes. If `.venv` already exists, re-run `make install`.
 
 ## `make validate` warns: packaging tool pin mismatch
 
@@ -125,7 +125,7 @@ GitHub merge commits are exempt by default. See `scripts/conventional-commits-au
 
 ## Install refused to reuse `.venv`
 
-`make install` will not reuse a directory that is not a complete virtualenv. It requires both `pyvenv.cfg` and `bin/python` (or `bin/python3`). A half-created tree — for example after a crashed `python -m venv` — may have only one of those markers; remove or rename that path, then re-run `make install`. `make rebuild` and `make clean` still use the looser `looks_like_venv` check (either marker is enough to identify a venv for removal).
+`make venv` creates `.venv` only when that path is missing. `make venv`, `make install`, `make install-image`, and `make install-video` will not reuse a directory that is not a complete virtualenv. A complete venv has both `pyvenv.cfg` and `bin/python` (or `bin/python3`). A half-created tree — for example after a crashed `python -m venv` — may have only one of those markers; remove or rename that path, then re-run `make venv`. `make install` does not create the venv. `make rebuild` and `make clean` still use the looser `looks_like_venv` check (either marker is enough to identify a venv for removal).
 
 A venv must resolve under `MLX_WORKSPACE`. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory (and optionally `MLX_VENV` under it). `MLX_VENV` alone pointing outside the workspace is rejected.
 

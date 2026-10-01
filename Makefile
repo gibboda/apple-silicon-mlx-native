@@ -11,7 +11,7 @@ SCRIPTS := scripts
 # Single-quote a Make value so the recipe shell does not evaluate metacharacters.
 sq = '$(subst ','\'',$(1))'
 
-.PHONY: help detect recommend list list-image list-video install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
+.PHONY: help detect recommend list list-image list-video venv install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
 
 help: ## Show available targets
 	@printf '%s\n' \
@@ -21,7 +21,8 @@ help: ## Show available targets
 		'make list      — list catalog text models with fit for this Mac (does not download)' \
 		'make list-image — list catalog image models with fit for this Mac (does not download)' \
 		'make list-video — list catalog video models with fit for this Mac (does not download)' \
-		'make install   — initial MLX-native bootstrap (Homebrew + venv + packages)' \
+		'make venv      — create .venv only (Homebrew Python); does not install MLX packages' \
+		'make install   — install MLX packages into an existing .venv (run make venv first)' \
 		'make rebuild   — recreate .venv and reinstall MLX packages' \
 		'make validate  — validate mlx / mlx-lm and run a fast computation check' \
 		'make install-image — install Pure MLX text-to-image (mflux) into .venv' \
@@ -53,7 +54,10 @@ list-image: ## List catalog image models with fit for this Mac (does not downloa
 list-video: ## List catalog video models with fit for this Mac (does not download)
 	@$(SCRIPTS)/detect-apple-silicon.sh --list-video
 
-install: ## Bootstrap MLX-native environment
+venv: ## Create the project .venv only (Homebrew Python; no MLX packages)
+	@$(SCRIPTS)/create-mlx-venv.sh
+
+install: ## Install MLX packages into an existing .venv
 	@$(SCRIPTS)/initial-build-mlx-native-media.sh
 
 rebuild: ## Rebuild Python MLX environment

@@ -3,7 +3,8 @@
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# Assumptions: macOS + Apple Silicon. Does not assume Homebrew or a venv exist.
+# Assumptions: macOS + Apple Silicon, and a complete .venv from `make venv`.
+# Does not assume Homebrew exists. Does not create .venv.
 # Never installs Rosetta-only/x86 packages. Never uses sudo pip.
 #
 # Usage:
@@ -52,11 +53,11 @@ Bootstrap MLX-native tooling on a new Apple Silicon Mac.
 
 Steps:
   1. Verify Darwin arm64 / detect hardware, chip class, and memory tier
-  2. Validate workspace / venv paths (fail closed before Homebrew)
+  2. Require a complete workspace venv (fail closed before Homebrew; run make venv first)
   3. Verify/install Xcode CLT guidance
   4. Detect (or optionally install) Homebrew
   5. Install Homebrew packages (python, git, ffmpeg)
-  6. Seed config and create or reuse Python venv
+  6. Seed config
   7. Install pinned packaging tools; install pinned mlx, mlx-lm, selected media
   8. Validate MLX; print versions, hardware, next commands
 
@@ -90,9 +91,10 @@ fi
 
 log_header "Workspace"
 mkdir -p "${MLX_WORKSPACE}"
-mkdir -p "${MLX_CONFIG_DIR}"
-assert_install_venv_paths
+require_install_venv
 log_ok "Workspace validated: ${MLX_WORKSPACE}"
+log_ok "Using existing venv: ${MLX_VENV}"
+mkdir -p "${MLX_CONFIG_DIR}"
 seed_models_env_if_missing
 
 # --- Prerequisites ---
@@ -147,25 +149,6 @@ for pkg in "${MLX_HOMEBREW_PACKAGES[@]}"; do
     brew install "${pkg}"
   fi
 done
-
-# Prefer Homebrew Python for the venv when available.
-BREW_PY="$(homebrew_prefix)/opt/python@${MLX_PYTHON_VERSION}/bin/python${MLX_PYTHON_VERSION}"
-if [[ ! -x "${BREW_PY}" ]]; then
-  BREW_PY="$(command -v "python${MLX_PYTHON_VERSION}" || true)"
-fi
-if [[ -z "${BREW_PY}" || ! -x "${BREW_PY}" ]]; then
-  die "Python ${MLX_PYTHON_VERSION} not found after Homebrew install."
-fi
-log_ok "Using Python: ${BREW_PY} ($("${BREW_PY}" --version))"
-
-# --- Virtual environment ---
-log_header "Python virtual environment"
-if [[ -d "${MLX_VENV}" ]]; then
-  log_warn "Existing venv found at ${MLX_VENV}; reusing. Use make rebuild to recreate."
-else
-  "${BREW_PY}" -m venv "${MLX_VENV}"
-  log_ok "Created venv at ${MLX_VENV}"
-fi
 
 PIP="$(venv_pip)"
 install_packaging_tools

@@ -25,7 +25,7 @@ Usage: install-mlx-image.sh [-h|--help]
 
 Install mflux into the existing MLX virtualenv for text-to-image generation.
 
-Requires a prior `make install` (or equivalent). Does not uninstall or
+Requires a complete `.venv` from `make venv`. Does not uninstall or
 recreate .venv. Image model weights download on first generate.
 
 On 8 GB machines this is opt-in and swap-heavy; the generate wrapper
@@ -43,11 +43,9 @@ done
 
 log_header "Install MLX text-to-image (mflux)"
 
+require_install_venv
 PY="$(venv_python)"
 PIP="$(venv_pip)"
-if [[ ! -x "${PY}" ]]; then
-  die "Python venv not found at ${MLX_VENV}. Run: make install"
-fi
 
 assert_apple_silicon
 export_detect_env
