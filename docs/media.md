@@ -20,7 +20,7 @@ This repository installs **only deliberately selected** media dependencies. Gaps
 | Cloud TTS/STT APIs | FALLBACK / NON-MLX | Not installed | N/A |
 | PyTorch audio stacks | FALLBACK / NON-MLX | Not installed | Often large |
 
-Bootstrap installs `mlx-audio` and Homebrew `ffmpeg` (encoding/decoding support). **`mlx`**, **`mlx-lm`**, and **`mlx-audio` are pinned** in `scripts/lib/common.sh` (`mlx==0.32.2`, `mlx-lm==0.31.3`, `mlx-audio==0.5.5`). That file also pins `pip`, `setuptools`, and `wheel`; image and video installers reuse those pins before installing. Override a spec before install or rebuild, including an unpinned name to track upstream:
+Bootstrap installs `mlx-audio` and Homebrew `ffmpeg` (encoding/decoding support). **`mlx`**, **`mlx-lm`**, and **`mlx-audio` are pinned** in `scripts/lib/common.sh` (`mlx==0.32.2`, `mlx-lm==0.31.3`, `mlx-audio==0.5.5`). That file also pins `pip`, `setuptools`, and `wheel`; image and video installers install those into `.venv` and set `PIP_BUILD_CONSTRAINT` so isolated PEP 517 builds (including the git `mlx-video` install) use the same specs. Override a spec before install or rebuild, including an unpinned name to track upstream:
 
 ```bash
 MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild

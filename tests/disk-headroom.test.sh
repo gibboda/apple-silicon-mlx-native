@@ -107,6 +107,11 @@ expect_eq "packaging pins" "$(printf '%s\n' 'pip==26.2.1' 'setuptools==84.0.0' '
 packaging_override="$(MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_PACKAGING_PACKAGES[@]}\"")"
 expect_eq "packaging override" "$(printf '%s\n' pip setuptools wheel)" "${packaging_override}"
 
+BUILD_CONSTRAINT_WS="$(mktemp -d)"
+constraint_out="$(MLX_WORKSPACE="${BUILD_CONSTRAINT_WS}" bash -c "source \"${COMMON}\"; export_pip_build_constraint; printf '%s\n' \"\${PIP_BUILD_CONSTRAINT}\"; cat \"\${PIP_BUILD_CONSTRAINT}\"")"
+rm -rf "${BUILD_CONSTRAINT_WS}"
+expect_eq "PIP_BUILD_CONSTRAINT file" "$(printf '%s\n' "${BUILD_CONSTRAINT_WS}/.mlx-pip-build-constraint.txt" 'pip==26.2.1' 'setuptools==84.0.0' 'wheel==0.48.0')" "${constraint_out}"
+
 for installer in \
   "${ROOT}/scripts/initial-build-mlx-native-media.sh" \
   "${ROOT}/scripts/rebuild-mlx-native-media.sh" \

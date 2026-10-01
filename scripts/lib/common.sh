@@ -40,6 +40,8 @@ MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-pip==26.2.1}"
 MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-setuptools==84.0.0}"
 MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-wheel==0.48.0}"
 MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}")
+# pip 26+ applies this to PEP 517 isolated build envs (venv setuptools/wheel are ignored).
+MLX_PIP_BUILD_CONSTRAINT_FILE="${MLX_PIP_BUILD_CONSTRAINT_FILE:-${MLX_WORKSPACE}/.mlx-pip-build-constraint.txt}"
 MLX_VIDEO_WAN_SOURCE_REPO="${MLX_VIDEO_WAN_SOURCE_REPO:-Wan-AI/Wan2.1-T2V-1.3B}"
 MLX_VIDEO_WAN_MODEL_NAME="${MLX_VIDEO_WAN_MODEL_NAME:-wan21-t2v-1.3b-q4}"
 MLX_VIDEO_LTX_REPO="${MLX_VIDEO_LTX_REPO:-prince-canuma/LTX-2-distilled}"
@@ -1019,6 +1021,18 @@ for name in ("pip", "setuptools", "wheel"):
   done <<< "${versions}"
 }
 
+# Write MLX_PACKAGING_PACKAGES to a constraints file and export PIP_BUILD_CONSTRAINT
+# so PEP 517 isolated builds (for example git mlx-video) use the same specs.
+export_pip_build_constraint() {
+  local pkg
+  local constraint_file="${MLX_PIP_BUILD_CONSTRAINT_FILE}"
+  : >"${constraint_file}"
+  for pkg in "${MLX_PACKAGING_PACKAGES[@]}"; do
+    printf '%s\n' "${pkg}" >>"${constraint_file}"
+  done
+  export PIP_BUILD_CONSTRAINT="${constraint_file}"
+}
+
 # Install the shared packaging-tool pins into the active venv.
 install_packaging_tools() {
   local py
@@ -1026,6 +1040,8 @@ install_packaging_tools() {
   [[ -x "${py}" ]] || die "Python venv not found at ${py}. Run: make install"
   log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
   "${py}" -m pip install --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
+  export_pip_build_constraint
+  log_info "PEP 517 build isolation constrained via PIP_BUILD_CONSTRAINT=${MLX_PIP_BUILD_CONSTRAINT_FILE}"
   report_packaging_tools "${py}"
 }
 
