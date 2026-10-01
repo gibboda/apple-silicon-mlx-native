@@ -31,6 +31,15 @@ MLX_MEDIA_PACKAGES=("${MLX_AUDIO_PACKAGE}")
 MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
 # Pin mlx-video to a git SHA (not published on PyPI). Override with MLX_VIDEO_PACKAGE.
 MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837}"
+# Packaging tools are pinned so bootstrap, rebuild, and media installs match
+# across days. Bump these in this file for a security fix, a Python
+# requirement change, or an install failure, and record the bump in
+# CHANGELOG.md. Override a spec to try newer tooling once, for example
+# MLX_PIP_PACKAGE=pip.
+MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-pip==26.2.1}"
+MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-setuptools==84.0.0}"
+MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-wheel==0.48.0}"
+MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}")
 MLX_VIDEO_WAN_SOURCE_REPO="${MLX_VIDEO_WAN_SOURCE_REPO:-Wan-AI/Wan2.1-T2V-1.3B}"
 MLX_VIDEO_WAN_MODEL_NAME="${MLX_VIDEO_WAN_MODEL_NAME:-wan21-t2v-1.3b-q4}"
 MLX_VIDEO_LTX_REPO="${MLX_VIDEO_LTX_REPO:-prince-canuma/LTX-2-distilled}"
@@ -963,6 +972,61 @@ venv_python() {
 
 venv_pip() {
   echo "${MLX_VENV}/bin/pip"
+}
+
+# Print installed pip/setuptools/wheel versions. Warn when an exact pin does
+# not match. Does not fail the caller; install_packaging_tools still fails
+# if the install itself fails.
+report_packaging_tools() {
+  local py="${1:-$(venv_python)}"
+  local versions name installed spec pin line
+  if [[ ! -x "${py}" ]]; then
+    log_warn "Packaging tools not reported; Python not found at ${py}"
+    return 0
+  fi
+  if ! versions="$("${py}" -c 'import importlib.metadata as m
+for name in ("pip", "setuptools", "wheel"):
+    try:
+        print(name + " " + m.version(name))
+    except m.PackageNotFoundError:
+        print(name + " missing")
+')"; then
+    log_warn "Could not read pip, setuptools, and wheel versions"
+    return 0
+  fi
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] || continue
+    name="${line%% *}"
+    installed="${line#* }"
+    case "${name}" in
+      pip) spec="${MLX_PIP_PACKAGE}" ;;
+      setuptools) spec="${MLX_SETUPTOOLS_PACKAGE}" ;;
+      wheel) spec="${MLX_WHEEL_PACKAGE}" ;;
+      *) spec="" ;;
+    esac
+    if [[ "${spec}" == *==* ]]; then
+      pin="${spec#*==}"
+      if [[ "${installed}" == "${pin}" ]]; then
+        log_ok "Packaging tool ${name} ${installed}"
+      else
+        log_warn "Packaging tool ${name} ${installed} (pin ${spec})"
+      fi
+    elif [[ -n "${spec}" ]]; then
+      log_info "Packaging tool ${name} ${installed} (spec ${spec})"
+    else
+      log_info "Packaging tool ${name} ${installed}"
+    fi
+  done <<< "${versions}"
+}
+
+# Install the shared packaging-tool pins into the active venv.
+install_packaging_tools() {
+  local py
+  py="$(venv_python)"
+  [[ -x "${py}" ]] || die "Python venv not found at ${py}. Run: make install"
+  log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
+  "${py}" -m pip install --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
+  report_packaging_tools "${py}"
 }
 
 activate_venv() {

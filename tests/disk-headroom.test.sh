@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Self-test for disk floors and pinned MLX package specs.
+# Self-test for disk floors and pinned MLX and packaging-tool specs.
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
 
@@ -100,6 +100,43 @@ expect_contains "mlx-audio pin" "mlx-audio==0.5.5" "${pins}"
 
 overridden="$(MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_CORE_PACKAGES[@]}\" \"\${MLX_MEDIA_PACKAGES[@]}\"")"
 expect_eq "unpinned override" "$(printf '%s\n' mlx mlx-lm mlx-audio)" "${overridden}"
+
+packaging="$(env bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_PACKAGING_PACKAGES[@]}\"")"
+expect_eq "packaging pins" "$(printf '%s\n' 'pip==26.2.1' 'setuptools==84.0.0' 'wheel==0.48.0')" "${packaging}"
+
+packaging_override="$(MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_PACKAGING_PACKAGES[@]}\"")"
+expect_eq "packaging override" "$(printf '%s\n' pip setuptools wheel)" "${packaging_override}"
+
+for installer in \
+  "${ROOT}/scripts/initial-build-mlx-native-media.sh" \
+  "${ROOT}/scripts/rebuild-mlx-native-media.sh" \
+  "${ROOT}/scripts/install-mlx-image.sh" \
+  "${ROOT}/scripts/install-mlx-video.sh"
+do
+  if grep -q 'install_packaging_tools' "${installer}"; then
+    pass "shared packaging install in $(basename "${installer}")"
+  else
+    fail "shared packaging install missing in $(basename "${installer}")"
+  fi
+  if grep -q 'pip install --upgrade pip setuptools wheel' "${installer}"; then
+    fail "unpinned packaging upgrade remains in $(basename "${installer}")"
+  else
+    pass "no unpinned packaging upgrade in $(basename "${installer}")"
+  fi
+done
+
+FAKE_VENV="$(mktemp -d)"
+mkdir -p "${FAKE_VENV}/bin"
+cat >"${FAKE_VENV}/bin/python" <<'EOF'
+#!/bin/sh
+printf '%s\n' 'pip 26.2.1' 'setuptools 84.0.0' 'wheel 0.47.0'
+EOF
+chmod +x "${FAKE_VENV}/bin/python"
+packaging_report="$(MLX_VENV="${FAKE_VENV}" bash -c "source \"${COMMON}\"; report_packaging_tools")"
+rm -rf "${FAKE_VENV}"
+expect_contains "matching pip pin" "Packaging tool pip 26.2.1" "${packaging_report}"
+expect_contains "matching setuptools pin" "Packaging tool setuptools 84.0.0" "${packaging_report}"
+expect_contains "wheel pin mismatch" "Packaging tool wheel 0.47.0 (pin wheel==0.48.0)" "${packaging_report}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT

@@ -69,6 +69,12 @@ Default pins live in `scripts/lib/common.sh`: `mlx==0.32.2`, `mlx-lm==0.31.3`, `
 MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 ```
 
+The same file pins the packaging toolchain used by `make install`, `make rebuild`, `make install-image`, and `make install-video`: `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`. `make validate` prints the versions in `.venv` and warns when an exact pin does not match. Bump those three pins in `scripts/lib/common.sh` for a security fix, a Python requirement change, or an install failure, and record the bump in `CHANGELOG.md`. To try a newer toolchain once:
+
+```bash
+MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel make rebuild
+```
+
 Optional:
 
 ```bash

@@ -76,7 +76,7 @@ Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** st
 | `validate-mlx.sh` | Fast correctness checks plus `mx.device_info()` working-set limits |
 | `conventional-commits-audit.sh` | Commit subject policy |
 
-Shared helpers live in `scripts/lib/common.sh` so detection and compose logic stay consistent. **RAM is the OOM fence; chip class is the performance fence.** Unknown chips warn and fall back to RAM-only defaults; install does not fail. See [hardware-tiers.md](hardware-tiers.md).
+Shared helpers live in `scripts/lib/common.sh` so detection, compose logic, and packaging-tool pins stay consistent. **RAM is the OOM fence; chip class is the performance fence.** Unknown chips warn and fall back to RAM-only defaults; install does not fail. See [hardware-tiers.md](hardware-tiers.md).
 
 ## Memory accounting (design constraint)
 
