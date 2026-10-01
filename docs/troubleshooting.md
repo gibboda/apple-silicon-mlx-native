@@ -36,6 +36,19 @@ xcode-select --install
 
 Re-run `make install` after the installer finishes.
 
+## `make validate` warns: packaging tool pin mismatch
+
+```text
+WARN: Packaging tool pip 25.2 (pin pip==26.2.1)
+```
+
+The venv has a different `pip`, `setuptools`, `wheel`, or `packaging` than the pins in `scripts/lib/common.sh`. A mismatch can be older or newer, for example after `MLX_PIP_PACKAGE=pip make rebuild` or a manual `pip install -U pip`. Rebuild to apply the pins. If you rebuilt with an override on purpose, this warning is expected.
+
+```bash
+make rebuild
+make validate
+```
+
 ## `make validate` fails: mlx not importable
 
 ```bash

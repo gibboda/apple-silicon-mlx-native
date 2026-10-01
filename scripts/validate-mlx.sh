@@ -20,8 +20,8 @@ usage() {
   cat <<'EOF'
 Usage: validate-mlx.sh [--venv PATH] [-h|--help]
 
-Validate Python arm64 execution, mlx, mlx-lm, basic array ops, Metal observability,
-and mx.device_info() working-set / memory-limit probe.
+Validate Python arm64 execution, pinned pip/setuptools/wheel/packaging versions, mlx, mlx-lm,
+basic array ops, Metal observability, and mx.device_info() working-set / memory-limit probe.
 
   --venv PATH   Virtual environment to validate (default: $MLX_VENV)
   -h            Show this help
@@ -70,6 +70,8 @@ if [[ "${py_arch}" == "arm64" ]]; then
 else
   fail "Python reports ${py_arch}; expected native arm64 (Rosetta/x86_64 interpreters are rejected)"
 fi
+
+report_packaging_tools "${python_bin}"
 
 # Package imports and versions
 if ! "${python_bin}" -c 'import mlx' 2>/dev/null; then

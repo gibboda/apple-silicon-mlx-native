@@ -9,6 +9,7 @@
 *.code-workspace
 
 # Python
+.mlx-pip-build-constraint.txt
 .venv/
 venv/
 ENV/

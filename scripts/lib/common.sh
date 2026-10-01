@@ -31,6 +31,21 @@ MLX_MEDIA_PACKAGES=("${MLX_AUDIO_PACKAGE}")
 MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
 # Pin mlx-video to a git SHA (not published on PyPI). Override with MLX_VIDEO_PACKAGE.
 MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837}"
+# Packaging tools are pinned so bootstrap, rebuild, and media installs match
+# across days. Bump these in this file for a security fix, a Python
+# requirement change, or an install failure, and record the bump in
+# CHANGELOG.md. Override a spec to try newer tooling once, for example
+# MLX_PIP_PACKAGE=pip.
+MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-pip==26.2.1}"
+MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-setuptools==84.0.0}"
+MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-wheel==0.48.0}"
+# wheel 0.48.0 depends on packaging>=24.0. Pin the library itself so a fresh
+# venv does not float to whatever packaging release is newest that day.
+# Named MLX_PACKAGING_LIB_PACKAGE so it is not confused with MLX_PACKAGING_PACKAGES.
+MLX_PACKAGING_LIB_PACKAGE="${MLX_PACKAGING_LIB_PACKAGE:-packaging==26.3}"
+MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}" "${MLX_PACKAGING_LIB_PACKAGE}")
+# pip 26+ applies this to PEP 517 isolated build envs (venv setuptools/wheel are ignored).
+MLX_PIP_BUILD_CONSTRAINT_FILE="${MLX_PIP_BUILD_CONSTRAINT_FILE:-${MLX_WORKSPACE}/.mlx-pip-build-constraint.txt}"
 MLX_VIDEO_WAN_SOURCE_REPO="${MLX_VIDEO_WAN_SOURCE_REPO:-Wan-AI/Wan2.1-T2V-1.3B}"
 MLX_VIDEO_WAN_MODEL_NAME="${MLX_VIDEO_WAN_MODEL_NAME:-wan21-t2v-1.3b-q4}"
 MLX_VIDEO_LTX_REPO="${MLX_VIDEO_LTX_REPO:-prince-canuma/LTX-2-distilled}"
@@ -963,6 +978,80 @@ venv_python() {
 
 venv_pip() {
   echo "${MLX_VENV}/bin/pip"
+}
+
+# Print installed pip/setuptools/wheel versions. Warn when an exact pin does
+# not match. Does not fail the caller; install_packaging_tools still fails
+# if the install itself fails.
+report_packaging_tools() {
+  local py="${1:-$(venv_python)}"
+  local versions name installed spec pin line
+  if [[ ! -x "${py}" ]]; then
+    log_warn "Packaging tools not reported; Python not found at ${py}"
+    return 0
+  fi
+  if ! versions="$("${py}" -c 'import importlib.metadata as m
+for name in ("pip", "setuptools", "wheel", "packaging"):
+    try:
+        print(name + " " + m.version(name))
+    except m.PackageNotFoundError:
+        print(name + " missing")
+')"; then
+    log_warn "Could not read pip, setuptools, wheel, and packaging versions"
+    return 0
+  fi
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] || continue
+    name="${line%% *}"
+    installed="${line#* }"
+    case "${name}" in
+      pip) spec="${MLX_PIP_PACKAGE}" ;;
+      setuptools) spec="${MLX_SETUPTOOLS_PACKAGE}" ;;
+      wheel) spec="${MLX_WHEEL_PACKAGE}" ;;
+      packaging) spec="${MLX_PACKAGING_LIB_PACKAGE}" ;;
+      *) spec="" ;;
+    esac
+    # Exact pins only. Wildcard specs (setuptools==84.*) and === are not
+    # plain string compares, so they are reported as the configured spec.
+    if [[ "${spec}" == *==* && "${spec}" != *===* && "${spec}" != *'*'* ]]; then
+      pin="${spec#*==}"
+      if [[ "${installed}" == "${pin}" ]]; then
+        log_ok "Packaging tool ${name} ${installed}"
+      else
+        log_warn "Packaging tool ${name} ${installed} (pin ${spec})"
+      fi
+    elif [[ -n "${spec}" ]]; then
+      log_info "Packaging tool ${name} ${installed} (spec ${spec})"
+    else
+      log_info "Packaging tool ${name} ${installed}"
+    fi
+  done <<< "${versions}"
+}
+
+# Write MLX_PACKAGING_PACKAGES to a constraints file and export PIP_BUILD_CONSTRAINT
+# so PEP 517 isolated builds (for example git mlx-video) use the same specs.
+export_pip_build_constraint() {
+  local pkg
+  local constraint_file="${MLX_PIP_BUILD_CONSTRAINT_FILE}"
+  : >"${constraint_file}"
+  for pkg in "${MLX_PACKAGING_PACKAGES[@]}"; do
+    printf '%s\n' "${pkg}" >>"${constraint_file}"
+  done
+  export PIP_BUILD_CONSTRAINT="${constraint_file}"
+}
+
+# Install the shared packaging-tool pins into the active venv.
+install_packaging_tools() {
+  local py
+  py="$(venv_python)"
+  [[ -x "${py}" ]] || die "Python venv not found at ${py}. Run: make install"
+  log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
+  # Silence "you should upgrade pip" for this process, including later installs.
+  export PIP_DISABLE_PIP_VERSION_CHECK=1
+  "${py}" -m pip install --disable-pip-version-check --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
+  export_pip_build_constraint
+  log_info "PEP 517 build isolation constrained via PIP_BUILD_CONSTRAINT=${MLX_PIP_BUILD_CONSTRAINT_FILE}"
+  report_packaging_tools "${py}"
 }
 
 activate_venv() {

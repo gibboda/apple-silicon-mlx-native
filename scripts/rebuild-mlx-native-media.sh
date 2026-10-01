@@ -105,7 +105,7 @@ log_info "Creating venv with ${BREW_PY}"
 
 PY="$(venv_python)"
 PIP="$(venv_pip)"
-"${PY}" -m pip install --upgrade pip setuptools wheel
+install_packaging_tools
 log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
 "${PIP}" install --upgrade "${MLX_CORE_PACKAGES[@]}"
 

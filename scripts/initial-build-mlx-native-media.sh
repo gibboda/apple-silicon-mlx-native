@@ -21,6 +21,10 @@
 #   MLX_PACKAGE             pip spec for mlx (default: pinned == version)
 #   MLX_LM_PACKAGE          pip spec for mlx-lm (default: pinned == version)
 #   MLX_AUDIO_PACKAGE       pip spec for mlx-audio (default: pinned == version)
+#   MLX_PIP_PACKAGE         pip spec for pip (default: pinned == version)
+#   MLX_SETUPTOOLS_PACKAGE  pip spec for setuptools (default: pinned == version)
+#   MLX_WHEEL_PACKAGE       pip spec for wheel (default: pinned == version)
+#   MLX_PACKAGING_LIB_PACKAGE  pip spec for the packaging library (default: pinned == version)
 #   MLX_DISK_ENFORCE        If 1, abort when free space is under the download floor
 #   MLX_SKIP_DISK_CHECK     If 1, skip the free-space warning
 #   OVERRIDE_MEMORY_TIER    Force policy tier id: constrained|standard|high|workstation|large
@@ -53,7 +57,7 @@ Steps:
   4. Detect (or optionally install) Homebrew
   5. Install Homebrew packages (python, git, ffmpeg)
   6. Seed config and create or reuse Python venv
-  7. Upgrade packaging tools; install pinned mlx, mlx-lm, selected media
+  7. Install pinned packaging tools; install pinned mlx, mlx-lm, selected media
   8. Validate MLX; print versions, hardware, next commands
 
 Image/video packages are NOT installed by default. See docs/media.md.
@@ -163,9 +167,8 @@ else
   log_ok "Created venv at ${MLX_VENV}"
 fi
 
-PY="$(venv_python)"
 PIP="$(venv_pip)"
-"${PY}" -m pip install --upgrade pip setuptools wheel
+install_packaging_tools
 
 log_header "MLX core packages"
 log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"

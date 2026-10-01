@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Self-test for disk floors and pinned MLX package specs.
+# Self-test for disk floors and pinned MLX and packaging-tool specs.
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
 
@@ -100,6 +100,96 @@ expect_contains "mlx-audio pin" "mlx-audio==0.5.5" "${pins}"
 
 overridden="$(MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_CORE_PACKAGES[@]}\" \"\${MLX_MEDIA_PACKAGES[@]}\"")"
 expect_eq "unpinned override" "$(printf '%s\n' mlx mlx-lm mlx-audio)" "${overridden}"
+
+packaging="$(env bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_PACKAGING_PACKAGES[@]}\"")"
+expect_eq "packaging pins" "$(printf '%s\n' 'pip==26.2.1' 'setuptools==84.0.0' 'wheel==0.48.0' 'packaging==26.3')" "${packaging}"
+
+packaging_override="$(MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel MLX_PACKAGING_LIB_PACKAGE=packaging bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_PACKAGING_PACKAGES[@]}\"")"
+expect_eq "packaging override" "$(printf '%s\n' pip setuptools wheel packaging)" "${packaging_override}"
+
+BUILD_CONSTRAINT_WS="$(mktemp -d)"
+constraint_out="$(MLX_WORKSPACE="${BUILD_CONSTRAINT_WS}" bash -c "source \"${COMMON}\"; export_pip_build_constraint; printf '%s\n' \"\${PIP_BUILD_CONSTRAINT}\"; cat \"\${PIP_BUILD_CONSTRAINT}\"")"
+rm -rf "${BUILD_CONSTRAINT_WS}"
+expect_eq "PIP_BUILD_CONSTRAINT file" "$(printf '%s\n' "${BUILD_CONSTRAINT_WS}/.mlx-pip-build-constraint.txt" 'pip==26.2.1' 'setuptools==84.0.0' 'wheel==0.48.0' 'packaging==26.3')" "${constraint_out}"
+
+for installer in \
+  "${ROOT}/scripts/initial-build-mlx-native-media.sh" \
+  "${ROOT}/scripts/rebuild-mlx-native-media.sh" \
+  "${ROOT}/scripts/install-mlx-image.sh" \
+  "${ROOT}/scripts/install-mlx-video.sh"
+do
+  if grep -q 'install_packaging_tools' "${installer}"; then
+    pass "shared packaging install in $(basename "${installer}")"
+  else
+    fail "shared packaging install missing in $(basename "${installer}")"
+  fi
+done
+
+unpinned_hits="$(grep -E -n 'pip install[[:space:]].*(--upgrade|-U).*(^|[^[:alnum:]_])(pip|setuptools|wheel)([^[:alnum:]_]|$)' \
+  "${ROOT}/Makefile" "${ROOT}/scripts/"*.sh "${ROOT}/scripts/lib/"*.sh || true)"
+expect_eq "no unpinned packaging upgrade" "" "${unpinned_hits}"
+
+INSTALL_WS="$(mktemp -d)"
+mkdir -p "${INSTALL_WS}/.venv/bin"
+cat >"${INSTALL_WS}/.venv/bin/python" <<EOF
+#!/bin/sh
+if [ "\$1" = "-m" ] && [ "\$2" = "pip" ]; then
+  printf '%s' "\$1" >> "${INSTALL_WS}/pip-args"
+  shift
+  for arg in "\$@"; do
+    printf ' %s' "\$arg" >> "${INSTALL_WS}/pip-args"
+  done
+  printf '\\n' >> "${INSTALL_WS}/pip-args"
+  exit 0
+fi
+printf '%s\\n' 'pip 26.2.1' 'setuptools 84.0.0' 'wheel 0.48.0' 'packaging 26.3'
+EOF
+chmod +x "${INSTALL_WS}/.venv/bin/python"
+install_out="$(MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" bash -c "source \"${COMMON}\"; install_packaging_tools")"
+expect_eq "packaging install argv" "-m pip install --disable-pip-version-check --upgrade pip==26.2.1 setuptools==84.0.0 wheel==0.48.0 packaging==26.3" "$(cat "${INSTALL_WS}/pip-args")"
+expect_contains "installed pip is OK" "OK: Packaging tool pip 26.2.1" "${install_out}"
+expect_contains "installed setuptools is OK" "OK: Packaging tool setuptools 84.0.0" "${install_out}"
+expect_contains "installed wheel is OK" "OK: Packaging tool wheel 0.48.0" "${install_out}"
+expect_contains "installed packaging is OK" "OK: Packaging tool packaging 26.3" "${install_out}"
+if [[ "${install_out}" == *"WARN: Packaging tool pip"* ]]; then
+  fail "matching pip pin must not warn"
+else
+  pass "matching pip pin does not warn"
+fi
+
+rm -f "${INSTALL_WS}/pip-args"
+override_out="$(MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" MLX_PIP_PACKAGE='pip==1' MLX_SETUPTOOLS_PACKAGE='setuptools==2' MLX_WHEEL_PACKAGE='wheel==3' MLX_PACKAGING_LIB_PACKAGE='packaging==4' bash -c "source \"${COMMON}\"; install_packaging_tools")"
+expect_eq "packaging install override argv" "-m pip install --disable-pip-version-check --upgrade pip==1 setuptools==2 wheel==3 packaging==4" "$(cat "${INSTALL_WS}/pip-args")"
+expect_contains "override pip warns" "WARN: Packaging tool pip 26.2.1 (pin pip==1)" "${override_out}"
+
+wild_out="$(MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" MLX_SETUPTOOLS_PACKAGE='setuptools==84.*' MLX_WHEEL_PACKAGE='wheel===0.48.0' bash -c "source \"${COMMON}\"; report_packaging_tools")"
+expect_contains "wildcard spec is info" "INFO: Packaging tool setuptools 84.0.0 (spec setuptools==84.*)" "${wild_out}"
+expect_contains "triple-equal spec is info" "INFO: Packaging tool wheel 0.48.0 (spec wheel===0.48.0)" "${wild_out}"
+if [[ "${wild_out}" == *"WARN: Packaging tool setuptools"* || "${wild_out}" == *"WARN: Packaging tool wheel"* ]]; then
+  fail "non-exact specs must not warn"
+else
+  pass "non-exact specs do not warn"
+fi
+rm -rf "${INSTALL_WS}"
+
+FAKE_VENV="$(mktemp -d)"
+mkdir -p "${FAKE_VENV}/bin"
+cat >"${FAKE_VENV}/bin/python" <<'EOF'
+#!/bin/sh
+printf '%s\n' 'pip 26.2.1' 'setuptools 84.0.0' 'wheel 0.47.0' 'packaging 26.3'
+EOF
+chmod +x "${FAKE_VENV}/bin/python"
+packaging_report="$(MLX_VENV="${FAKE_VENV}" bash -c "source \"${COMMON}\"; report_packaging_tools")"
+rm -rf "${FAKE_VENV}"
+expect_contains "matching pip pin" "OK: Packaging tool pip 26.2.1" "${packaging_report}"
+expect_contains "matching setuptools pin" "OK: Packaging tool setuptools 84.0.0" "${packaging_report}"
+expect_contains "matching packaging pin" "OK: Packaging tool packaging 26.3" "${packaging_report}"
+expect_contains "wheel pin mismatch" "WARN: Packaging tool wheel 0.47.0 (pin wheel==0.48.0)" "${packaging_report}"
+if [[ "${packaging_report}" == *"WARN: Packaging tool pip"* ]]; then
+  fail "OK pip line must not also count as a warning"
+else
+  pass "OK pip line is not a warning"
+fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT

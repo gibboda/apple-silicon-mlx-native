@@ -67,7 +67,7 @@ require_cmd git
 
 log_info "Installing ${MLX_VIDEO_PACKAGE} into ${MLX_VENV}"
 warn_or_die_disk_headroom video-pip
-"${PY}" -m pip install --upgrade pip setuptools wheel
+install_packaging_tools
 "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
 
 if "${PY}" -c "import mlx_video" >/dev/null 2>&1; then
