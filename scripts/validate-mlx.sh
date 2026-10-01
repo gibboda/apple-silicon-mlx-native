@@ -20,7 +20,7 @@ usage() {
   cat <<'EOF'
 Usage: validate-mlx.sh [--venv PATH] [-h|--help]
 
-Validate Python arm64 execution, pinned pip/setuptools/wheel versions, mlx, mlx-lm,
+Validate Python arm64 execution, pinned pip/setuptools/wheel/packaging versions, mlx, mlx-lm,
 basic array ops, Metal observability, and mx.device_info() working-set / memory-limit probe.
 
   --venv PATH   Virtual environment to validate (default: $MLX_VENV)

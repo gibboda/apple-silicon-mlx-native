@@ -24,6 +24,7 @@
 #   MLX_PIP_PACKAGE         pip spec for pip (default: pinned == version)
 #   MLX_SETUPTOOLS_PACKAGE  pip spec for setuptools (default: pinned == version)
 #   MLX_WHEEL_PACKAGE       pip spec for wheel (default: pinned == version)
+#   MLX_PACKAGING_LIB_PACKAGE  pip spec for the packaging library (default: pinned == version)
 #   MLX_DISK_ENFORCE        If 1, abort when free space is under the download floor
 #   MLX_SKIP_DISK_CHECK     If 1, skip the free-space warning
 #   OVERRIDE_MEMORY_TIER    Force policy tier id: constrained|standard|high|workstation|large

@@ -39,7 +39,11 @@ MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video
 MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-pip==26.2.1}"
 MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-setuptools==84.0.0}"
 MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-wheel==0.48.0}"
-MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}")
+# wheel 0.48.0 depends on packaging>=24.0. Pin the library itself so a fresh
+# venv does not float to whatever packaging release is newest that day.
+# Named MLX_PACKAGING_LIB_PACKAGE so it is not confused with MLX_PACKAGING_PACKAGES.
+MLX_PACKAGING_LIB_PACKAGE="${MLX_PACKAGING_LIB_PACKAGE:-packaging==26.3}"
+MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}" "${MLX_PACKAGING_LIB_PACKAGE}")
 # pip 26+ applies this to PEP 517 isolated build envs (venv setuptools/wheel are ignored).
 MLX_PIP_BUILD_CONSTRAINT_FILE="${MLX_PIP_BUILD_CONSTRAINT_FILE:-${MLX_WORKSPACE}/.mlx-pip-build-constraint.txt}"
 MLX_VIDEO_WAN_SOURCE_REPO="${MLX_VIDEO_WAN_SOURCE_REPO:-Wan-AI/Wan2.1-T2V-1.3B}"
@@ -987,13 +991,13 @@ report_packaging_tools() {
     return 0
   fi
   if ! versions="$("${py}" -c 'import importlib.metadata as m
-for name in ("pip", "setuptools", "wheel"):
+for name in ("pip", "setuptools", "wheel", "packaging"):
     try:
         print(name + " " + m.version(name))
     except m.PackageNotFoundError:
         print(name + " missing")
 ')"; then
-    log_warn "Could not read pip, setuptools, and wheel versions"
+    log_warn "Could not read pip, setuptools, wheel, and packaging versions"
     return 0
   fi
   while IFS= read -r line; do
@@ -1004,9 +1008,12 @@ for name in ("pip", "setuptools", "wheel"):
       pip) spec="${MLX_PIP_PACKAGE}" ;;
       setuptools) spec="${MLX_SETUPTOOLS_PACKAGE}" ;;
       wheel) spec="${MLX_WHEEL_PACKAGE}" ;;
+      packaging) spec="${MLX_PACKAGING_LIB_PACKAGE}" ;;
       *) spec="" ;;
     esac
-    if [[ "${spec}" == *==* ]]; then
+    # Exact pins only. Wildcard specs (setuptools==84.*) and === are not
+    # plain string compares, so they are reported as the configured spec.
+    if [[ "${spec}" == *==* && "${spec}" != *===* && "${spec}" != *'*'* ]]; then
       pin="${spec#*==}"
       if [[ "${installed}" == "${pin}" ]]; then
         log_ok "Packaging tool ${name} ${installed}"
@@ -1039,7 +1046,9 @@ install_packaging_tools() {
   py="$(venv_python)"
   [[ -x "${py}" ]] || die "Python venv not found at ${py}. Run: make install"
   log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
-  "${py}" -m pip install --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
+  # Silence "you should upgrade pip" for this process, including later installs.
+  export PIP_DISABLE_PIP_VERSION_CHECK=1
+  "${py}" -m pip install --disable-pip-version-check --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
   export_pip_build_constraint
   log_info "PEP 517 build isolation constrained via PIP_BUILD_CONSTRAINT=${MLX_PIP_BUILD_CONSTRAINT_FILE}"
   report_packaging_tools "${py}"

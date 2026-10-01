@@ -42,7 +42,7 @@ Re-run `make install` after the installer finishes.
 WARN: Packaging tool pip 25.2 (pin pip==26.2.1)
 ```
 
-The venv still has an older `pip`, `setuptools`, or `wheel` than the pins in `scripts/lib/common.sh`. Rebuild to apply them:
+The venv has a different `pip`, `setuptools`, `wheel`, or `packaging` than the pins in `scripts/lib/common.sh`. A mismatch can be older or newer, for example after `MLX_PIP_PACKAGE=pip make rebuild` or a manual `pip install -U pip`. Rebuild to apply the pins. If you rebuilt with an override on purpose, this warning is expected.
 
 ```bash
 make rebuild
