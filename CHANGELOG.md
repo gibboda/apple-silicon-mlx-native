@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Pin `actions/checkout` to the v7.0.1 commit SHA in GitHub workflows (Node 24 runtime; persisted credentials now live under `$RUNNER_TEMP`)
 - Docs and help text describe `make list` as the full text catalog with fit labels (including `poor`), not only models that fit. The models matrix notes that 7B is `poor` on 8 GB in `make list`, matching the RAM fence
 
 ## [0.2.8] - 2026-09-27
