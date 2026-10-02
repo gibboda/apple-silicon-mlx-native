@@ -1449,7 +1449,7 @@ _install_owned_exit_trap() {
   local raw body quoted_body
   if [[ -z "${saved_spec}" ]]; then
     # shellcheck disable=SC2064
-    trap "${cleanup}" EXIT
+    trap 'rc=$?; '"${cleanup}"'; exit "$rc"' EXIT
     return 0
   fi
   raw="${saved_spec#trap -- }"
@@ -1457,12 +1457,15 @@ _install_owned_exit_trap() {
   eval "body=${raw}"
   if [[ -z "${body}" ]]; then
     # shellcheck disable=SC2064
-    trap "${cleanup}" EXIT
+    trap 'rc=$?; '"${cleanup}"'; exit "$rc"' EXIT
     return 0
   fi
   quoted_body="$(printf '%q' "${body}")"
+  # Capture $? before owned rm -rf so a caller trap that reads $? still sees
+  # the failure that triggered EXIT, not the cleanup status. set +e around
+  # (exit "$rc") keeps errexit from aborting the trap before the saved handler.
   # shellcheck disable=SC2064
-  trap "${cleanup}; eval ${quoted_body}" EXIT
+  trap 'rc=$?; '"${cleanup}"'; set +e; (exit "$rc"); eval '"${quoted_body}"'; set -e; exit "$rc"' EXIT
 }
 
 # Put back the EXIT trap captured by _exit_trap_spec. Empty means unset.

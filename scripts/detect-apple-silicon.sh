@@ -87,63 +87,45 @@ brew_ok="false"
 xcode_ok="false"
 check_xcode_clt && xcode_ok="true"
 
-case "${MODE}" in
-  human)
-    print_hardware_summary
-    echo "Homebrew:         ${brew_ok} (${brew_prefix:-not found})"
-    echo "Xcode CLT:        ${xcode_ok}"
-    ;;
-  recommend)
-    print_composed_profile
-    ;;
-  list)
-    # Flag parser consumes all args; no positional passthrough to the list renderer.
-    # shellcheck disable=SC2119
-    print_recommended_model_list
-    ;;
-  list-image)
-    # shellcheck disable=SC2119
-    print_recommended_image_list
-    ;;
-  list-video)
-    # shellcheck disable=SC2119
-    print_recommended_video_list
-    ;;
-  json)
-    DETECT_ARCH="${MLX_ARCH}" \
-    DETECT_CHIP="${MLX_CHIP}" \
-    DETECT_CHIP_FAMILY="${MLX_CHIP_FAMILY:-}" \
-    DETECT_CHIP_SKU="${MLX_CHIP_SKU:-}" \
-    DETECT_GPU_CORES="${MLX_GPU_CORES:-}" \
-    DETECT_P_CORES="${MLX_P_CORES:-}" \
-    DETECT_E_CORES="${MLX_E_CORES:-}" \
-    DETECT_HW_MODEL="${MLX_HW_MODEL:-}" \
-    DETECT_THERMAL="${MLX_THERMAL_CLASS:-}" \
-    DETECT_BANDWIDTH="${MLX_BANDWIDTH_GBS:-}" \
-    DETECT_THROUGHPUT="${MLX_THROUGHPUT_CLASS:-}" \
-    DETECT_MEM_BYTES="${MLX_MEM_BYTES}" \
-    DETECT_MEM_GIB="${MLX_MEM_GIB}" \
-    DETECT_TIER_ID="${MLX_TIER_ID}" \
-    DETECT_TIER_LABEL="${MLX_TIER_LABEL}" \
-    DETECT_PHYSICAL_TIER_ID="${MLX_PHYSICAL_TIER_ID}" \
-    DETECT_PHYSICAL_TIER_LABEL="${MLX_PHYSICAL_TIER_LABEL:-}" \
-    DETECT_TIER_HINT="${MLX_TIER_HINT}" \
-    DETECT_CORES="${MLX_CPU_CORES}" \
-    DETECT_MACOS="${MLX_MACOS_VERSION}" \
-    DETECT_DISK="${MLX_DISK_AVAIL_GIB:-0}" \
-    DETECT_PY="$(detect_python_version)" \
-    DETECT_BREW_OK="${brew_ok}" \
-    DETECT_BREW_PREFIX="${brew_prefix}" \
-    DETECT_XCODE="${xcode_ok}" \
-    DETECT_MODEL="${MLX_RECOMMENDED_MODEL}" \
-    DETECT_CONTEXT="${MLX_RECOMMENDED_CONTEXT}" \
-    DETECT_WORKING_SET="${MLX_WORKING_SET_BYTES:-}" \
-    DETECT_GPU_ARCH="${MLX_GPU_ARCH:-}" \
-    DETECT_IMAGE_PROFILE="${MLX_RECOMMENDED_IMAGE_PROFILE}" \
-    DETECT_VIDEO_PROFILE="${MLX_RECOMMENDED_VIDEO_PROFILE}" \
-    DETECT_VIDEO_FORCE="${MLX_VIDEO_FORCE_REQUIRED:-0}" \
-    DETECT_WORKSPACE="${MLX_WORKSPACE}" \
-    python3 - <<'PY'
+# macOS /bin/bash 3.2 mishandles a here-doc after many VAR=value continuations
+# inside case, so python3 can run with empty stdin and emit no JSON.
+print_detect_json() {
+  local brew_ok="$1" brew_prefix="$2" xcode_ok="$3"
+  export DETECT_ARCH="${MLX_ARCH}"
+  export DETECT_CHIP="${MLX_CHIP}"
+  export DETECT_CHIP_FAMILY="${MLX_CHIP_FAMILY:-}"
+  export DETECT_CHIP_SKU="${MLX_CHIP_SKU:-}"
+  export DETECT_GPU_CORES="${MLX_GPU_CORES:-}"
+  export DETECT_P_CORES="${MLX_P_CORES:-}"
+  export DETECT_E_CORES="${MLX_E_CORES:-}"
+  export DETECT_HW_MODEL="${MLX_HW_MODEL:-}"
+  export DETECT_THERMAL="${MLX_THERMAL_CLASS:-}"
+  export DETECT_BANDWIDTH="${MLX_BANDWIDTH_GBS:-}"
+  export DETECT_THROUGHPUT="${MLX_THROUGHPUT_CLASS:-}"
+  export DETECT_MEM_BYTES="${MLX_MEM_BYTES}"
+  export DETECT_MEM_GIB="${MLX_MEM_GIB}"
+  export DETECT_TIER_ID="${MLX_TIER_ID}"
+  export DETECT_TIER_LABEL="${MLX_TIER_LABEL}"
+  export DETECT_PHYSICAL_TIER_ID="${MLX_PHYSICAL_TIER_ID}"
+  export DETECT_PHYSICAL_TIER_LABEL="${MLX_PHYSICAL_TIER_LABEL:-}"
+  export DETECT_TIER_HINT="${MLX_TIER_HINT}"
+  export DETECT_CORES="${MLX_CPU_CORES}"
+  export DETECT_MACOS="${MLX_MACOS_VERSION}"
+  export DETECT_DISK="${MLX_DISK_AVAIL_GIB:-0}"
+  export DETECT_PY
+  DETECT_PY="$(detect_python_version)"
+  export DETECT_BREW_OK="${brew_ok}"
+  export DETECT_BREW_PREFIX="${brew_prefix}"
+  export DETECT_XCODE="${xcode_ok}"
+  export DETECT_MODEL="${MLX_RECOMMENDED_MODEL}"
+  export DETECT_CONTEXT="${MLX_RECOMMENDED_CONTEXT}"
+  export DETECT_WORKING_SET="${MLX_WORKING_SET_BYTES:-}"
+  export DETECT_GPU_ARCH="${MLX_GPU_ARCH:-}"
+  export DETECT_IMAGE_PROFILE="${MLX_RECOMMENDED_IMAGE_PROFILE}"
+  export DETECT_VIDEO_PROFILE="${MLX_RECOMMENDED_VIDEO_PROFILE}"
+  export DETECT_VIDEO_FORCE="${MLX_VIDEO_FORCE_REQUIRED:-0}"
+  export DETECT_WORKSPACE="${MLX_WORKSPACE}"
+  python3 - <<'PY'
 import json, os
 
 def maybe_int(key):
@@ -200,6 +182,32 @@ if arch is not None:
     payload["gpu_arch"] = arch
 print(json.dumps(payload, indent=2))
 PY
+}
+
+case "${MODE}" in
+  human)
+    print_hardware_summary
+    echo "Homebrew:         ${brew_ok} (${brew_prefix:-not found})"
+    echo "Xcode CLT:        ${xcode_ok}"
+    ;;
+  recommend)
+    print_composed_profile
+    ;;
+  list)
+    # Flag parser consumes all args; no positional passthrough to the list renderer.
+    # shellcheck disable=SC2119
+    print_recommended_model_list
+    ;;
+  list-image)
+    # shellcheck disable=SC2119
+    print_recommended_image_list
+    ;;
+  list-video)
+    # shellcheck disable=SC2119
+    print_recommended_video_list
+    ;;
+  json)
+    print_detect_json "${brew_ok}" "${brew_prefix}" "${xcode_ok}"
     ;;
   env)
     # Quote values so `eval "$(... --env)"` / sourcing is safe with spaces.

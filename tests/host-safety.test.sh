@@ -637,6 +637,29 @@ else
   pass "failed atomic create removed the create lock"
 fi
 
+# Owned cleanup must not overwrite $? before a caller EXIT trap reads it.
+EXIT_RC="${TMP}/exit-trap-rc"
+rm -rf "${EXIT_RC}"
+mkdir -p "${EXIT_RC}/bin"
+cat >"${EXIT_RC}/bin/python-fail" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "${EXIT_RC}/bin/python-fail"
+rc_file="${EXIT_RC}/captured-rc"
+(
+  rc_file="${rc_file}"
+  trap 'rc=$?; printf "%s" "${rc}" >"${rc_file}"' EXIT
+  # shellcheck disable=SC1090
+  source "${COMMON}"
+  create_atomic_project_venv "${EXIT_RC}/bin/python-fail" "${EXIT_RC}/.venv"
+) >/dev/null 2>&1 || true
+if [[ "$(cat "${rc_file}" 2>/dev/null || echo missing)" == "1" ]]; then
+  pass "failed atomic create preserves exit status for caller EXIT trap"
+else
+  fail "failed atomic create preserves exit status for caller EXIT trap (got $(cat "${rc_file}" 2>/dev/null || echo missing))"
+fi
+
 # --- real install / venv scripts (stubs; no live Homebrew) ---
 
 SCRIPT_STUB="${TMP}/script-stub"
@@ -693,6 +716,16 @@ run_stubbed() {
     MLX_WORKSPACE="${ws}" MLX_VENV="${ws}/.venv" MLX_SKIP_DEVICE_PROBE=1 \
     PATH="${SCRIPT_STUB}:${PATH}" "$@"
 }
+
+DETECT_JSON="${TMP}/detect-json"
+mkdir -p "${DETECT_JSON}"
+detect_json_out="$(run_stubbed "${DETECT_JSON}" "${DETECT}" --json 2>/dev/null)" || true
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get("architecture")=="arm64" and d.get("recommended_model") else 1)' \
+  "${detect_json_out}" 2>/dev/null; then
+  pass "detect --json emits parseable arm64 payload under Darwin stubs"
+else
+  fail "detect --json emits parseable arm64 payload under Darwin stubs"
+fi
 
 FRESH="${TMP}/fresh-install"
 mkdir -p "${FRESH}"
