@@ -258,8 +258,12 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   expect_contains "foreign home mentions Homebrew prefix" "Homebrew prefix" "${foreign_home_err}"
 
   ATOMIC="${TMP}/atomic"
-  mkdir -p "${ATOMIC}/.venv.partial.7" "${ATOMIC}/.venv.partial.notes"
-  printf 'stale\n' >"${ATOMIC}/.venv.partial.7/marker"
+  dead_partial_pid=2147483646
+  while kill -0 "${dead_partial_pid}" 2>/dev/null; do
+    dead_partial_pid=$((dead_partial_pid - 1))
+  done
+  mkdir -p "${ATOMIC}/.venv.partial.${dead_partial_pid}" "${ATOMIC}/.venv.partial.notes"
+  printf 'stale\n' >"${ATOMIC}/.venv.partial.${dead_partial_pid}/marker"
   printf 'keep\n' >"${ATOMIC}/.venv.partial.notes/marker"
   rm -rf "${ATOMIC}/.venv"
   if run_atomic_venv "${ATOMIC}" "${ATOMIC}/.venv" "$(command -v python3)"; then
@@ -303,10 +307,15 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   else
     fail "atomic venv activate and pyvenv.cfg record .venv (${prompt_line})"
   fi
-  if [[ -d "${ATOMIC}/.venv.partial.7" ]]; then
+  if [[ -d "${ATOMIC}/.venv.partial.${dead_partial_pid}" ]]; then
     fail "atomic venv left a stale partial directory"
   else
     pass "atomic venv removed a stale partial directory"
+  fi
+  if [[ -d "${ATOMIC}/.venv.create-lock" ]]; then
+    fail "atomic venv left the create lock"
+  else
+    pass "atomic venv released the create lock"
   fi
   if [[ -f "${ATOMIC}/.venv.partial.notes/marker" ]]; then
     pass "atomic venv left an unrelated partial-named directory"
@@ -318,6 +327,66 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   else
     pass "atomic venv left no partial directory"
   fi
+
+  LIVE="${TMP}/live-partial"
+  mkdir -p "${LIVE}"
+  sleep 30 &
+  live_partial_pid=$!
+  mkdir -p "${LIVE}/.venv.partial.${live_partial_pid}"
+  printf 'live\n' >"${LIVE}/.venv.partial.${live_partial_pid}/marker"
+  live_partial_err="$(run_atomic_venv "${LIVE}" "${LIVE}/.venv" "$(command -v python3)" 2>&1)" || true
+  expect_fail "create refuses an in-use partial directory" \
+    run_atomic_venv "${LIVE}" "${LIVE}/.venv" "$(command -v python3)"
+  expect_contains "in-use partial error names the directory" "in-use temporary venv" "${live_partial_err}"
+  if [[ -f "${LIVE}/.venv.partial.${live_partial_pid}/marker" ]]; then
+    pass "create left an in-use partial directory in place"
+  else
+    fail "create removed an in-use partial directory"
+  fi
+  kill "${live_partial_pid}" 2>/dev/null || true
+  wait "${live_partial_pid}" 2>/dev/null || true
+
+  RACE="${TMP}/race"
+  mkdir -p "${RACE}"
+  sleep 30 &
+  race_sleep=$!
+  mkdir -p "${RACE}/.venv.create-lock"
+  printf '%s\n' "${race_sleep}" >"${RACE}/.venv.create-lock/pid"
+  # A background function inherits this script's EXIT trap. Clear it so the
+  # waiter cannot delete the test directory when it exits.
+  (
+    trap - EXIT
+    run_atomic_venv "${RACE}" "${RACE}/.venv" "$(command -v python3)" >"${RACE}/out" 2>&1
+  ) &
+  race_create=$!
+  race_waited=0
+  while (( race_waited < 50 )); do
+    if grep -q "Waiting for venv create lock held by pid ${race_sleep}" "${RACE}/out" 2>/dev/null; then
+      break
+    fi
+    sleep 0.2
+    race_waited=$((race_waited + 1))
+  done
+  race_lock_pid="$(cat "${RACE}/.venv.create-lock/pid" 2>/dev/null || true)"
+  if grep -q "Waiting for venv create lock held by pid ${race_sleep}" "${RACE}/out" 2>/dev/null \
+    && kill -0 "${race_create}" 2>/dev/null \
+    && [[ "${race_lock_pid}" == "${race_sleep}" && ! -e "${RACE}/.venv" ]]; then
+    pass "create waits while another pid holds the lock"
+  else
+    fail "create waits while another pid holds the lock"
+  fi
+  mkdir -p "${RACE}/.venv"
+  printf 'owned\n' >"${RACE}/.venv/marker"
+  kill "${race_sleep}" 2>/dev/null || true
+  wait "${race_sleep}" 2>/dev/null || true
+  wait "${race_create}" 2>/dev/null || true
+  if [[ -f "${RACE}/.venv/marker" ]]; then
+    pass "waiting create left an existing .venv in place"
+  else
+    fail "waiting create removed an existing .venv"
+  fi
+  race_out="$(cat "${RACE}/out" 2>/dev/null || true)"
+  expect_contains "waiting create refuses an existing .venv" "Refusing to overwrite" "${race_out}"
 else
   pass "skip venv identity tests (python3 -m venv unavailable)"
 fi
