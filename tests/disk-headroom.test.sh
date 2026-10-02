@@ -58,7 +58,7 @@ run_check() {
   local avail="$1"
   local profile="$2"
   shift 2
-  env MLX_DISK_AVAIL_GIB="${avail}" "$@" bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom \"${profile}\""
+  env MLX_DISK_AVAIL_GIB="${avail}" "$@" bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom \"${profile}\"" 2>&1
 }
 
 expect_eq "media floor default" "4" "$(floor_of media-pip)"
@@ -158,7 +158,7 @@ else
 fi
 
 rm -f "${INSTALL_WS}/pip-args"
-override_out="$(MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" MLX_PIP_PACKAGE='pip==1' MLX_SETUPTOOLS_PACKAGE='setuptools==2' MLX_WHEEL_PACKAGE='wheel==3' MLX_PACKAGING_LIB_PACKAGE='packaging==4' bash -c "source \"${COMMON}\"; install_packaging_tools")"
+override_out="$(MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" MLX_PIP_PACKAGE='pip==1' MLX_SETUPTOOLS_PACKAGE='setuptools==2' MLX_WHEEL_PACKAGE='wheel==3' MLX_PACKAGING_LIB_PACKAGE='packaging==4' bash -c "source \"${COMMON}\"; install_packaging_tools" 2>&1)"
 expect_eq "packaging install override argv" "-m pip install --disable-pip-version-check --upgrade pip==1 setuptools==2 wheel==3 packaging==4" "$(cat "${INSTALL_WS}/pip-args")"
 expect_contains "override pip warns" "WARN: Packaging tool pip 26.2.1 (pin pip==1)" "${override_out}"
 
@@ -179,7 +179,7 @@ cat >"${FAKE_VENV}/bin/python" <<'EOF'
 printf '%s\n' 'pip 26.2.1' 'setuptools 84.0.0' 'wheel 0.47.0' 'packaging 26.3'
 EOF
 chmod +x "${FAKE_VENV}/bin/python"
-packaging_report="$(MLX_VENV="${FAKE_VENV}" bash -c "source \"${COMMON}\"; report_packaging_tools")"
+packaging_report="$(MLX_VENV="${FAKE_VENV}" bash -c "source \"${COMMON}\"; report_packaging_tools" 2>&1)"
 rm -rf "${FAKE_VENV}"
 expect_contains "matching pip pin" "OK: Packaging tool pip 26.2.1" "${packaging_report}"
 expect_contains "matching setuptools pin" "OK: Packaging tool setuptools 84.0.0" "${packaging_report}"

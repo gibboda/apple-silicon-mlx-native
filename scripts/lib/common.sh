@@ -60,7 +60,7 @@ readonly COLOR_RESET=$'\033[0m'
 
 log_info()  { printf '%s%s%s\n' "${COLOR_BLUE}" "INFO: $*" "${COLOR_RESET}"; }
 log_ok()    { printf '%s%s%s\n' "${COLOR_GREEN}" "OK: $*" "${COLOR_RESET}"; }
-log_warn()  { printf '%s%s%s\n' "${COLOR_YELLOW}" "WARN: $*" "${COLOR_RESET}"; }
+log_warn()  { printf '%s%s%s\n' "${COLOR_YELLOW}" "WARN: $*" "${COLOR_RESET}" >&2; }
 log_error() { printf '%s%s%s\n' "${COLOR_RED}" "ERROR: $*" "${COLOR_RESET}" >&2; }
 log_header() {
   printf '\n%s%s%s\n' "${COLOR_BOLD}" "=== $* ===" "${COLOR_RESET}"
