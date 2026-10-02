@@ -300,7 +300,8 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
     fail "atomic venv pip missing"
   fi
   pip_shebang="$(head -n 1 "${ATOMIC}/.venv/bin/pip")"
-  if [[ "${pip_shebang}" == "#!${ATOMIC}/.venv/bin/python"* && "${pip_shebang}" != *".partial."* ]]; then
+  atomic_canon="$(cd "${ATOMIC}" && pwd -P)"
+  if [[ "${pip_shebang}" == "#!${atomic_canon}/.venv/bin/python"* && "${pip_shebang}" != *".partial."* ]]; then
     pass "atomic venv pip shebang points at .venv"
   else
     fail "atomic venv pip shebang points at .venv (${pip_shebang})"
