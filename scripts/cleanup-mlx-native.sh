@@ -265,6 +265,14 @@ else
   log_info "No venv to remove at ${MLX_VENV}"
 fi
 
+if (( ! KEEP_VENV )); then
+  while IFS= read -r stale; do
+    [[ -n "${stale}" ]] || continue
+    assert_path_under_workspace "${stale}" "incomplete venv"
+    queue_remove "${stale}" "incomplete venv create"
+  done < <(list_stale_venv_partials "${MLX_VENV}")
+fi
+
 # --- local config (opt-in) ---
 if (( REMOVE_CONFIG )); then
   if [[ "${MLX_MODELS_ENV}" == "${MLX_MODELS_EXAMPLE}" ]]; then

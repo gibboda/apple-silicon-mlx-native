@@ -258,7 +258,9 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   expect_contains "foreign home mentions Homebrew prefix" "Homebrew prefix" "${foreign_home_err}"
 
   ATOMIC="${TMP}/atomic"
-  mkdir -p "${ATOMIC}"
+  mkdir -p "${ATOMIC}/.venv.partial.7" "${ATOMIC}/.venv.partial.notes"
+  printf 'stale\n' >"${ATOMIC}/.venv.partial.7/marker"
+  printf 'keep\n' >"${ATOMIC}/.venv.partial.notes/marker"
   rm -rf "${ATOMIC}/.venv"
   if run_atomic_venv "${ATOMIC}" "${ATOMIC}/.venv" "$(command -v python3)"; then
     pass "atomic venv create leaves a working tree"
@@ -274,6 +276,41 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
     pass "atomic venv pip works"
   else
     fail "atomic venv pip missing"
+  fi
+  pip_shebang="$(head -n 1 "${ATOMIC}/.venv/bin/pip")"
+  if [[ "${pip_shebang}" == "#!${ATOMIC}/.venv/bin/python"* && "${pip_shebang}" != *".partial."* ]]; then
+    pass "atomic venv pip shebang points at .venv"
+  else
+    fail "atomic venv pip shebang points at .venv (${pip_shebang})"
+  fi
+  if "${ATOMIC}/.venv/bin/pip" --version >/dev/null 2>&1; then
+    pass "atomic venv pip script runs"
+  else
+    fail "atomic venv pip script runs"
+  fi
+  prompt_line="$(grep '^VIRTUAL_ENV_PROMPT=' "${ATOMIC}/.venv/bin/activate" || true)"
+  if grep -F -q "export VIRTUAL_ENV=${ATOMIC}/.venv" "${ATOMIC}/.venv/bin/activate" \
+    && [[ "${prompt_line}" == "VIRTUAL_ENV_PROMPT=.venv" || "${prompt_line}" == "VIRTUAL_ENV_PROMPT='(.venv)"* ]] \
+    && ! grep -F -q '.partial.' "${ATOMIC}/.venv/bin/activate" \
+    && ! grep -F -q '.partial.' "${ATOMIC}/.venv/pyvenv.cfg"; then
+    pass "atomic venv activate and pyvenv.cfg record .venv"
+  else
+    fail "atomic venv activate and pyvenv.cfg record .venv (${prompt_line})"
+  fi
+  if [[ -d "${ATOMIC}/.venv.partial.7" ]]; then
+    fail "atomic venv left a stale partial directory"
+  else
+    pass "atomic venv removed a stale partial directory"
+  fi
+  if [[ -f "${ATOMIC}/.venv.partial.notes/marker" ]]; then
+    pass "atomic venv left an unrelated partial-named directory"
+  else
+    fail "atomic venv removed an unrelated partial-named directory"
+  fi
+  if compgen -G "${ATOMIC}/.venv.partial.[0-9]*" >/dev/null; then
+    fail "atomic venv left a partial directory"
+  else
+    pass "atomic venv left no partial directory"
   fi
 else
   pass "skip venv identity tests (python3 -m venv unavailable)"

@@ -181,6 +181,16 @@ expect_fail "rejects config path with .. escaping the workspace" \
   "${CLEANUP}" --config --keep-venv --force
 assert_exists "${TMP}/outside/secret.env"
 
+# 17. default cleanup removes a killed atomic-create directory, not a similar name
+make_venv "${MLX_VENV}"
+make_venv "${WS}/.venv.partial.42"
+mkdir -p "${WS}/.venv.partial.notes"
+printf 'keep\n' >"${WS}/.venv.partial.notes/marker"
+expect_ok "cleanup removes stale partial venv" "${CLEANUP}" --force
+assert_missing "${MLX_VENV}"
+assert_missing "${WS}/.venv.partial.42"
+assert_exists "${WS}/.venv.partial.notes/marker"
+
 if (( failures > 0 )); then
   printf 'CLEANUP_SELFTEST_RESULT=fail (%s)\n' "${failures}" >&2
   exit 1
