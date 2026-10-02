@@ -90,7 +90,7 @@ check_xcode_clt && xcode_ok="true"
 # macOS /bin/bash 3.2 mishandles inline here-docs in some case/continuation
 # layouts, so JSON emission lives in scripts/lib/detect_json.py.
 print_detect_json() {
-  local brew_ok="$1" brew_prefix="$2" xcode_ok="$3"
+  local brew_ok="$1" brew_prefix="$2" xcode_ok="$3" detect_py
   export DETECT_ARCH="${MLX_ARCH}"
   export DETECT_CHIP="${MLX_CHIP}"
   export DETECT_CHIP_FAMILY="${MLX_CHIP_FAMILY:-}"
@@ -112,7 +112,6 @@ print_detect_json() {
   export DETECT_CORES="${MLX_CPU_CORES}"
   export DETECT_MACOS="${MLX_MACOS_VERSION}"
   export DETECT_DISK="${MLX_DISK_AVAIL_GIB:-0}"
-  local detect_py
   detect_py="$(detect_python_version)"
   export DETECT_PY="${detect_py}"
   export DETECT_BREW_OK="${brew_ok}"
@@ -122,12 +121,19 @@ print_detect_json() {
   export DETECT_CONTEXT="${MLX_RECOMMENDED_CONTEXT}"
   export DETECT_WORKING_SET="${MLX_WORKING_SET_BYTES:-}"
   export DETECT_GPU_ARCH="${MLX_GPU_ARCH:-}"
-  export DETECT_IMAGE_PROFILE="${MLX_RECOMMENDED_IMAGE_PROFILE}"
-  export DETECT_VIDEO_PROFILE="${MLX_RECOMMENDED_VIDEO_PROFILE}"
+  export DETECT_IMAGE_PROFILE="${MLX_RECOMMENDED_IMAGE_PROFILE:-}"
+  export DETECT_VIDEO_PROFILE="${MLX_RECOMMENDED_VIDEO_PROFILE:-}"
   export DETECT_VIDEO_FORCE="${MLX_VIDEO_FORCE_REQUIRED:-0}"
   export DETECT_WORKSPACE="${MLX_WORKSPACE}"
-  python3 "${SCRIPT_DIR}/lib/detect_json.py"
+  python3 "${SCRIPT_DIR}/lib/detect_json.py" || die "detect JSON emission failed"
 }
+
+# macOS /bin/bash 3.2 (GitHub Actions) can skip case arms that call functions
+# after a function definition in the same compound list; handle --json first.
+if [[ "${MODE}" == "json" ]]; then
+  print_detect_json "${brew_ok}" "${brew_prefix}" "${xcode_ok}"
+  exit 0
+fi
 
 case "${MODE}" in
   human)
@@ -151,11 +157,11 @@ case "${MODE}" in
     # shellcheck disable=SC2119
     print_recommended_video_list
     ;;
-  json)
-    print_detect_json "${brew_ok}" "${brew_prefix}" "${xcode_ok}"
-    ;;
   env)
     # Quote values so `eval "$(... --env)"` / sourcing is safe with spaces.
     print_detect_env "${brew_ok}" "${brew_prefix}" "${xcode_ok}"
+    ;;
+  *)
+    die "Unhandled detect mode: ${MODE}"
     ;;
 esac

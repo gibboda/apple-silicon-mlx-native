@@ -63,9 +63,17 @@ jobs:
         run: scripts/detect-apple-silicon.sh --quiet
 
       - name: Parse detect JSON
+        env:
+          # Smoke does not install MLX; skip device probe for stable JSON output.
+          MLX_SKIP_DEVICE_PROBE: 1
         run: |
           set -euo pipefail
-          scripts/detect-apple-silicon.sh --json > "${RUNNER_TEMP}/detect.json"
+          scripts/detect-apple-silicon.sh --json > "${RUNNER_TEMP}/detect.json" 2> "${RUNNER_TEMP}/detect.err"
+          if [[ ! -s "${RUNNER_TEMP}/detect.json" ]]; then
+            echo "detect --json produced no stdout:" >&2
+            cat "${RUNNER_TEMP}/detect.err" >&2 || true
+            exit 1
+          fi
           python3 - "${RUNNER_TEMP}/detect.json" <<'PY'
           import json
           import sys
