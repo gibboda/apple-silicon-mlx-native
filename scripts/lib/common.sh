@@ -1455,7 +1455,7 @@ create_atomic_project_venv() {
     [[ -n "${stale}" ]] || continue
     stale_pid="${stale##*.}"
     if [[ "${stale_pid}" != "$$" ]] && kill -0 "${stale_pid}" 2>/dev/null; then
-      die "Refusing to remove in-use temporary venv ${stale}"
+      die "Refusing to remove in-use temporary venv ${stale} (pid ${stale_pid} is running). If no other make venv/rebuild is active, remove it or run: make clean"
     fi
     rm -rf -- "${stale}"
   done < <(list_stale_venv_partials "${dest}")

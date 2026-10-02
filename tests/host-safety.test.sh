@@ -356,6 +356,7 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   expect_fail "create refuses an in-use partial directory" \
     run_atomic_venv "${LIVE}" "${LIVE}/.venv" "$(command -v python3)"
   expect_contains "in-use partial error names the directory" "in-use temporary venv" "${live_partial_err}"
+  expect_contains "in-use partial error suggests make clean" "make clean" "${live_partial_err}"
   if [[ -f "${LIVE}/.venv.partial.${live_partial_pid}/marker" ]]; then
     pass "create left an in-use partial directory in place"
   else
