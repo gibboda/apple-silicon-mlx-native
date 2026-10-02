@@ -1437,6 +1437,9 @@ create_atomic_project_venv() {
   [[ -x "${py}" ]] || die "Venv creation failed: ${py} is not executable"
   "${py}" -m pip --version >/dev/null || die "Venv creation failed: pip is not available in ${partial}"
   rewrite_relocated_venv_paths "${brew_py}" "${partial}" "${dest}"
+  if [[ -e "${dest}" || -L "${dest}" ]]; then
+    die "Refusing to overwrite ${dest}: it appeared while building ${partial}"
+  fi
   mv "${partial}" "${dest}"
   # This run now owns the renamed tree. A later failure may remove it.
   # shellcheck disable=SC2064
