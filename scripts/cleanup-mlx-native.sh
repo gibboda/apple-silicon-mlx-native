@@ -266,11 +266,34 @@ else
 fi
 
 if (( ! KEEP_VENV )); then
-  while IFS= read -r stale; do
-    [[ -n "${stale}" ]] || continue
-    assert_path_under_workspace "${stale}" "incomplete venv"
-    queue_remove "${stale}" "incomplete venv create"
-  done < <(list_stale_venv_partials "${MLX_VENV}")
+  skip_stale_partials=0
+  venv_create_lock="${MLX_VENV}.create-lock"
+  lock_pid=""
+  if [[ -d "${venv_create_lock}" && -f "${venv_create_lock}/pid" && ! -L "${venv_create_lock}/pid" ]]; then
+    IFS= read -r lock_pid <"${venv_create_lock}/pid" || lock_pid=""
+  fi
+  case "${lock_pid}" in
+    ''|*[!0-9]*) lock_pid="" ;;
+  esac
+  if [[ -n "${lock_pid}" ]] && kill -0 "${lock_pid}" 2>/dev/null; then
+    log_info "Skipping incomplete venv partials while ${venv_create_lock} is held by pid ${lock_pid}"
+    skip_stale_partials=1
+  fi
+  if (( ! skip_stale_partials )); then
+    while IFS= read -r stale; do
+      [[ -n "${stale}" ]] || continue
+      assert_path_under_workspace "${stale}" "incomplete venv"
+      stale_pid="${stale##*.}"
+      case "${stale_pid}" in
+        ''|*[!0-9]*) stale_pid="" ;;
+      esac
+      if [[ -n "${stale_pid}" ]] && kill -0 "${stale_pid}" 2>/dev/null; then
+        log_info "Skipping in-use incomplete venv ${stale} (pid ${stale_pid} is running)"
+        continue
+      fi
+      queue_remove "${stale}" "incomplete venv create"
+    done < <(list_stale_venv_partials "${MLX_VENV}")
+  fi
 fi
 
 # --- local config (opt-in) ---
