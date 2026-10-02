@@ -181,6 +181,35 @@ expect_fail "rejects config path with .. escaping the workspace" \
   "${CLEANUP}" --config --keep-venv --force
 assert_exists "${TMP}/outside/secret.env"
 
+# 17. default cleanup removes a killed atomic-create directory, not a similar name
+dead_partial_pid=2147483646
+while kill -0 "${dead_partial_pid}" 2>/dev/null; do
+  dead_partial_pid=$((dead_partial_pid - 1))
+done
+make_venv "${MLX_VENV}"
+make_venv "${WS}/.venv.partial.${dead_partial_pid}"
+mkdir -p "${WS}/.venv.partial.notes"
+printf 'keep\n' >"${WS}/.venv.partial.notes/marker"
+expect_ok "cleanup removes stale partial venv" "${CLEANUP}" --force
+assert_missing "${MLX_VENV}"
+assert_missing "${WS}/.venv.partial.${dead_partial_pid}"
+assert_exists "${WS}/.venv.partial.notes/marker"
+
+# 18. cleanup skips a partial directory whose pid suffix is still running
+sleep 30 &
+live_partial_pid=$!
+mkdir -p "${WS}/.venv.partial.${live_partial_pid}"
+printf 'live\n' >"${WS}/.venv.partial.${live_partial_pid}/marker"
+expect_ok "cleanup skips in-use partial venv" "${CLEANUP}" --force
+if [[ -f "${WS}/.venv.partial.${live_partial_pid}/marker" ]]; then
+  pass "cleanup left in-use partial venv in place"
+else
+  fail "cleanup removed an in-use partial venv"
+fi
+kill "${live_partial_pid}" 2>/dev/null || true
+wait "${live_partial_pid}" 2>/dev/null || true
+rm -rf "${WS}/.venv.partial.${live_partial_pid}"
+
 if (( failures > 0 )); then
   printf 'CLEANUP_SELFTEST_RESULT=fail (%s)\n' "${failures}" >&2
   exit 1

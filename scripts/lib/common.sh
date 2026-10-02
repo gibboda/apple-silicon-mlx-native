@@ -1239,29 +1239,246 @@ assert_reusable_brew_venv_for_make_venv() {
   fi
 }
 
-# Create .venv atomically: build in a sibling temp dir, verify pip, then mv.
-# The partial path is baked into the EXIT trap so a failed create does not
-# leave a half-built tree for the next run to reuse.
+# Sibling directories left when an atomic create is killed before rename:
+# <dest>.partial.<pid>. Names that are not that pattern are ignored.
+list_stale_venv_partials() {
+  local dest="$1"
+  local stale base name suffix nullglob_state
+  base="$(basename "${dest}")"
+  [[ -n "${base}" && "${base}" != "/" && "${base}" != "." && "${base}" != ".." ]] || return 0
+  nullglob_state="$(shopt -p nullglob || true)"
+  shopt -s nullglob
+  for stale in "${dest}.partial."*; do
+    [[ -d "${stale}" && ! -L "${stale}" ]] || continue
+    name="$(basename "${stale}")"
+    suffix="${name#"${base}.partial."}"
+    [[ "${name}" == "${base}.partial.${suffix}" ]] || continue
+    case "${suffix}" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    printf '%s\n' "${stale}"
+  done
+  _restore_nullglob "${nullglob_state}"
+}
+
+# Python's venv records the creation path in bin/pip, bin/activate, and
+# pyvenv.cfg. Rewrite that temporary path to the final destination before rename.
+rewrite_relocated_venv_paths() {
+  local brew_py="$1"
+  local partial="$2"
+  local dest="$3"
+  local old_base new_base
+  old_base="$(basename "${partial}")"
+  new_base="$(basename "${dest}")"
+  [[ "${partial}" == "${dest}.partial."* ]] || die "Refusing to relocate venv with unexpected temporary path: ${partial}"
+  [[ -n "${old_base}" && "${old_base}" != "${new_base}" ]] || die "Refusing to relocate venv onto the same path: ${dest}"
+  "${brew_py}" - "${partial}" "${dest}" "${old_base}" "${new_base}" "${partial}" <<'PY' || die "Venv creation failed: could not rewrite temporary path in ${partial}"
+import os
+import sys
+
+old_path, new_path, old_base, new_base, root = sys.argv[1:]
+old_path_b = old_path.encode()
+new_path_b = new_path.encode()
+old_base_b = old_base.encode()
+new_base_b = new_base.encode()
+if not old_path_b or not new_path_b or not old_base_b or old_base_b == new_base_b:
+    sys.stderr.write("refusing empty venv path rewrite\n")
+    sys.exit(1)
+
+for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    dirnames[:] = [entry for entry in dirnames if not os.path.islink(os.path.join(dirpath, entry))]
+    for name in filenames:
+        path = os.path.join(dirpath, name)
+        if os.path.islink(path):
+            continue
+        try:
+            with open(path, "rb") as handle:
+                data = handle.read()
+        except OSError as exc:
+            sys.stderr.write(f"cannot read {path}: {exc}\n")
+            sys.exit(1)
+        if old_path_b not in data and old_base_b not in data:
+            continue
+        # Compiled files record the creation path as co_filename. Their string
+        # lengths are prefixed, so a byte replace would corrupt them. They are
+        # removed below and recreated on the next import from the final path.
+        if b"\0" in data:
+            continue
+        updated = data.replace(old_path_b, new_path_b).replace(old_base_b, new_base_b)
+        with open(path, "wb") as handle:
+            handle.write(updated)
+
+for dirpath, _dirnames, _filenames in os.walk(root, topdown=False, followlinks=False):
+    if os.path.basename(dirpath) != "__pycache__" or os.path.islink(dirpath):
+        continue
+    for name in os.listdir(dirpath):
+        cache_path = os.path.join(dirpath, name)
+        if os.path.islink(cache_path) or os.path.isfile(cache_path):
+            os.remove(cache_path)
+    os.rmdir(dirpath)
+PY
+}
+
+# Exclusive lock for one destination: ${dest}.create-lock/pid.
+# mkdir is atomic. A live pid owns the lock; a dead pid is abandoned and replaced.
+# Before removing a stale lock, re-read pid so two waiters cannot both delete a
+# fresh lock another process just created. Prints the lock directory. Callers
+# must remove it on the success path; the EXIT trap removes it when create fails.
+acquire_venv_create_lock() {
+  local dest="$1"
+  local lock pid stale_owner current_owner empty_seen waited logged_wait
+  lock="${dest}.create-lock"
+  empty_seen=0
+  waited=0
+  logged_wait=0
+  while (( waited < 180 )); do
+    if mkdir -- "${lock}" 2>/dev/null; then
+      if printf '%s\n' "$$" >"${lock}/pid"; then
+        printf '%s\n' "${lock}"
+        return 0
+      fi
+      rm -rf -- "${lock}"
+      die "Could not record venv create lock owner in ${lock}"
+    fi
+    if [[ -L "${lock}" || ! -d "${lock}" ]]; then
+      die "Refusing to replace venv create lock that is not a directory: ${lock}"
+    fi
+    pid=""
+    if [[ -f "${lock}/pid" && ! -L "${lock}/pid" ]]; then
+      IFS= read -r pid <"${lock}/pid" || pid=""
+    fi
+    case "${pid}" in
+      ''|*[!0-9]*) pid="" ;;
+    esac
+    if [[ -z "${pid}" ]]; then
+      empty_seen=$((empty_seen + 1))
+      if (( empty_seen < 5 )); then
+        sleep 0.2
+        waited=$((waited + 1))
+        continue
+      fi
+    elif kill -0 "${pid}" 2>/dev/null; then
+      if (( logged_wait == 0 )); then
+        printf 'INFO: Waiting for venv create lock held by pid %s\n' "${pid}" >&2
+        logged_wait=1
+      fi
+      empty_seen=0
+      sleep 0.2
+      waited=$((waited + 1))
+      continue
+    fi
+    stale_owner="${pid}"
+    current_owner=""
+    if [[ -f "${lock}/pid" && ! -L "${lock}/pid" ]]; then
+      IFS= read -r current_owner <"${lock}/pid" || current_owner=""
+    fi
+    case "${current_owner}" in
+      ''|*[!0-9]*) current_owner="" ;;
+    esac
+    if [[ -n "${stale_owner}" ]]; then
+      if [[ "${current_owner}" != "${stale_owner}" ]]; then
+        empty_seen=0
+        sleep 0.2
+        waited=$((waited + 1))
+        continue
+      fi
+      if kill -0 "${stale_owner}" 2>/dev/null; then
+        empty_seen=0
+        sleep 0.2
+        waited=$((waited + 1))
+        continue
+      fi
+    elif [[ -n "${current_owner}" ]]; then
+      empty_seen=0
+      sleep 0.2
+      waited=$((waited + 1))
+      continue
+    fi
+    rm -rf -- "${lock}"
+    empty_seen=0
+  done
+  die "Timed out waiting for venv create lock: ${lock}"
+}
+
+# True when a finished venv still mentions the temporary directory name.
+venv_records_temporary_path() {
+  local dest="$1"
+  local marker="$2"
+  local file nullglob_state
+  [[ -n "${marker}" ]] || return 1
+  if [[ -f "${dest}/pyvenv.cfg" ]] && grep -F -q -- "${marker}" "${dest}/pyvenv.cfg"; then
+    return 0
+  fi
+  nullglob_state="$(shopt -p nullglob || true)"
+  shopt -s nullglob
+  for file in "${dest}/bin/"*; do
+    [[ -f "${file}" && ! -L "${file}" ]] || continue
+    if grep -F -q -- "${marker}" "${file}"; then
+      _restore_nullglob "${nullglob_state}"
+      return 0
+    fi
+  done
+  _restore_nullglob "${nullglob_state}"
+  return 1
+}
+
+# Create .venv atomically: build in a sibling temp dir, point scripts at the
+# final path, verify pip, then rename. One create lock per destination stops a
+# second run from deleting the first run's temporary directory. The EXIT trap
+# removes that temporary directory until rename; it removes the destination
+# only after this run owns the renamed tree.
 create_atomic_project_venv() {
   local brew_py="$1"
   local dest="$2"
-  local partial py quoted
+  local partial py stale stale_pid lock quoted_partial quoted_dest quoted_lock old_base
 
   [[ -n "${brew_py}" && -x "${brew_py}" ]] || die "Refusing to create venv without a Python interpreter"
   [[ -n "${dest}" ]] || die "Refusing to create venv with an empty destination"
+  while [[ "${dest}" != "/" && "${dest}" == */ ]]; do
+    dest="${dest%/}"
+  done
   [[ ! -e "${dest}" ]] || die "Refusing to overwrite existing path: ${dest}"
 
   partial="${dest}.partial.$$"
-  quoted="$(printf '%q' "${partial}")"
-  # Path is fixed at registration; the trap must not depend on a nested function.
+  lock="$(acquire_venv_create_lock "${dest}")"
+  quoted_partial="$(printf '%q' "${partial}")"
+  quoted_dest="$(printf '%q' "${dest}")"
+  quoted_lock="$(printf '%q' "${lock}")"
+  # Paths are fixed at registration; the trap must not depend on a nested function.
+  # Do not remove the destination yet: this run does not own it.
   # shellcheck disable=SC2064
-  trap "rm -rf -- ${quoted}" EXIT
+  trap "rm -rf -- ${quoted_partial} ${quoted_lock}" EXIT
+  if [[ -e "${dest}" ]]; then
+    die "Refusing to overwrite existing path: ${dest}"
+  fi
+  while IFS= read -r stale; do
+    [[ -n "${stale}" ]] || continue
+    stale_pid="${stale##*.}"
+    if [[ "${stale_pid}" != "$$" ]] && kill -0 "${stale_pid}" 2>/dev/null; then
+      die "Refusing to remove in-use temporary venv ${stale} (pid ${stale_pid} is running). If no other make venv/rebuild is active, remove it or run: make clean"
+    fi
+    rm -rf -- "${stale}"
+  done < <(list_stale_venv_partials "${dest}")
   rm -rf -- "${partial}"
   "${brew_py}" -m venv "${partial}"
   py="${partial}/bin/python"
   [[ -x "${py}" ]] || die "Venv creation failed: ${py} is not executable"
   "${py}" -m pip --version >/dev/null || die "Venv creation failed: pip is not available in ${partial}"
+  rewrite_relocated_venv_paths "${brew_py}" "${partial}" "${dest}"
+  if [[ -e "${dest}" || -L "${dest}" ]]; then
+    die "Refusing to overwrite ${dest}: it appeared while building ${partial}"
+  fi
   mv "${partial}" "${dest}"
+  # This run now owns the renamed tree. A later failure may remove it.
+  # shellcheck disable=SC2064
+  trap "rm -rf -- ${quoted_dest} ${quoted_lock}" EXIT
+  old_base="$(basename "${partial}")"
+  if venv_records_temporary_path "${dest}" "${old_base}"; then
+    die "Venv creation failed: temporary path remains in ${dest}"
+  fi
+  [[ -x "${dest}/bin/pip" ]] || die "Venv creation failed: ${dest}/bin/pip is not executable"
+  "${dest}/bin/pip" --version >/dev/null || die "Venv creation failed: ${dest}/bin/pip does not run"
+  rm -rf -- "${lock}"
   trap - EXIT
 }
 

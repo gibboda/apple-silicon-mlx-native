@@ -207,6 +207,22 @@ run_atomic_venv() {
     "source \"${COMMON}\"; create_atomic_project_venv \"\${ATOMIC_BREW_PY}\" \"\${MLX_VENV}\""
 }
 
+run_rewrite_relocated_venv_paths() {
+  # shellcheck disable=SC2317
+  env REWRITE_PY="$1" REWRITE_PARTIAL="$2" REWRITE_DEST="$3" bash -c \
+    "source \"${COMMON}\"; rewrite_relocated_venv_paths \"\${REWRITE_PY}\" \"\${REWRITE_PARTIAL}\" \"\${REWRITE_DEST}\""
+}
+
+assert_no_venv_partial_names_in_tree() {
+  local tree="$1"
+  local label="$2"
+  if grep -rlaF '.venv.partial.' "${tree}" >/dev/null 2>&1; then
+    fail "${label}"
+  else
+    pass "${label}"
+  fi
+}
+
 # --- broken interpreter symlink ---
 
 rm -rf "${WS}/.venv"
@@ -258,7 +274,13 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   expect_contains "foreign home mentions Homebrew prefix" "Homebrew prefix" "${foreign_home_err}"
 
   ATOMIC="${TMP}/atomic"
-  mkdir -p "${ATOMIC}"
+  dead_partial_pid=2147483646
+  while kill -0 "${dead_partial_pid}" 2>/dev/null; do
+    dead_partial_pid=$((dead_partial_pid - 1))
+  done
+  mkdir -p "${ATOMIC}/.venv.partial.${dead_partial_pid}" "${ATOMIC}/.venv.partial.notes"
+  printf 'stale\n' >"${ATOMIC}/.venv.partial.${dead_partial_pid}/marker"
+  printf 'keep\n' >"${ATOMIC}/.venv.partial.notes/marker"
   rm -rf "${ATOMIC}/.venv"
   if run_atomic_venv "${ATOMIC}" "${ATOMIC}/.venv" "$(command -v python3)"; then
     pass "atomic venv create leaves a working tree"
@@ -274,6 +296,240 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
     pass "atomic venv pip works"
   else
     fail "atomic venv pip missing"
+  fi
+  pip_shebang="$(head -n 1 "${ATOMIC}/.venv/bin/pip")"
+  if [[ "${pip_shebang}" == "#!${ATOMIC}/.venv/bin/python"* && "${pip_shebang}" != *".partial."* ]]; then
+    pass "atomic venv pip shebang points at .venv"
+  else
+    fail "atomic venv pip shebang points at .venv (${pip_shebang})"
+  fi
+  if "${ATOMIC}/.venv/bin/pip" --version >/dev/null 2>&1; then
+    pass "atomic venv pip script runs"
+  else
+    fail "atomic venv pip script runs"
+  fi
+  # Debian/Ubuntu activate scripts indent assignments; Homebrew may not.
+  prompt_line="$(
+    grep 'VIRTUAL_ENV_PROMPT=' "${ATOMIC}/.venv/bin/activate" 2>/dev/null \
+      | sed -n 's/^[[:space:]]*//p' \
+      | head -n 1 \
+      || true
+  )"
+  if grep -F -q "export VIRTUAL_ENV=${ATOMIC}/.venv" "${ATOMIC}/.venv/bin/activate" \
+    && [[ "${prompt_line}" == "VIRTUAL_ENV_PROMPT=.venv" || "${prompt_line}" == "VIRTUAL_ENV_PROMPT='(.venv)"* ]] \
+    && ! grep -F -q '.partial.' "${ATOMIC}/.venv/bin/activate" \
+    && ! grep -F -q '.partial.' "${ATOMIC}/.venv/pyvenv.cfg"; then
+    pass "atomic venv activate and pyvenv.cfg record .venv"
+  else
+    fail "atomic venv activate and pyvenv.cfg record .venv (${prompt_line})"
+  fi
+  assert_no_venv_partial_names_in_tree "${ATOMIC}/.venv" \
+    "atomic venv tree has no temporary path"
+  if [[ -d "${ATOMIC}/.venv.partial.${dead_partial_pid}" ]]; then
+    fail "atomic venv left a stale partial directory"
+  else
+    pass "atomic venv removed a stale partial directory"
+  fi
+  if [[ -d "${ATOMIC}/.venv.create-lock" ]]; then
+    fail "atomic venv left the create lock"
+  else
+    pass "atomic venv released the create lock"
+  fi
+  if [[ -f "${ATOMIC}/.venv.partial.notes/marker" ]]; then
+    pass "atomic venv left an unrelated partial-named directory"
+  else
+    fail "atomic venv removed an unrelated partial-named directory"
+  fi
+  if compgen -G "${ATOMIC}/.venv.partial.[0-9]*" >/dev/null; then
+    fail "atomic venv left a partial directory"
+  else
+    pass "atomic venv left no partial directory"
+  fi
+
+  LIVE="${TMP}/live-partial"
+  mkdir -p "${LIVE}"
+  sleep 30 &
+  live_partial_pid=$!
+  mkdir -p "${LIVE}/.venv.partial.${live_partial_pid}"
+  printf 'live\n' >"${LIVE}/.venv.partial.${live_partial_pid}/marker"
+  live_partial_err="$(run_atomic_venv "${LIVE}" "${LIVE}/.venv" "$(command -v python3)" 2>&1)" || true
+  expect_fail "create refuses an in-use partial directory" \
+    run_atomic_venv "${LIVE}" "${LIVE}/.venv" "$(command -v python3)"
+  expect_contains "in-use partial error names the directory" "in-use temporary venv" "${live_partial_err}"
+  expect_contains "in-use partial error suggests make clean" "make clean" "${live_partial_err}"
+  if [[ -f "${LIVE}/.venv.partial.${live_partial_pid}/marker" ]]; then
+    pass "create left an in-use partial directory in place"
+  else
+    fail "create removed an in-use partial directory"
+  fi
+  kill "${live_partial_pid}" 2>/dev/null || true
+  wait "${live_partial_pid}" 2>/dev/null || true
+
+  RACE="${TMP}/race"
+  mkdir -p "${RACE}"
+  sleep 30 &
+  race_sleep=$!
+  mkdir -p "${RACE}/.venv.create-lock"
+  printf '%s\n' "${race_sleep}" >"${RACE}/.venv.create-lock/pid"
+  # A background function inherits this script's EXIT trap. Clear it so the
+  # waiter cannot delete the test directory when it exits.
+  (
+    trap - EXIT
+    run_atomic_venv "${RACE}" "${RACE}/.venv" "$(command -v python3)" >"${RACE}/out" 2>&1
+  ) &
+  race_create=$!
+  race_waited=0
+  while (( race_waited < 50 )); do
+    if grep -q "Waiting for venv create lock held by pid ${race_sleep}" "${RACE}/out" 2>/dev/null; then
+      break
+    fi
+    sleep 0.2
+    race_waited=$((race_waited + 1))
+  done
+  race_lock_pid="$(cat "${RACE}/.venv.create-lock/pid" 2>/dev/null || true)"
+  if grep -q "Waiting for venv create lock held by pid ${race_sleep}" "${RACE}/out" 2>/dev/null \
+    && kill -0 "${race_create}" 2>/dev/null \
+    && [[ "${race_lock_pid}" == "${race_sleep}" && ! -e "${RACE}/.venv" ]]; then
+    pass "create waits while another pid holds the lock"
+  else
+    fail "create waits while another pid holds the lock"
+  fi
+  mkdir -p "${RACE}/.venv"
+  printf 'owned\n' >"${RACE}/.venv/marker"
+  kill "${race_sleep}" 2>/dev/null || true
+  wait "${race_sleep}" 2>/dev/null || true
+  wait "${race_create}" 2>/dev/null || true
+  if [[ -f "${RACE}/.venv/marker" ]]; then
+    pass "waiting create left an existing .venv in place"
+  else
+    fail "waiting create removed an existing .venv"
+  fi
+  race_out="$(cat "${RACE}/out" 2>/dev/null || true)"
+  expect_contains "waiting create refuses an existing .venv" "Refusing to overwrite" "${race_out}"
+
+  rewrite_bad="${TMP}/rewrite-bad"
+  mkdir -p "${rewrite_bad}/.venv.partial.1"
+  expect_fail "rewrite refuses unexpected temporary partial path" \
+    run_rewrite_relocated_venv_paths "$(command -v python3)" \
+    "${rewrite_bad}/wrong.partial.1" "${rewrite_bad}/.venv"
+  rewrite_fail="${TMP}/rewrite-fail"
+  mkdir -p "${rewrite_fail}"
+  rm -rf "${rewrite_fail}/.venv.partial.1"
+  python3 -m venv "${rewrite_fail}/.venv.partial.1"
+  chmod 000 "${rewrite_fail}/.venv.partial.1/bin/activate"
+  mkdir -p "${rewrite_fail}/.venv/foreign"
+  printf 'keep\n' >"${rewrite_fail}/.venv/foreign/keep.txt"
+  expect_fail "rewrite fails when a venv file is unreadable" \
+    run_rewrite_relocated_venv_paths "$(command -v python3)" \
+    "${rewrite_fail}/.venv.partial.1" "${rewrite_fail}/.venv"
+  chmod 644 "${rewrite_fail}/.venv.partial.1/bin/activate" 2>/dev/null || true
+  if [[ -f "${rewrite_fail}/.venv/foreign/keep.txt" ]]; then
+    pass "rewrite failure leaves an unrelated existing .venv in place"
+  else
+    fail "rewrite failure removed an unrelated existing .venv"
+  fi
+
+  MID="${TMP}/mid-build"
+  mkdir -p "${MID}/bin"
+  cat >"${MID}/bin/python3-slow" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+real_py="$(command -v python3)"
+if [[ "${1:-}" == "-m" && "${2:-}" == "venv" ]]; then
+  "${real_py}" "$@"
+  sleep 3
+  exit 0
+fi
+exec "${real_py}" "$@"
+EOF
+  chmod +x "${MID}/bin/python3-slow"
+  rm -rf "${MID}/.venv" "${MID}/.venv.create-lock"
+  rm -rf "${MID}"/.venv.partial.*
+  mid_out="${MID}/mid.out"
+  : >"${mid_out}"
+  (
+    trap - EXIT
+    run_atomic_venv "${MID}" "${MID}/.venv" "${MID}/bin/python3-slow" >>"${mid_out}" 2>&1
+  ) &
+  mid_create=$!
+  mid_injected=0
+  mid_waited=0
+  while (( mid_waited < 100 )); do
+    if compgen -G "${MID}/.venv.partial.*/bin/python" >/dev/null; then
+      mkdir -p "${MID}/.venv/userstuff"
+      printf 'keep\n' >"${MID}/.venv/userstuff/keep.txt"
+      mid_injected=1
+      break
+    fi
+    if ! kill -0 "${mid_create}" 2>/dev/null; then
+      break
+    fi
+    sleep 0.1
+    mid_waited=$((mid_waited + 1))
+  done
+  wait "${mid_create}" 2>/dev/null || true
+  mid_err="$(cat "${mid_out}" 2>/dev/null || true)"
+  if (( mid_injected == 1 )); then
+    if [[ -f "${MID}/.venv/userstuff/keep.txt" ]]; then
+      pass "mid-build .venv marker survives when destination appears during create"
+    else
+      fail "mid-build .venv marker was removed"
+    fi
+    expect_contains "mid-build create refuses destination that appeared during build" \
+      "appeared while building" "${mid_err}"
+    if compgen -G "${MID}/.venv/.venv.partial.*" >/dev/null \
+      || compgen -G "${MID}/.venv/.venv.partial.*/bin" >/dev/null; then
+      fail "mid-build create nested partial inside an existing .venv"
+    else
+      pass "mid-build create did not nest partial inside .venv"
+    fi
+  else
+    fail "mid-build test could not inject .venv while partial was building"
+  fi
+  rm -rf "${MID}"
+
+  BREAK="${TMP}/break-pip"
+  mkdir -p "${BREAK}/bin"
+  cat >"${BREAK}/bin/python3-break" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+real_py="$(command -v python3)"
+if [[ "${1:-}" == "-m" && "${2:-}" == "venv" ]]; then
+  "${real_py}" "$@"
+  exit 0
+fi
+if [[ "${1:-}" == "-" ]]; then
+  partial="${2:-}"
+  "${real_py}" "$@"
+  if [[ -n "${partial}" && -f "${partial}/bin/pip" ]]; then
+    chmod a-x "${partial}/bin/pip"
+  fi
+  exit 0
+fi
+exec "${real_py}" "$@"
+EOF
+  chmod +x "${BREAK}/bin/python3-break"
+  rm -rf "${BREAK}/.venv" "${BREAK}/.venv.create-lock"
+  rm -rf "${BREAK}"/.venv.partial.*
+  break_err="$(
+    run_atomic_venv "${BREAK}" "${BREAK}/.venv" "${BREAK}/bin/python3-break" 2>&1
+  )" || true
+  expect_contains "post-rename pip check fails on broken pip script" \
+    "bin/pip is not executable" "${break_err}"
+  if [[ ! -e "${BREAK}/.venv" ]]; then
+    pass "failed post-rename check removes only this run's .venv tree"
+  else
+    fail "failed post-rename check left a broken .venv tree behind"
+  fi
+  if compgen -G "${BREAK}/.venv.partial.*" >/dev/null; then
+    fail "failed post-rename check left a partial directory"
+  else
+    pass "failed post-rename check left no partial directory"
+  fi
+  if [[ -d "${BREAK}/.venv.create-lock" ]]; then
+    fail "failed post-rename check left the create lock"
+  else
+    pass "failed post-rename check released the create lock"
   fi
 else
   pass "skip venv identity tests (python3 -m venv unavailable)"
