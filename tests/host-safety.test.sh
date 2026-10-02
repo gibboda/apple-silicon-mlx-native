@@ -288,7 +288,13 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   else
     fail "atomic venv pip script runs"
   fi
-  prompt_line="$(grep '^VIRTUAL_ENV_PROMPT=' "${ATOMIC}/.venv/bin/activate" || true)"
+  # Debian/Ubuntu activate scripts indent assignments; Homebrew may not.
+  prompt_line="$(
+    grep 'VIRTUAL_ENV_PROMPT=' "${ATOMIC}/.venv/bin/activate" 2>/dev/null \
+      | sed -n 's/^[[:space:]]*//p' \
+      | head -n 1 \
+      || true
+  )"
   if grep -F -q "export VIRTUAL_ENV=${ATOMIC}/.venv" "${ATOMIC}/.venv/bin/activate" \
     && [[ "${prompt_line}" == "VIRTUAL_ENV_PROMPT=.venv" || "${prompt_line}" == "VIRTUAL_ENV_PROMPT='(.venv)"* ]] \
     && ! grep -F -q '.partial.' "${ATOMIC}/.venv/bin/activate" \
