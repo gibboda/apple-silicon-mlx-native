@@ -1321,11 +1321,12 @@ PY
 
 # Exclusive lock for one destination: ${dest}.create-lock/pid.
 # mkdir is atomic. A live pid owns the lock; a dead pid is abandoned and replaced.
-# Prints the lock directory. Callers must remove it on the success path; the
-# EXIT trap removes it when create fails.
+# Before removing a stale lock, re-read pid so two waiters cannot both delete a
+# fresh lock another process just created. Prints the lock directory. Callers
+# must remove it on the success path; the EXIT trap removes it when create fails.
 acquire_venv_create_lock() {
   local dest="$1"
-  local lock pid empty_seen waited logged_wait
+  local lock pid stale_owner current_owner empty_seen waited logged_wait
   lock="${dest}.create-lock"
   empty_seen=0
   waited=0
@@ -1361,6 +1362,33 @@ acquire_venv_create_lock() {
         printf 'INFO: Waiting for venv create lock held by pid %s\n' "${pid}" >&2
         logged_wait=1
       fi
+      empty_seen=0
+      sleep 0.2
+      waited=$((waited + 1))
+      continue
+    fi
+    stale_owner="${pid}"
+    current_owner=""
+    if [[ -f "${lock}/pid" && ! -L "${lock}/pid" ]]; then
+      IFS= read -r current_owner <"${lock}/pid" || current_owner=""
+    fi
+    case "${current_owner}" in
+      ''|*[!0-9]*) current_owner="" ;;
+    esac
+    if [[ -n "${stale_owner}" ]]; then
+      if [[ "${current_owner}" != "${stale_owner}" ]]; then
+        empty_seen=0
+        sleep 0.2
+        waited=$((waited + 1))
+        continue
+      fi
+      if kill -0 "${stale_owner}" 2>/dev/null; then
+        empty_seen=0
+        sleep 0.2
+        waited=$((waited + 1))
+        continue
+      fi
+    elif [[ -n "${current_owner}" ]]; then
       empty_seen=0
       sleep 0.2
       waited=$((waited + 1))
