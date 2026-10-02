@@ -43,16 +43,75 @@ jobs:
       - name: Run portable self-tests
         run: make test
 
+  # GitHub-hosted macos-latest is Apple Silicon. This job does not install
+  # models or MLX packages. The required ShellCheck gate below includes it so
+  # branch protection does not need a separate check name.
+  macos-smoke:
+    name: macOS Apple Silicon smoke
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Confirm Darwin arm64
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+
+      - name: Quiet Apple Silicon check
+        run: scripts/detect-apple-silicon.sh --quiet
+
+      - name: Parse detect JSON
+        run: |
+          set -euo pipefail
+          scripts/detect-apple-silicon.sh --json > "${RUNNER_TEMP}/detect.json"
+          python3 - "${RUNNER_TEMP}/detect.json" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              data = json.load(handle)
+          required = (
+              "architecture",
+              "apple_chip",
+              "memory_bytes",
+              "memory_gib",
+              "memory_tier_id",
+              "macos_version",
+              "recommended_model",
+              "workspace",
+          )
+          missing = [key for key in required if data.get(key) in (None, "")]
+          if missing:
+              raise SystemExit("detect JSON missing fields: " + ", ".join(missing))
+          if data["architecture"] != "arm64":
+              raise SystemExit("expected arm64, got " + str(data["architecture"]))
+          if int(data["memory_bytes"]) <= 0 or int(data["memory_gib"]) <= 0:
+              raise SystemExit("memory fields must be positive")
+          PY
+
+      - name: Recommend defaults
+        run: |
+          set -euo pipefail
+          out="$(make recommend)"
+          printf '%s\n' "${out}"
+          grep -E -q '^recommended_model=.+' <<<"${out}"
+
+      - name: Host-safety self-test
+        run: bash tests/host-safety.test.sh
+
   # Protect main requires context "ShellCheck" (workflow name). GitHub Actions
   # reports job names, so this gate posts that exact check.
   required:
     name: ShellCheck
-    needs: [shellcheck, selftest]
+    needs: [shellcheck, selftest, macos-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require lint and portable self-tests
+      - name: Require lint, portable self-tests, and macOS smoke
         run: |
           set -euo pipefail
           test "${{ needs.shellcheck.result }}" = "success"
           test "${{ needs.selftest.result }}" = "success"
+          test "${{ needs.macos-smoke.result }}" = "success"

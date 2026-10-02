@@ -1199,6 +1199,15 @@ venv_python_has_pip() {
   "${py}" -m pip --version >/dev/null 2>&1
 }
 
+# True when bin/pip itself runs. python -m pip can succeed while the script's
+# shebang still points at a directory that was renamed away.
+venv_pip_script_runs() {
+  local dir="${1:-${MLX_VENV}}"
+  local pip="${dir}/bin/pip"
+  [[ -f "${pip}" && -x "${pip}" ]] || return 1
+  "${pip}" --version >/dev/null 2>&1
+}
+
 venv_version_matches_expected() {
   local dir="${1:-${MLX_VENV}}"
   local cfg_ver
@@ -1227,6 +1236,9 @@ assert_reusable_brew_venv_for_make_venv() {
   [[ -x "$(venv_project_python "${dir}")" ]] || die "Refusing to reuse incomplete venv at ${dir}. Run: make rebuild"
   if ! venv_python_has_pip "${dir}"; then
     die "Refusing to reuse incomplete venv (pip is missing or broken) at ${dir}. Run: make rebuild"
+  fi
+  if ! venv_pip_script_runs "${dir}"; then
+    die "Refusing to reuse incomplete venv (bin/pip does not run) at ${dir}. Run: make rebuild"
   fi
   if ! venv_version_matches_expected "${dir}"; then
     cfg_ver="$(pyvenv_cfg_value "${dir}" version || echo unknown)"
@@ -1422,15 +1434,57 @@ venv_records_temporary_path() {
   return 1
 }
 
+# `trap -p EXIT` text. Empty when the caller has no EXIT trap.
+_exit_trap_spec() {
+  trap -p EXIT || true
+}
+
+# Install an EXIT trap that removes paths this create owns, then runs the
+# caller's EXIT command. Bash traps are process-global, so replacing EXIT
+# without chaining would drop the caller's cleanup when create fails.
+# saved_spec is the caller's trap from before this function installed its own.
+_install_owned_exit_trap() {
+  local cleanup="$1"
+  local saved_spec="$2"
+  local raw body quoted_body
+  if [[ -z "${saved_spec}" ]]; then
+    # shellcheck disable=SC2064
+    trap "${cleanup}" EXIT
+    return 0
+  fi
+  raw="${saved_spec#trap -- }"
+  raw="${raw% EXIT}"
+  eval "body=${raw}"
+  if [[ -z "${body}" ]]; then
+    # shellcheck disable=SC2064
+    trap "${cleanup}" EXIT
+    return 0
+  fi
+  quoted_body="$(printf '%q' "${body}")"
+  # shellcheck disable=SC2064
+  trap "${cleanup}; eval ${quoted_body}" EXIT
+}
+
+# Put back the EXIT trap captured by _exit_trap_spec. Empty means unset.
+_restore_exit_trap() {
+  local saved_spec="$1"
+  if [[ -n "${saved_spec}" ]]; then
+    eval "${saved_spec}"
+  else
+    trap - EXIT
+  fi
+}
+
 # Create .venv atomically: build in a sibling temp dir, point scripts at the
 # final path, verify pip, then rename. One create lock per destination stops a
 # second run from deleting the first run's temporary directory. The EXIT trap
 # removes that temporary directory until rename; it removes the destination
-# only after this run owns the renamed tree.
+# only after this run owns the renamed tree. Success restores the caller's
+# EXIT trap. Failure still runs that trap after this run's cleanup.
 create_atomic_project_venv() {
   local brew_py="$1"
   local dest="$2"
-  local partial py stale stale_pid lock quoted_partial quoted_dest quoted_lock old_base
+  local partial py stale stale_pid lock quoted_partial quoted_dest quoted_lock old_base saved_exit_trap
 
   [[ -n "${brew_py}" && -x "${brew_py}" ]] || die "Refusing to create venv without a Python interpreter"
   [[ -n "${dest}" ]] || die "Refusing to create venv with an empty destination"
@@ -1444,10 +1498,10 @@ create_atomic_project_venv() {
   quoted_partial="$(printf '%q' "${partial}")"
   quoted_dest="$(printf '%q' "${dest}")"
   quoted_lock="$(printf '%q' "${lock}")"
+  saved_exit_trap="$(_exit_trap_spec)"
   # Paths are fixed at registration; the trap must not depend on a nested function.
   # Do not remove the destination yet: this run does not own it.
-  # shellcheck disable=SC2064
-  trap "rm -rf -- ${quoted_partial} ${quoted_lock}" EXIT
+  _install_owned_exit_trap "rm -rf -- ${quoted_partial} ${quoted_lock}" "${saved_exit_trap}"
   if [[ -e "${dest}" ]]; then
     die "Refusing to overwrite existing path: ${dest}"
   fi
@@ -1470,8 +1524,7 @@ create_atomic_project_venv() {
   fi
   mv "${partial}" "${dest}"
   # This run now owns the renamed tree. A later failure may remove it.
-  # shellcheck disable=SC2064
-  trap "rm -rf -- ${quoted_dest} ${quoted_lock}" EXIT
+  _install_owned_exit_trap "rm -rf -- ${quoted_dest} ${quoted_lock}" "${saved_exit_trap}"
   old_base="$(basename "${partial}")"
   if venv_records_temporary_path "${dest}" "${old_base}"; then
     die "Venv creation failed: temporary path remains in ${dest}"
@@ -1479,7 +1532,7 @@ create_atomic_project_venv() {
   [[ -x "${dest}/bin/pip" ]] || die "Venv creation failed: ${dest}/bin/pip is not executable"
   "${dest}/bin/pip" --version >/dev/null || die "Venv creation failed: ${dest}/bin/pip does not run"
   rm -rf -- "${lock}"
-  trap - EXIT
+  _restore_exit_trap "${saved_exit_trap}"
 }
 
 # Homebrew python@MLX_PYTHON_VERSION on arm64. No PATH fallback.
@@ -1539,7 +1592,8 @@ venv_install_ready() {
   local dir="${1:-${MLX_VENV}}"
   [[ -f "${dir}/pyvenv.cfg" ]] || return 1
   [[ -x "$(venv_project_python "${dir}")" ]] || return 1
-  venv_python_has_pip "${dir}"
+  venv_python_has_pip "${dir}" || return 1
+  venv_pip_script_runs "${dir}"
 }
 
 # Callers mkdir -p the workspace first. Missing .venv is OK (create). An
@@ -1566,6 +1620,9 @@ assert_install_venv_paths() {
     die "Refusing to reuse incomplete venv (bin/python is not executable): ${MLX_VENV}. Run: make rebuild"
   fi
   if [[ -f "${MLX_VENV}/pyvenv.cfg" && -x "${py}" ]]; then
+    if venv_python_has_pip "${MLX_VENV}" && ! venv_pip_script_runs "${MLX_VENV}"; then
+      die "Refusing to reuse incomplete venv (bin/pip does not run): ${MLX_VENV}. Run: make rebuild"
+    fi
     die "Refusing to reuse incomplete venv (pip is missing or broken): ${MLX_VENV}. Run: make rebuild"
   fi
   if [[ -f "${MLX_VENV}/pyvenv.cfg" ]]; then

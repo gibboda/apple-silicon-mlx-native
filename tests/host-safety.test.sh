@@ -116,7 +116,8 @@ expect_ok "install paths allow missing venv" run_install_paths "${WS}" "${WS}/.v
 mkdir -p "${WS}/.venv/bin"
 printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${WS}/.venv/pyvenv.cfg"
 printf '#!/bin/sh\nexit 0\n' >"${WS}/.venv/bin/python"
-chmod +x "${WS}/.venv/bin/python"
+printf '#!/bin/sh\nexit 0\n' >"${WS}/.venv/bin/pip"
+chmod +x "${WS}/.venv/bin/python" "${WS}/.venv/bin/pip"
 expect_ok "install paths reuse a real venv" run_install_paths "${WS}" "${WS}/.venv"
 
 rm -rf "${WS}/.venv"
@@ -179,7 +180,8 @@ expect_contains "missing venv mentions make venv" "make venv" "${req_missing}"
 mkdir -p "${REQ}/.venv/bin"
 printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${REQ}/.venv/pyvenv.cfg"
 printf '#!/bin/sh\nexit 0\n' >"${REQ}/.venv/bin/python"
-chmod +x "${REQ}/.venv/bin/python"
+printf '#!/bin/sh\nexit 0\n' >"${REQ}/.venv/bin/pip"
+chmod +x "${REQ}/.venv/bin/python" "${REQ}/.venv/bin/pip"
 expect_ok "require venv accepts a complete venv" run_require_venv "${REQ}" "${REQ}/.venv"
 
 rm -rf "${REQ}/.venv"
@@ -531,8 +533,108 @@ EOF
   else
     pass "failed post-rename check released the create lock"
   fi
+
+  BROKEN_PIP="${TMP}/broken-pip-shebang"
+  rm -rf "${BROKEN_PIP}"
+  python3 -m venv "${BROKEN_PIP}/.venv"
+  printf 'home = /opt/homebrew/opt/python@3.12/bin\ninclude-system-site-packages = false\nversion = 3.12.9\n' \
+    >"${BROKEN_PIP}/.venv/pyvenv.cfg"
+  pip_script="${BROKEN_PIP}/.venv/bin/pip"
+  if [[ -f "${pip_script}" && ! -L "${pip_script}" ]]; then
+    { printf '#!%s\n' "${BROKEN_PIP}/missing-python"; tail -n +2 "${pip_script}"; } >"${pip_script}.new"
+    mv "${pip_script}.new" "${pip_script}"
+    chmod +x "${pip_script}"
+    if "${BROKEN_PIP}/.venv/bin/python" -m pip --version >/dev/null 2>&1; then
+      pass "broken pip shebang still has python -m pip"
+    else
+      fail "broken pip shebang still has python -m pip"
+    fi
+    broken_pip_err="$(run_install_paths "${BROKEN_PIP}" "${BROKEN_PIP}/.venv" 2>&1)" || true
+    expect_fail "install paths refuse a pip script with a missing interpreter" \
+      run_install_paths "${BROKEN_PIP}" "${BROKEN_PIP}/.venv"
+    expect_contains "broken pip shebang mentions bin/pip" "bin/pip does not run" "${broken_pip_err}"
+    broken_reuse_err="$(run_reusable_brew_venv "${BROKEN_PIP}" "${BROKEN_PIP}/.venv" 3.12 "${BREW_PATH}" 2>&1)" || true
+    expect_fail "make venv reuse refuses a pip script with a missing interpreter" \
+      run_reusable_brew_venv "${BROKEN_PIP}" "${BROKEN_PIP}/.venv" 3.12 "${BREW_PATH}"
+    expect_contains "broken pip reuse mentions bin/pip" "bin/pip does not run" "${broken_reuse_err}"
+  else
+    fail "broken pip shebang fixture has a regular bin/pip script"
+  fi
+
+  EXIT_OK="${TMP}/exit-trap-ok"
+  rm -rf "${EXIT_OK}"
+  mkdir -p "${EXIT_OK}"
+  ok_flag="${EXIT_OK}/caller-ran"
+  ok_out="${EXIT_OK}/out"
+  (
+    flag="${ok_flag}"
+    trap 'touch "${flag}"' EXIT
+    # shellcheck disable=SC1090
+    source "${COMMON}"
+    saved="$(trap -p EXIT)"
+    create_atomic_project_venv "$(command -v python3)" "${EXIT_OK}/.venv"
+    now="$(trap -p EXIT)"
+    if [[ "${now}" == "${saved}" ]]; then
+      printf 'restored\n'
+    else
+      printf 'not-restored\n'
+    fi
+    if [[ -e "${flag}" ]]; then
+      printf 'ran-early\n'
+    else
+      printf 'not-yet\n'
+    fi
+  ) >"${ok_out}" 2>&1 || true
+  if grep -q '^restored$' "${ok_out}" && grep -q '^not-yet$' "${ok_out}"; then
+    pass "successful atomic create restores the caller EXIT trap"
+  else
+    fail "successful atomic create restores the caller EXIT trap ($(tr '\n' ' ' <"${ok_out}"))"
+  fi
+  if [[ -e "${ok_flag}" ]]; then
+    pass "caller EXIT trap still runs after atomic create returns"
+  else
+    fail "caller EXIT trap was dropped after atomic create returned"
+  fi
+  if [[ -x "${EXIT_OK}/.venv/bin/python" ]]; then
+    pass "EXIT trap restore left the created venv in place"
+  else
+    fail "EXIT trap restore removed the created venv"
+  fi
 else
   pass "skip venv identity tests (python3 -m venv unavailable)"
+fi
+
+# Failure after the create trap is installed must still run the caller's EXIT trap.
+EXIT_FAIL="${TMP}/exit-trap-fail"
+rm -rf "${EXIT_FAIL}"
+mkdir -p "${EXIT_FAIL}/bin"
+cat >"${EXIT_FAIL}/bin/python-fail" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "${EXIT_FAIL}/bin/python-fail"
+fail_flag="${EXIT_FAIL}/caller-ran"
+(
+  flag="${fail_flag}"
+  trap 'touch "${flag}"' EXIT
+  # shellcheck disable=SC1090
+  source "${COMMON}"
+  create_atomic_project_venv "${EXIT_FAIL}/bin/python-fail" "${EXIT_FAIL}/.venv"
+) >/dev/null 2>&1 || true
+if [[ -e "${fail_flag}" ]]; then
+  pass "failed atomic create still runs the caller EXIT trap"
+else
+  fail "failed atomic create dropped the caller EXIT trap"
+fi
+if compgen -G "${EXIT_FAIL}/.venv.partial.*" >/dev/null || [[ -e "${EXIT_FAIL}/.venv" ]]; then
+  fail "failed atomic create left a partial or destination tree"
+else
+  pass "failed atomic create removed its temporary tree"
+fi
+if [[ -d "${EXIT_FAIL}/.venv.create-lock" ]]; then
+  fail "failed atomic create left the create lock"
+else
+  pass "failed atomic create removed the create lock"
 fi
 
 # --- real install / venv scripts (stubs; no live Homebrew) ---
