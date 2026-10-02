@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `detect-apple-silicon.sh --json` emits JSON on macOS `/bin/bash` 3.2 (GitHub Actions `macOS Apple Silicon smoke` no longer gets an empty detect file)
+- `detect-apple-silicon.sh --json` emits JSON on macOS `/bin/bash` 3.2 via `scripts/lib/detect_json.py` (GitHub Actions `macOS Apple Silicon smoke` no longer gets an empty detect file)
 - Chained `EXIT` traps during atomic venv create preserve the status that triggered cleanup, so a caller trap that reads `$?` still sees the original failure
 - `make venv` keeps a caller's `EXIT` trap. The atomic create still removes its own temporary directory on failure, then runs the trap that was already installed. A successful create restores that trap instead of clearing it
 - `make venv` and `make install` refuse a tree whose `bin/pip` script does not run, including a shebang that still points at a removed `.venv.partial.<pid>` interpreter. `python -m pip` alone is not enough to reuse that tree

@@ -87,8 +87,8 @@ brew_ok="false"
 xcode_ok="false"
 check_xcode_clt && xcode_ok="true"
 
-# macOS /bin/bash 3.2 mishandles a here-doc after many VAR=value continuations
-# inside case, so python3 can run with empty stdin and emit no JSON.
+# macOS /bin/bash 3.2 mishandles inline here-docs in some case/continuation
+# layouts, so JSON emission lives in scripts/lib/detect_json.py.
 print_detect_json() {
   local brew_ok="$1" brew_prefix="$2" xcode_ok="$3"
   export DETECT_ARCH="${MLX_ARCH}"
@@ -112,8 +112,9 @@ print_detect_json() {
   export DETECT_CORES="${MLX_CPU_CORES}"
   export DETECT_MACOS="${MLX_MACOS_VERSION}"
   export DETECT_DISK="${MLX_DISK_AVAIL_GIB:-0}"
-  export DETECT_PY
-  DETECT_PY="$(detect_python_version)"
+  local detect_py
+  detect_py="$(detect_python_version)"
+  export DETECT_PY="${detect_py}"
   export DETECT_BREW_OK="${brew_ok}"
   export DETECT_BREW_PREFIX="${brew_prefix}"
   export DETECT_XCODE="${xcode_ok}"
@@ -125,63 +126,7 @@ print_detect_json() {
   export DETECT_VIDEO_PROFILE="${MLX_RECOMMENDED_VIDEO_PROFILE}"
   export DETECT_VIDEO_FORCE="${MLX_VIDEO_FORCE_REQUIRED:-0}"
   export DETECT_WORKSPACE="${MLX_WORKSPACE}"
-  python3 - <<'PY'
-import json, os
-
-def maybe_int(key):
-    v = os.environ.get(key, "")
-    if v == "":
-        return None
-    try:
-        return int(v)
-    except ValueError:
-        return None
-
-def maybe_str(key):
-    v = os.environ.get(key, "")
-    return v if v != "" else None
-
-payload = {
-  "architecture": os.environ["DETECT_ARCH"],
-  "apple_chip": os.environ["DETECT_CHIP"],
-  "chip_family": maybe_int("DETECT_CHIP_FAMILY"),
-  "chip_sku": maybe_str("DETECT_CHIP_SKU"),
-  "gpu_cores": maybe_int("DETECT_GPU_CORES"),
-  "p_cores": maybe_int("DETECT_P_CORES"),
-  "e_cores": maybe_int("DETECT_E_CORES"),
-  "hw_model": maybe_str("DETECT_HW_MODEL"),
-  "thermal_class": maybe_str("DETECT_THERMAL"),
-  "bandwidth_gbs": maybe_int("DETECT_BANDWIDTH"),
-  "throughput_class": maybe_str("DETECT_THROUGHPUT"),
-  "memory_bytes": int(os.environ["DETECT_MEM_BYTES"]),
-  "memory_gib": int(os.environ["DETECT_MEM_GIB"]),
-  "memory_tier_id": os.environ["DETECT_TIER_ID"],
-  "memory_tier_label": os.environ["DETECT_TIER_LABEL"],
-  "physical_memory_tier_id": maybe_str("DETECT_PHYSICAL_TIER_ID"),
-  "physical_memory_tier_label": maybe_str("DETECT_PHYSICAL_TIER_LABEL"),
-  "memory_tier_hint": os.environ["DETECT_TIER_HINT"],
-  "cpu_cores": int(os.environ["DETECT_CORES"]),
-  "macos_version": os.environ["DETECT_MACOS"],
-  "disk_available_gib": int(float(os.environ["DETECT_DISK"] or 0)),
-  "python_version": os.environ["DETECT_PY"],
-  "homebrew": os.environ["DETECT_BREW_OK"] == "true",
-  "homebrew_prefix": os.environ["DETECT_BREW_PREFIX"],
-  "xcode_clt": os.environ["DETECT_XCODE"] == "true",
-  "recommended_model": os.environ["DETECT_MODEL"],
-  "recommended_context": maybe_int("DETECT_CONTEXT"),
-  "recommended_image_profile": os.environ.get("DETECT_IMAGE_PROFILE") or None,
-  "recommended_video_profile": os.environ.get("DETECT_VIDEO_PROFILE") or None,
-  "video_force_required": os.environ.get("DETECT_VIDEO_FORCE", "0") == "1",
-  "workspace": os.environ["DETECT_WORKSPACE"],
-}
-ws = maybe_int("DETECT_WORKING_SET")
-if ws is not None:
-    payload["working_set_bytes"] = ws
-arch = maybe_str("DETECT_GPU_ARCH")
-if arch is not None:
-    payload["gpu_arch"] = arch
-print(json.dumps(payload, indent=2))
-PY
+  python3 "${SCRIPT_DIR}/lib/detect_json.py"
 }
 
 case "${MODE}" in

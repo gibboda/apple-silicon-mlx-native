@@ -267,6 +267,7 @@ apple-silicon-mlx-native/
 ├── scripts/
 │   ├── lib/
 │   │   ├── common.sh
+│   │   ├── detect_json.py
 │   │   └── mlx_launch.py
 │   ├── cleanup-mlx-native.sh
 │   ├── conventional-commits-audit.sh

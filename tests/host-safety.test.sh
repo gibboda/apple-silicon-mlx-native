@@ -646,18 +646,18 @@ cat >"${EXIT_RC}/bin/python-fail" <<'EOF'
 exit 1
 EOF
 chmod +x "${EXIT_RC}/bin/python-fail"
-rc_file="${EXIT_RC}/captured-rc"
+rc_capture="${EXIT_RC}/captured-rc"
 (
-  rc_file="${rc_file}"
-  trap 'rc=$?; printf "%s" "${rc}" >"${rc_file}"' EXIT
+  # shellcheck disable=SC2154,SC2030,SC2031
+  trap 'rc=$?; printf "%s" "${rc}" >"'"${rc_capture}"'"' EXIT
   # shellcheck disable=SC1090
   source "${COMMON}"
   create_atomic_project_venv "${EXIT_RC}/bin/python-fail" "${EXIT_RC}/.venv"
 ) >/dev/null 2>&1 || true
-if [[ "$(cat "${rc_file}" 2>/dev/null || echo missing)" == "1" ]]; then
+if [[ "$(cat "${rc_capture}" 2>/dev/null || echo missing)" == "1" ]]; then
   pass "failed atomic create preserves exit status for caller EXIT trap"
 else
-  fail "failed atomic create preserves exit status for caller EXIT trap (got $(cat "${rc_file}" 2>/dev/null || echo missing))"
+  fail "failed atomic create preserves exit status for caller EXIT trap (got $(cat "${rc_capture}" 2>/dev/null || echo missing))"
 fi
 
 # --- real install / venv scripts (stubs; no live Homebrew) ---
