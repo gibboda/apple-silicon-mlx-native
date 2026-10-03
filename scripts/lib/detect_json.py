@@ -69,7 +69,7 @@ def main() -> int:
         "disk_available_gib": int(float(os.environ.get("DETECT_DISK") or 0)),
         "python_version": os.environ["DETECT_PY"],
         "homebrew": os.environ["DETECT_BREW_OK"] == "true",
-        "homebrew_prefix": os.environ["DETECT_BREW_PREFIX"],
+        "homebrew_prefix": os.environ.get("DETECT_BREW_PREFIX", ""),
         "xcode_clt": os.environ["DETECT_XCODE"] == "true",
         "recommended_model": os.environ["DETECT_MODEL"],
         "recommended_context": maybe_int("DETECT_CONTEXT"),

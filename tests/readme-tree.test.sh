@@ -14,10 +14,12 @@ fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
 
 # Print one relative path per file entry in the Repository structure fence.
 readme_tree_files() {
+  local source="${1:-${README}}"
   local line rest name depth i joined previous
   local -a stack=()
   local -a next=()
   while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
     [[ -n "${line}" ]] || continue
     [[ "${line}" == *├──* || "${line}" == *└──* ]] || continue
     rest="${line}"
@@ -74,11 +76,12 @@ readme_tree_files() {
     fi
   done < <(
     awk '
+      { sub(/\r$/, "") }
       /^## Repository structure/ { in_heading = 1; next }
       in_heading && /^```text$/ { in_tree = 1; next }
       in_heading && in_tree && /^```$/ { exit }
       in_tree { print }
-    ' "${README}"
+    ' "${source}"
   )
 }
 
@@ -122,6 +125,21 @@ else
     fi
     printf 'Hint: Update the tree under %s in README.md.\n' "'## Repository structure'" >&2
   fi
+fi
+
+crlf_src="${TMP}/readme-crlf.md"
+printf '%s\r\n' \
+  '## Repository structure' \
+  '```text' \
+  'apple-silicon-mlx-native/' \
+  '├── README.md' \
+  '```' \
+  >"${crlf_src}"
+crlf_parsed="$(readme_tree_files "${crlf_src}")"
+if [[ "${crlf_parsed}" == "README.md" ]]; then
+  pass "README tree parser accepts CRLF fences"
+else
+  fail "README tree parser accepts CRLF fences (${crlf_parsed})"
 fi
 
 if (( failures > 0 )); then

@@ -209,8 +209,9 @@ run_atomic_venv() {
     "source \"${COMMON}\"; create_atomic_project_venv \"\${ATOMIC_BREW_PY}\" \"\${MLX_VENV}\""
 }
 
+# Invoked only inside the python3 -m venv guard. ShellCheck 0.11 does not see that call.
+# shellcheck disable=SC2317,SC2329
 run_rewrite_relocated_venv_paths() {
-  # shellcheck disable=SC2317
   env REWRITE_PY="$1" REWRITE_PARTIAL="$2" REWRITE_DEST="$3" bash -c \
     "source \"${COMMON}\"; rewrite_relocated_venv_paths \"\${REWRITE_PY}\" \"\${REWRITE_PARTIAL}\" \"\${REWRITE_DEST}\""
 }
@@ -760,6 +761,20 @@ if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get("
   pass "detect --json emits parseable arm64 payload under Darwin stubs"
 else
   fail "detect --json emits parseable arm64 payload under Darwin stubs"
+fi
+brew_prefix_json="$(
+  env -u DETECT_BREW_PREFIX \
+    DETECT_ARCH=arm64 DETECT_CHIP=test DETECT_MEM_BYTES=1 DETECT_MEM_GIB=1 \
+    DETECT_TIER_ID=constrained DETECT_TIER_LABEL=label DETECT_TIER_HINT=hint \
+    DETECT_CORES=8 DETECT_MACOS=15 DETECT_PY=3.12 DETECT_BREW_OK=false \
+    DETECT_XCODE=false DETECT_MODEL=model DETECT_WORKSPACE=/tmp \
+    python3 "${ROOT}/scripts/lib/detect_json.py" 2>/dev/null
+)" || true
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get("homebrew_prefix")=="" and d.get("homebrew") is False else 1)' \
+  "${brew_prefix_json}" 2>/dev/null; then
+  pass "detect JSON allows a missing Homebrew prefix"
+else
+  fail "detect JSON allows a missing Homebrew prefix"
 fi
 
 FRESH="${TMP}/fresh-install"
