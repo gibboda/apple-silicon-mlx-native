@@ -1527,10 +1527,11 @@ create_atomic_project_venv() {
   fi
   mv "${partial}" "${dest}"
   # If dest appears as a directory in the gap before mv, mv nests the partial
-  # inside it. Do not claim dest: the EXIT trap still removes only the partial
-  # path and the lock, so a later failure cannot delete the foreign tree.
+  # inside it. Remove only the nested partial and do not claim dest, preserving
+  # the foreign tree during this failure.
   nested="${dest}/$(basename "${partial}")"
   if [[ -e "${nested}" || -L "${nested}" ]]; then
+    rm -rf -- "${nested}"
     die "Refusing to claim ${dest}: it appeared during rename"
   fi
   # This run now owns the renamed tree. A later failure may remove it.

@@ -519,6 +519,11 @@ EOF
   else
     fail "rename race removed the foreign .venv"
   fi
+  if compgen -G "${NEST}/.venv/.venv.partial.*" >/dev/null; then
+    fail "rename race left the nested partial in the foreign .venv"
+  else
+    pass "rename race removed the nested partial"
+  fi
 
   BREAK="${TMP}/break-pip"
   mkdir -p "${BREAK}/bin"
