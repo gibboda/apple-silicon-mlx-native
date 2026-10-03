@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-10-02
+
 ### Added
 
 - GitHub Actions runs an Apple Silicon smoke job on `macos-latest`: Darwin `arm64`, `detect-apple-silicon.sh --quiet`, parseable `--json`, `make recommend`, and `tests/host-safety.test.sh`. It does not download models or install MLX packages
@@ -187,7 +189,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.5...v0.2.6
