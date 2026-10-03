@@ -116,7 +116,8 @@ expect_ok "install paths allow missing venv" run_install_paths "${WS}" "${WS}/.v
 mkdir -p "${WS}/.venv/bin"
 printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${WS}/.venv/pyvenv.cfg"
 printf '#!/bin/sh\nexit 0\n' >"${WS}/.venv/bin/python"
-chmod +x "${WS}/.venv/bin/python"
+printf '#!/bin/sh\nexit 0\n' >"${WS}/.venv/bin/pip"
+chmod +x "${WS}/.venv/bin/python" "${WS}/.venv/bin/pip"
 expect_ok "install paths reuse a real venv" run_install_paths "${WS}" "${WS}/.venv"
 
 rm -rf "${WS}/.venv"
@@ -179,7 +180,8 @@ expect_contains "missing venv mentions make venv" "make venv" "${req_missing}"
 mkdir -p "${REQ}/.venv/bin"
 printf 'home = /usr/bin/python3\ninclude-system-site-packages = false\n' >"${REQ}/.venv/pyvenv.cfg"
 printf '#!/bin/sh\nexit 0\n' >"${REQ}/.venv/bin/python"
-chmod +x "${REQ}/.venv/bin/python"
+printf '#!/bin/sh\nexit 0\n' >"${REQ}/.venv/bin/pip"
+chmod +x "${REQ}/.venv/bin/python" "${REQ}/.venv/bin/pip"
 expect_ok "require venv accepts a complete venv" run_require_venv "${REQ}" "${REQ}/.venv"
 
 rm -rf "${REQ}/.venv"
@@ -207,8 +209,9 @@ run_atomic_venv() {
     "source \"${COMMON}\"; create_atomic_project_venv \"\${ATOMIC_BREW_PY}\" \"\${MLX_VENV}\""
 }
 
+# Invoked only inside the python3 -m venv guard. ShellCheck 0.11 does not see that call.
+# shellcheck disable=SC2317,SC2329
 run_rewrite_relocated_venv_paths() {
-  # shellcheck disable=SC2317
   env REWRITE_PY="$1" REWRITE_PARTIAL="$2" REWRITE_DEST="$3" bash -c \
     "source \"${COMMON}\"; rewrite_relocated_venv_paths \"\${REWRITE_PY}\" \"\${REWRITE_PARTIAL}\" \"\${REWRITE_DEST}\""
 }
@@ -298,7 +301,12 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
     fail "atomic venv pip missing"
   fi
   pip_shebang="$(head -n 1 "${ATOMIC}/.venv/bin/pip")"
-  if [[ "${pip_shebang}" == "#!${ATOMIC}/.venv/bin/python"* && "${pip_shebang}" != *".partial."* ]]; then
+  atomic_canon="$(cd "${ATOMIC}" && pwd -P)"
+  # macOS mktemp stays on /var while pwd -P follows /var -> /private/var.
+  # Python may record either path. Both are the destination, not the partial.
+  if [[ "${pip_shebang}" != *".partial."* ]] \
+    && { [[ "${pip_shebang}" == "#!${ATOMIC}/.venv/bin/python"* ]] \
+      || [[ "${pip_shebang}" == "#!${atomic_canon}/.venv/bin/python"* ]]; }; then
     pass "atomic venv pip shebang points at .venv"
   else
     fail "atomic venv pip shebang points at .venv (${pip_shebang})"
@@ -488,6 +496,36 @@ EOF
   fi
   rm -rf "${MID}"
 
+  NEST="${TMP}/nest-rename"
+  mkdir -p "${NEST}/bin"
+  cat >"${NEST}/bin/mv" <<'EOF'
+#!/bin/sh
+# Plant a directory so mv nests the partial inside .venv.
+if [ "$(basename "${2:-}")" = ".venv" ]; then
+  mkdir -p "${2}/USERDATA"
+  printf 'keep\n' >"${2}/USERDATA/keep.txt"
+fi
+exec /bin/mv "$@"
+EOF
+  chmod +x "${NEST}/bin/mv"
+  nest_err="$(
+    env MLX_WORKSPACE="${NEST}" MLX_VENV="${NEST}/.venv" ATOMIC_BREW_PY="$(command -v python3)" \
+      PATH="${NEST}/bin:${PATH}" \
+      bash -c "source \"${COMMON}\"; create_atomic_project_venv \"\${ATOMIC_BREW_PY}\" \"\${MLX_VENV}\"" 2>&1
+  )" || true
+  expect_contains "rename race refuses to claim a destination that appeared during mv" \
+    "appeared during rename" "${nest_err}"
+  if [[ -f "${NEST}/.venv/USERDATA/keep.txt" ]]; then
+    pass "rename race left the foreign .venv in place"
+  else
+    fail "rename race removed the foreign .venv"
+  fi
+  if compgen -G "${NEST}/.venv/.venv.partial.*" >/dev/null; then
+    fail "rename race left the nested partial in the foreign .venv"
+  else
+    pass "rename race removed the nested partial"
+  fi
+
   BREAK="${TMP}/break-pip"
   mkdir -p "${BREAK}/bin"
   cat >"${BREAK}/bin/python3-break" <<'EOF'
@@ -531,8 +569,131 @@ EOF
   else
     pass "failed post-rename check released the create lock"
   fi
+
+  BROKEN_PIP="${TMP}/broken-pip-shebang"
+  rm -rf "${BROKEN_PIP}"
+  python3 -m venv "${BROKEN_PIP}/.venv"
+  printf 'home = /opt/homebrew/opt/python@3.12/bin\ninclude-system-site-packages = false\nversion = 3.12.9\n' \
+    >"${BROKEN_PIP}/.venv/pyvenv.cfg"
+  pip_script="${BROKEN_PIP}/.venv/bin/pip"
+  if [[ -f "${pip_script}" && ! -L "${pip_script}" ]]; then
+    { printf '#!%s\n' "${BROKEN_PIP}/missing-python"; tail -n +2 "${pip_script}"; } >"${pip_script}.new"
+    mv "${pip_script}.new" "${pip_script}"
+    chmod +x "${pip_script}"
+    if "${BROKEN_PIP}/.venv/bin/python" -m pip --version >/dev/null 2>&1; then
+      pass "broken pip shebang still has python -m pip"
+    else
+      fail "broken pip shebang still has python -m pip"
+    fi
+    broken_pip_err="$(run_install_paths "${BROKEN_PIP}" "${BROKEN_PIP}/.venv" 2>&1)" || true
+    expect_fail "install paths refuse a pip script with a missing interpreter" \
+      run_install_paths "${BROKEN_PIP}" "${BROKEN_PIP}/.venv"
+    expect_contains "broken pip shebang mentions bin/pip" "bin/pip does not run" "${broken_pip_err}"
+    broken_reuse_err="$(run_reusable_brew_venv "${BROKEN_PIP}" "${BROKEN_PIP}/.venv" 3.12 "${BREW_PATH}" 2>&1)" || true
+    expect_fail "make venv reuse refuses a pip script with a missing interpreter" \
+      run_reusable_brew_venv "${BROKEN_PIP}" "${BROKEN_PIP}/.venv" 3.12 "${BREW_PATH}"
+    expect_contains "broken pip reuse mentions bin/pip" "bin/pip does not run" "${broken_reuse_err}"
+  else
+    fail "broken pip shebang fixture has a regular bin/pip script"
+  fi
+
+  EXIT_OK="${TMP}/exit-trap-ok"
+  rm -rf "${EXIT_OK}"
+  mkdir -p "${EXIT_OK}"
+  ok_flag="${EXIT_OK}/caller-ran"
+  ok_out="${EXIT_OK}/out"
+  (
+    flag="${ok_flag}"
+    trap 'touch "${flag}"' EXIT
+    # shellcheck disable=SC1090
+    source "${COMMON}"
+    saved="$(trap -p EXIT)"
+    create_atomic_project_venv "$(command -v python3)" "${EXIT_OK}/.venv"
+    now="$(trap -p EXIT)"
+    if [[ "${now}" == "${saved}" ]]; then
+      printf 'restored\n'
+    else
+      printf 'not-restored\n'
+    fi
+    if [[ -e "${flag}" ]]; then
+      printf 'ran-early\n'
+    else
+      printf 'not-yet\n'
+    fi
+  ) >"${ok_out}" 2>&1 || true
+  if grep -q '^restored$' "${ok_out}" && grep -q '^not-yet$' "${ok_out}"; then
+    pass "successful atomic create restores the caller EXIT trap"
+  else
+    fail "successful atomic create restores the caller EXIT trap ($(tr '\n' ' ' <"${ok_out}"))"
+  fi
+  if [[ -e "${ok_flag}" ]]; then
+    pass "caller EXIT trap still runs after atomic create returns"
+  else
+    fail "caller EXIT trap was dropped after atomic create returned"
+  fi
+  if [[ -x "${EXIT_OK}/.venv/bin/python" ]]; then
+    pass "EXIT trap restore left the created venv in place"
+  else
+    fail "EXIT trap restore removed the created venv"
+  fi
 else
   pass "skip venv identity tests (python3 -m venv unavailable)"
+fi
+
+# Failure after the create trap is installed must still run the caller's EXIT trap.
+EXIT_FAIL="${TMP}/exit-trap-fail"
+rm -rf "${EXIT_FAIL}"
+mkdir -p "${EXIT_FAIL}/bin"
+cat >"${EXIT_FAIL}/bin/python-fail" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "${EXIT_FAIL}/bin/python-fail"
+fail_flag="${EXIT_FAIL}/caller-ran"
+(
+  flag="${fail_flag}"
+  trap 'touch "${flag}"' EXIT
+  # shellcheck disable=SC1090
+  source "${COMMON}"
+  create_atomic_project_venv "${EXIT_FAIL}/bin/python-fail" "${EXIT_FAIL}/.venv"
+) >/dev/null 2>&1 || true
+if [[ -e "${fail_flag}" ]]; then
+  pass "failed atomic create still runs the caller EXIT trap"
+else
+  fail "failed atomic create dropped the caller EXIT trap"
+fi
+if compgen -G "${EXIT_FAIL}/.venv.partial.*" >/dev/null || [[ -e "${EXIT_FAIL}/.venv" ]]; then
+  fail "failed atomic create left a partial or destination tree"
+else
+  pass "failed atomic create removed its temporary tree"
+fi
+if [[ -d "${EXIT_FAIL}/.venv.create-lock" ]]; then
+  fail "failed atomic create left the create lock"
+else
+  pass "failed atomic create removed the create lock"
+fi
+
+# Owned cleanup must not overwrite $? before a caller EXIT trap reads it.
+EXIT_RC="${TMP}/exit-trap-rc"
+rm -rf "${EXIT_RC}"
+mkdir -p "${EXIT_RC}/bin"
+cat >"${EXIT_RC}/bin/python-fail" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "${EXIT_RC}/bin/python-fail"
+rc_capture="${EXIT_RC}/captured-rc"
+(
+  # shellcheck disable=SC2154,SC2030,SC2031
+  trap 'rc=$?; printf "%s" "${rc}" >"'"${rc_capture}"'"' EXIT
+  # shellcheck disable=SC1090
+  source "${COMMON}"
+  create_atomic_project_venv "${EXIT_RC}/bin/python-fail" "${EXIT_RC}/.venv"
+) >/dev/null 2>&1 || true
+if [[ "$(cat "${rc_capture}" 2>/dev/null || echo missing)" == "1" ]]; then
+  pass "failed atomic create preserves exit status for caller EXIT trap"
+else
+  fail "failed atomic create preserves exit status for caller EXIT trap (got $(cat "${rc_capture}" 2>/dev/null || echo missing))"
 fi
 
 # --- real install / venv scripts (stubs; no live Homebrew) ---
@@ -591,6 +752,30 @@ run_stubbed() {
     MLX_WORKSPACE="${ws}" MLX_VENV="${ws}/.venv" MLX_SKIP_DEVICE_PROBE=1 \
     PATH="${SCRIPT_STUB}:${PATH}" "$@"
 }
+
+DETECT_JSON="${TMP}/detect-json"
+mkdir -p "${DETECT_JSON}"
+detect_json_out="$(run_stubbed "${DETECT_JSON}" "${DETECT}" --json 2>/dev/null)" || true
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get("architecture")=="arm64" and d.get("recommended_model") else 1)' \
+  "${detect_json_out}" 2>/dev/null; then
+  pass "detect --json emits parseable arm64 payload under Darwin stubs"
+else
+  fail "detect --json emits parseable arm64 payload under Darwin stubs"
+fi
+brew_prefix_json="$(
+  env -u DETECT_BREW_PREFIX \
+    DETECT_ARCH=arm64 DETECT_CHIP=test DETECT_MEM_BYTES=1 DETECT_MEM_GIB=1 \
+    DETECT_TIER_ID=constrained DETECT_TIER_LABEL=label DETECT_TIER_HINT=hint \
+    DETECT_CORES=8 DETECT_MACOS=15 DETECT_PY=3.12 DETECT_BREW_OK=false \
+    DETECT_XCODE=false DETECT_MODEL=model DETECT_WORKSPACE=/tmp \
+    python3 "${ROOT}/scripts/lib/detect_json.py" 2>/dev/null
+)" || true
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get("homebrew_prefix")=="" and d.get("homebrew") is False else 1)' \
+  "${brew_prefix_json}" 2>/dev/null; then
+  pass "detect JSON allows a missing Homebrew prefix"
+else
+  fail "detect JSON allows a missing Homebrew prefix"
+fi
 
 FRESH="${TMP}/fresh-install"
 mkdir -p "${FRESH}"

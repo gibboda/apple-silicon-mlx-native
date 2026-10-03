@@ -249,10 +249,12 @@ On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The U
 apple-silicon-mlx-native/
 ├── .github/
 │   ├── CODEOWNERS
+│   ├── dependabot.yml
 │   ├── pull_request_template.md
 │   └── workflows/
 │       ├── conventional-commits.yml
 │       ├── delete-merged-branch.yml
+│       ├── publish-release.yml
 │       └── shellcheck.yml
 ├── config/
 │   └── models.example.env
@@ -263,20 +265,26 @@ apple-silicon-mlx-native/
 │   ├── models.md
 │   └── troubleshooting.md
 ├── scripts/
-│   ├── lib/common.sh
+│   ├── lib/
+│   │   ├── common.sh
+│   │   ├── detect_json.py
+│   │   └── mlx_launch.py
+│   ├── cleanup-mlx-native.sh
+│   ├── conventional-commits-audit.sh
 │   ├── create-mlx-venv.sh
-│   ├── initial-build-mlx-native-media.sh
-│   ├── rebuild-mlx-native-media.sh
-│   ├── install-mlx-image.sh
+│   ├── delete-merged-pr-branch.sh
+│   ├── detect-apple-silicon.sh
 │   ├── generate-mlx-image.sh
+│   ├── generate-mlx-text.sh
+│   ├── generate-mlx-video.sh
+│   ├── initial-build-mlx-native-media.sh
+│   ├── install-mlx-image.sh
 │   ├── install-mlx-video.sh
 │   ├── prepare-mlx-video-wan.sh
-│   ├── generate-mlx-video.sh
-│   ├── cleanup-mlx-native.sh
-│   ├── detect-apple-silicon.sh
-│   ├── validate-mlx.sh
-│   ├── conventional-commits-audit.sh
-│   └── delete-merged-pr-branch.sh
+│   ├── rebuild-mlx-native-media.sh
+│   ├── release.sh
+│   ├── serve-mlx.sh
+│   └── validate-mlx.sh
 ├── tests/
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
@@ -285,9 +293,13 @@ apple-silicon-mlx-native/
 │   ├── disk-headroom.test.sh
 │   ├── generate-args.test.sh
 │   ├── host-safety.test.sh
+│   ├── media-list.test.sh
 │   ├── mlx-image.test.sh
+│   ├── mlx-limits.test.sh
 │   ├── mlx-video.test.sh
+│   ├── model-list.test.sh
 │   ├── models-env.test.sh
+│   ├── readme-tree.test.sh
 │   └── release.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
@@ -296,7 +308,9 @@ apple-silicon-mlx-native/
 └── README.md
 ```
 
-`scripts/lib/common.sh` holds shared detection, bandwidth lookup, and compose helpers (engineering reason for the extra path).
+The tree lists every tracked file. `tests/readme-tree.test.sh` fails when a tracked path is missing from it, or when it names a path that is not tracked.
+
+`scripts/lib/common.sh` holds shared detection, bandwidth lookup, and compose helpers. `scripts/lib/mlx_launch.py` applies the ≤8 GB Metal working-set limits before text generation or `mlx_lm.server` starts.
 
 ## Make targets
 
