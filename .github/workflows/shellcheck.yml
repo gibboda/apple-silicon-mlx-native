@@ -43,21 +43,26 @@ jobs:
       - name: Run portable self-tests
         run: make test
 
-  # GitHub-hosted macos-latest is Apple Silicon. This job does not install
-  # models or MLX packages. The required ShellCheck gate below includes it so
-  # branch protection does not need a separate check name.
+  # GitHub-hosted macos-latest is Apple Silicon. The macos-26-arm64 image ships
+  # Bash 3.2.57, so the host-safety step is the real bash 3.2 coverage for the
+  # EXIT-trap fix. This job does not install models or MLX packages. It is part
+  # of the required ShellCheck gate, so a hang must not block merges for hours.
   macos-smoke:
     name: macOS Apple Silicon smoke
     runs-on: macos-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Confirm Darwin arm64
         run: |
           set -euo pipefail
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
+          bash --version
 
       - name: Quiet Apple Silicon check
         run: scripts/detect-apple-silicon.sh --quiet

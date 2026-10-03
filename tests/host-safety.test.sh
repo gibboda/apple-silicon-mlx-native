@@ -301,7 +301,11 @@ if command -v python3 >/dev/null 2>&1 && python3 -m venv "${IDENT}/.venv-probe" 
   fi
   pip_shebang="$(head -n 1 "${ATOMIC}/.venv/bin/pip")"
   atomic_canon="$(cd "${ATOMIC}" && pwd -P)"
-  if [[ "${pip_shebang}" == "#!${atomic_canon}/.venv/bin/python"* && "${pip_shebang}" != *".partial."* ]]; then
+  # macOS mktemp stays on /var while pwd -P follows /var -> /private/var.
+  # Python may record either path. Both are the destination, not the partial.
+  if [[ "${pip_shebang}" != *".partial."* ]] \
+    && { [[ "${pip_shebang}" == "#!${ATOMIC}/.venv/bin/python"* ]] \
+      || [[ "${pip_shebang}" == "#!${atomic_canon}/.venv/bin/python"* ]]; }; then
     pass "atomic venv pip shebang points at .venv"
   else
     fail "atomic venv pip shebang points at .venv (${pip_shebang})"
@@ -490,6 +494,31 @@ EOF
     fail "mid-build test could not inject .venv while partial was building"
   fi
   rm -rf "${MID}"
+
+  NEST="${TMP}/nest-rename"
+  mkdir -p "${NEST}/bin"
+  cat >"${NEST}/bin/mv" <<'EOF'
+#!/bin/sh
+# Plant a directory so mv nests the partial inside .venv.
+if [ "$(basename "${2:-}")" = ".venv" ]; then
+  mkdir -p "${2}/USERDATA"
+  printf 'keep\n' >"${2}/USERDATA/keep.txt"
+fi
+exec /bin/mv "$@"
+EOF
+  chmod +x "${NEST}/bin/mv"
+  nest_err="$(
+    env MLX_WORKSPACE="${NEST}" MLX_VENV="${NEST}/.venv" ATOMIC_BREW_PY="$(command -v python3)" \
+      PATH="${NEST}/bin:${PATH}" \
+      bash -c "source \"${COMMON}\"; create_atomic_project_venv \"\${ATOMIC_BREW_PY}\" \"\${MLX_VENV}\"" 2>&1
+  )" || true
+  expect_contains "rename race refuses to claim a destination that appeared during mv" \
+    "appeared during rename" "${nest_err}"
+  if [[ -f "${NEST}/.venv/USERDATA/keep.txt" ]]; then
+    pass "rename race left the foreign .venv in place"
+  else
+    fail "rename race removed the foreign .venv"
+  fi
 
   BREAK="${TMP}/break-pip"
   mkdir -p "${BREAK}/bin"

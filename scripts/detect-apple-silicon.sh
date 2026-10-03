@@ -87,8 +87,8 @@ brew_ok="false"
 xcode_ok="false"
 check_xcode_clt && xcode_ok="true"
 
-# macOS /bin/bash 3.2 mishandles inline here-docs in some case/continuation
-# layouts, so JSON emission lives in scripts/lib/detect_json.py.
+# JSON comes from scripts/lib/detect_json.py. log_warn writes to stderr so a
+# chip-policy warning cannot land on stdout ahead of the JSON object.
 print_detect_json() {
   local brew_ok="$1" brew_prefix="$2" xcode_ok="$3" detect_py
   export DETECT_ARCH="${MLX_ARCH}"
@@ -128,8 +128,8 @@ print_detect_json() {
   python3 "${SCRIPT_DIR}/lib/detect_json.py" || die "detect JSON emission failed"
 }
 
-# macOS /bin/bash 3.2 (GitHub Actions) can skip case arms that call functions
-# after a function definition in the same compound list; handle --json first.
+# Emit JSON before the other modes. The failure mode on CI was a warning on
+# stdout (unrecognized virtual brand), not a skipped case arm or here-doc.
 if [[ "${MODE}" == "json" ]]; then
   print_detect_json "${brew_ok}" "${brew_prefix}" "${xcode_ok}"
   exit 0

@@ -1487,7 +1487,7 @@ _restore_exit_trap() {
 create_atomic_project_venv() {
   local brew_py="$1"
   local dest="$2"
-  local partial py stale stale_pid lock quoted_partial quoted_dest quoted_lock old_base saved_exit_trap
+  local partial py stale stale_pid lock quoted_partial quoted_dest quoted_lock old_base saved_exit_trap nested
 
   [[ -n "${brew_py}" && -x "${brew_py}" ]] || die "Refusing to create venv without a Python interpreter"
   [[ -n "${dest}" ]] || die "Refusing to create venv with an empty destination"
@@ -1526,6 +1526,13 @@ create_atomic_project_venv() {
     die "Refusing to overwrite ${dest}: it appeared while building ${partial}"
   fi
   mv "${partial}" "${dest}"
+  # If dest appears as a directory in the gap before mv, mv nests the partial
+  # inside it. Do not claim dest: the EXIT trap still removes only the partial
+  # path and the lock, so a later failure cannot delete the foreign tree.
+  nested="${dest}/$(basename "${partial}")"
+  if [[ -e "${nested}" || -L "${nested}" ]]; then
+    die "Refusing to claim ${dest}: it appeared during rename"
+  fi
   # This run now owns the renamed tree. A later failure may remove it.
   _install_owned_exit_trap "rm -rf -- ${quoted_dest} ${quoted_lock}" "${saved_exit_trap}"
   old_base="$(basename "${partial}")"
@@ -1533,7 +1540,7 @@ create_atomic_project_venv() {
     die "Venv creation failed: temporary path remains in ${dest}"
   fi
   [[ -x "${dest}/bin/pip" ]] || die "Venv creation failed: ${dest}/bin/pip is not executable"
-  "${dest}/bin/pip" --version >/dev/null || die "Venv creation failed: ${dest}/bin/pip does not run"
+  venv_pip_script_runs "${dest}" || die "Venv creation failed: ${dest}/bin/pip does not run"
   rm -rf -- "${lock}"
   _restore_exit_trap "${saved_exit_trap}"
 }
