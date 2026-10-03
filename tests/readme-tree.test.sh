@@ -87,6 +87,11 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! git -C "${ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  fail "not a git repository (README tree test requires git-tracked files)"
+  exit 1
+fi
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 tracked="${TMP}/tracked"
@@ -99,7 +104,9 @@ else
   pass "README repository tree parsed"
 fi
 
-if [[ -s "${listed}" ]]; then
+if [[ ! -s "${listed}" ]]; then
+  fail "README '## Repository structure' text fence not found or empty"
+else
   missing="$(comm -23 "${tracked}" "${listed}" || true)"
   extra="$(comm -13 "${tracked}" "${listed}" || true)"
   if [[ -z "${missing}" && -z "${extra}" ]]; then
@@ -113,6 +120,7 @@ if [[ -s "${listed}" ]]; then
       fail "README tree lists paths that are not tracked"
       printf '%s\n' "${extra}" >&2
     fi
+    printf 'Hint: Update the tree under %s in README.md.\n' "'## Repository structure'" >&2
   fi
 fi
 
