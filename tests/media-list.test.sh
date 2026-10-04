@@ -46,6 +46,16 @@ expect_fail() {
   fi
 }
 
+expect_ok() {
+  local label="$1"
+  shift
+  if "$@" >/dev/null 2>&1; then
+    pass "${label}"
+  else
+    fail "${label} (expected success)"
+  fi
+}
+
 list_column() {
   local model="$1"
   local column="$2"
@@ -184,6 +194,20 @@ expect_eq "24 GB cooled klein still fits" \
   "$(image_list_fit flux2-klein-4b high fast cooled)" "fits"
 expect_eq "24 GB cooled schnell fits" \
   "$(image_list_fit schnell high fast cooled)" "fits"
+for air_model in MacBookAir10,1 Mac14,2 Mac14,15 Mac15,12 Mac15,13 Mac16,12 Mac16,13 Mac17,3 Mac17,4; do
+  air_thermal="$(classify_thermal_class "${air_model}")"
+  expect_eq "${air_model} media thermal is fanless" "${air_thermal}" "fanless"
+  expect_eq "${air_model} image default stays klein" \
+    "$(image_list_fit flux2-klein-4b standard fast "${air_thermal}")" "default"
+  expect_eq "${air_model} video default stays wan" \
+    "$(video_list_fit "${MLX_VIDEO_WAN_MODEL_NAME}" standard fast "${air_thermal}")" "default"
+  expect_ok "${air_model} video force required" \
+    video_force_required_for_profile standard fast "${air_thermal}"
+done
+expect_eq "Mac14,7 media thermal is cooled" "$(classify_thermal_class Mac14,7)" "cooled"
+expect_fail "Mac14,7 fast cooled does not force video" \
+  video_force_required_for_profile standard fast cooled
+
 expect_eq "fanless 24 GB image default stays klein" \
   "$(image_list_fit flux2-klein-4b high fast fanless)" "default"
 expect_eq "fanless 24 GB z-image is tight" \

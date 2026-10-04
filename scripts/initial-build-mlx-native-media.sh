@@ -93,6 +93,7 @@ fi
 log_header "Workspace"
 mkdir -p "${MLX_WORKSPACE}"
 require_install_venv
+ensure_mlx_workspace_marker
 log_ok "Workspace validated: ${MLX_WORKSPACE}"
 log_ok "Using existing venv: ${MLX_VENV}"
 mkdir -p "${MLX_CONFIG_DIR}"

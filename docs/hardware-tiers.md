@@ -22,7 +22,7 @@ Unknown chips (unrecognized brand string, or a family with no bandwidth row such
 | Chip family / SKU | Bandwidth lookup and throughput class |
 | GPU cores (`ioreg` `gpu-core-count`) | Max GPU-bin footnotes; modest video frame scaling when RAM already allows Wan |
 | P/E cores (`hw.perflevel0/1.physicalcpu`) | Reporting |
-| `hw.model` | Thermal class: `MacBookAir*` is **fanless**, otherwise **cooled** |
+| `hw.model` | Thermal class: a MacBook Air is **fanless**. That is `MacBookAir*` plus the later identifiers `Mac14,2`, `Mac14,15`, `Mac15,12`, `Mac15,13`, `Mac16,12`, and `Mac16,13` (Apple Support). `Mac17,3` and `Mac17,4` are included from third-party M5 Air listings and are not on that page yet. Every other model is **cooled** |
 | Unified memory (GiB) | Memory tier (OOM fence) |
 | `mx.device_info()` working set / GPU arch | When mlx is importable; omitted otherwise. Uses `mx.device_info`, not deprecated `mx.metal.device_info` |
 | CPU cores / macOS / disk / Homebrew / Xcode CLT / Python | Reporting and bootstrap |
@@ -53,7 +53,7 @@ Class comes from looked-up bandwidth, **not** generation number. M3 Pro (~150 GB
 
 M5+ GPU Neural Accelerators (generation ≥ 5) do **not** change image defaults (those follow `fast` throughput on cooled RAM). They only affect video: on the `high` tier, Wan frames go from 33 to 49 when throughput is known, GPU cores ≥ 24, **and** (throughput is `very_fast` **or** the chip has NAX). Unknown chips stay on the tier-only 33-frame profile. They do not help decode, and this stack never routes through ANE — MLX/Metal GPU only.
 
-Fanless (`MacBookAir*`) derates: throughput_class must **not** raise the default model, image, video, or context above the conservative Air profile, even on later Airs.
+Fanless MacBook Air derates: throughput_class must **not** raise the default model, image, video, or context above the conservative Air profile, including M2 and later Airs whose `hw.model` is `MacNN,N` rather than `MacBookAir*`.
 
 ## Composed LLM defaults
 

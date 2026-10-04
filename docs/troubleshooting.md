@@ -127,7 +127,7 @@ GitHub merge commits are exempt by default. See `scripts/conventional-commits-au
 
 `make venv` creates `.venv` only when that path is missing. A venv that install can use has `pyvenv.cfg`, an executable `bin/python`, and a working `pip` module. `bin/python3` alone, a non-executable `bin/python`, or a tree left behind when `python -m venv` dies before `ensurepip` is not enough. Remove or rename that path, or run `make rebuild` (it accepts either marker via `looks_like_venv`). `make venv` will not repair it. `make install` does not create the venv. Fresh clones run `make venv` once before `make install`. An existing complete `.venv` does not need that extra step.
 
-A venv must resolve under `MLX_WORKSPACE`. To keep the environment outside the clone, set `MLX_WORKSPACE` to that enclosing directory (and optionally `MLX_VENV` under it). `MLX_VENV` alone pointing outside the workspace is rejected.
+A venv must resolve under `MLX_WORKSPACE`. To keep the environment outside the clone, set `MLX_WORKSPACE` to a dedicated directory (and optionally `MLX_VENV` under it), not `$HOME` or a system root. `make venv` writes `.mlx-workspace` there. `MLX_VENV` alone pointing outside the workspace is rejected. `make clean --purge` refuses `$HOME` and a workspace without that marker or this repository's `Makefile`.
 
 ## Rebuild refused to delete `.venv`
 

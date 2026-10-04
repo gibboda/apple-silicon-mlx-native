@@ -16,6 +16,9 @@ MLX_PYTHON_VERSION="${MLX_PYTHON_VERSION:-3.12}"
 MLX_CONFIG_DIR="${MLX_CONFIG_DIR:-${MLX_WORKSPACE}/config}"
 MLX_MODELS_ENV="${MLX_MODELS_ENV:-${MLX_CONFIG_DIR}/models.env}"
 MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
+# Written into a non-repo MLX_WORKSPACE so purge can tell a toolkit directory
+# from $HOME or another broad path. The repository itself is its own marker.
+MLX_WORKSPACE_SENTINEL_NAME=".mlx-workspace"
 
 # Deliberately selected Python packages (Pure MLX core + selected media).
 # Image/video packages are NOT installed by default — see docs/media.md.
@@ -321,10 +324,17 @@ detect_hw_model() {
   sysctl -n hw.model 2>/dev/null || echo ""
 }
 
+# Fanless when hw.model is a MacBook Air.
+# M1 keeps the MacBookAir* prefix. Later Airs use MacNN,N identifiers.
+# M2–M4 IDs are from Apple Support "Identify your MacBook Air model"
+# (https://support.apple.com/en-us/102869). Mac17,3 and Mac17,4 are M5 Air
+# IDs from third-party listings and are not on that page yet.
 classify_thermal_class() {
   local model="${1:-}"
   case "${model}" in
-    MacBookAir*) echo "fanless" ;;
+    MacBookAir*|Mac14,2|Mac14,15|Mac15,12|Mac15,13|Mac16,12|Mac16,13|Mac17,3|Mac17,4)
+      echo "fanless"
+      ;;
     "") echo "" ;;
     *) echo "cooled" ;;
   esac
@@ -1143,6 +1153,117 @@ assert_workspace_safe() {
   [[ -d "${orig}" ]] || die "Expected workspace missing: ${orig}"
   MLX_WORKSPACE="$(canonical_path "${orig}")" || die "Cannot resolve workspace: ${orig}"
   [[ "${MLX_WORKSPACE}" != "/" ]] || die "Refusing to operate on workspace /"
+}
+
+# Volume roots and other directories that are not a project workspace.
+workspace_is_system_root() {
+  local ws="${1%/}"
+  case "${ws}" in
+    /|/Users|/home|/Volumes|/opt|/private|/tmp|/var|/usr|/bin|/sbin|/etc|/System|/Library|/Applications|/dev|/proc|/private/tmp|/private/var|/var/tmp|/opt/homebrew|/usr/local)
+      return 0
+      ;;
+  esac
+  if [[ "${ws}" == /Volumes/* && "${ws#/Volumes/}" != */* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+# True when purging this workspace could delete home or system files.
+workspace_purge_forbidden() {
+  local ws="$1"
+  local home
+  home="$(canonical_path "${HOME}")" || return 0
+  if path_is_within "${home}" "${ws}"; then
+    return 0
+  fi
+  workspace_is_system_root "${ws}"
+}
+
+workspace_is_repo_root() {
+  local ws="${1:-${MLX_WORKSPACE}}"
+  [[ -f "${ws}/Makefile" && -f "${ws}/scripts/lib/common.sh" ]]
+}
+
+workspace_has_purge_marker() {
+  local ws="${1:-${MLX_WORKSPACE}}"
+  local marker
+  if workspace_is_repo_root "${ws}"; then
+    return 0
+  fi
+  marker="${ws}/${MLX_WORKSPACE_SENTINEL_NAME}"
+  [[ -f "${marker}" && ! -L "${marker}" ]]
+}
+
+# Refuse --purge / --workspace-caches on $HOME, a parent of $HOME, a system
+# root, or a directory the toolkit has not marked.
+assert_workspace_purge_safe() {
+  local ws home
+  ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+  home="$(canonical_path "${HOME}")" || die "Cannot resolve HOME"
+  if path_is_within "${home}" "${ws}"; then
+    die "Refusing to purge workspace that is \$HOME or a parent of it: ${ws}"
+  fi
+  if workspace_is_system_root "${ws}"; then
+    die "Refusing to purge system path: ${ws}"
+  fi
+  if ! workspace_has_purge_marker "${ws}"; then
+    die "Refusing to purge ${ws} without a toolkit marker (${MLX_WORKSPACE_SENTINEL_NAME} or this repository's Makefile and scripts/lib/common.sh)"
+  fi
+}
+
+# Claim a dedicated non-repo workspace. Does not write the marker into $HOME
+# or a system root; purge stays refused there.
+ensure_mlx_workspace_marker() {
+  local ws dest
+  ws="$(canonical_path "${MLX_WORKSPACE}")" || die "Cannot resolve workspace: ${MLX_WORKSPACE}"
+  if workspace_is_repo_root "${ws}"; then
+    return 0
+  fi
+  if workspace_purge_forbidden "${ws}"; then
+    log_warn "Not writing ${MLX_WORKSPACE_SENTINEL_NAME} in ${ws}; make clean --purge will refuse this workspace."
+    return 0
+  fi
+  dest="${ws}/${MLX_WORKSPACE_SENTINEL_NAME}"
+  if [[ -L "${dest}" ]]; then
+    die "Refusing to follow symlink workspace marker: ${dest}"
+  fi
+  if [[ -e "${dest}" && ! -f "${dest}" ]]; then
+    die "Workspace marker exists but is not a file: ${dest}"
+  fi
+  if [[ -f "${dest}" ]]; then
+    return 0
+  fi
+  printf '%s\n' \
+    "# apple-silicon-mlx-native workspace" \
+    "# make clean --purge may remove toolkit caches in this directory." \
+    >"${dest}"
+  log_info "Wrote workspace marker ${dest}"
+}
+
+# True when removing this directory would also remove Hugging Face home,
+# the hub cache, or a huggingface tree inside .cache.
+workspace_cache_holds_huggingface() {
+  local cache="$1"
+  local cache_c hf_home hf_home_c hf_hub hf_hub_c
+  [[ -n "${cache}" ]] || return 1
+  cache_c="$(canonical_path "${cache}")" || return 1
+  hf_home="${HF_HOME:-${HOME}/.cache/huggingface}"
+  hf_home_c="$(canonical_path "${hf_home}")" || return 1
+  hf_hub="$(huggingface_hub_cache_dir)"
+  hf_hub_c="$(canonical_path "${hf_hub}")" || return 1
+  if path_is_within "${hf_home_c}" "${cache_c}"; then
+    return 0
+  fi
+  if path_is_within "${hf_hub_c}" "${cache_c}"; then
+    return 0
+  fi
+  if [[ "$(basename "${cache_c}")" == ".cache" ]]; then
+    if [[ -e "${cache_c}/huggingface" || -e "${cache_c}/.huggingface" ]]; then
+      return 0
+    fi
+  fi
+  return 1
 }
 
 assert_venv_under_workspace() {

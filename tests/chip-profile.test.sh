@@ -55,6 +55,35 @@ expect_contains() {
   fi
 }
 
+expect_exact_line() {
+  local label="$1"
+  local line="$2"
+  local text="$3"
+  if grep -qx -F -- "${line}" <<<"${text}"; then
+    pass "${label}"
+  else
+    fail "${label} (missing exact line ${line})"
+  fi
+}
+
+# 16 GB composed profile for one hw.model, using that model's chip family.
+air_profile_text() {
+  local model="$1"
+  local family="$2"
+  local brand="$3"
+  unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
+  MLX_HW_MODEL="${model}"
+  MLX_THERMAL_CLASS="$(classify_thermal_class "${model}")"
+  MLX_CHIP="${brand}"
+  MLX_CHIP_FAMILY="${family}"
+  MLX_CHIP_SKU="base"
+  MLX_GPU_CORES=10
+  MLX_PHYSICAL_TIER_ID="standard"
+  MLX_MEM_GIB=16
+  compose_chip_policy >/dev/null 2>&1
+  print_composed_profile
+}
+
 unset OVERRIDE_MEMORY_TIER OVERRIDE_CHIP_FAMILY OVERRIDE_CHIP_SKU OVERRIDE_GPU_CORES OVERRIDE_THERMAL_CLASS
 
 # --- Brand parser (longest-match regex, not substring "M1") ---
@@ -200,6 +229,40 @@ expect_ok "fanless video requires --force" video_force_required_for_profile high
 expect_eq "fanless does not advertise LTX" \
   "$(recommended_video_profile_for_profile workstation very_fast fanless 4 20)" \
   "wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto"
+
+# hw.model table: M1 prefix, Apple-documented M2–M4 Airs, third-party M5 Airs.
+expect_eq "empty hw.model has no thermal class" "$(classify_thermal_class "")" ""
+expect_eq "M1 Air prefix is fanless" "$(classify_thermal_class MacBookAir10,1)" "fanless"
+expect_eq "M2 Pro MacBook is cooled" "$(classify_thermal_class Mac14,7)" "cooled"
+
+while IFS='|' read -r air_model air_family air_brand; do
+  [[ -n "${air_model}" ]] || continue
+  air_text="$(air_profile_text "${air_model}" "${air_family}" "${air_brand}")"
+  expect_exact_line "${air_model} thermal line" "thermal_class=fanless" "${air_text}"
+  expect_exact_line "${air_model} stays 3B" \
+    "recommended_model=mlx-community/Llama-3.2-3B-Instruct-4bit" "${air_text}"
+  expect_exact_line "${air_model} context stays 2048" "recommended_context=2048" "${air_text}"
+  expect_exact_line "${air_model} image stays 512 4-bit" \
+    "image_profile=flux2|flux2-klein-4b|4|4|512|512|1" "${air_text}"
+  expect_exact_line "${air_model} video stays short Wan" \
+    "video_profile=wan21|${MLX_VIDEO_WAN_MODEL_NAME}|832|480|17|10|auto" "${air_text}"
+  expect_exact_line "${air_model} video force required" "video_force_required=1" "${air_text}"
+done <<'EOF'
+MacBookAir10,1|1|Apple M1
+Mac14,2|2|Apple M2
+Mac14,15|2|Apple M2
+Mac15,12|3|Apple M3
+Mac15,13|3|Apple M3
+Mac16,12|4|Apple M4
+Mac16,13|4|Apple M4
+Mac17,3|5|Apple M5
+Mac17,4|5|Apple M5
+EOF
+
+pro_text="$(air_profile_text Mac14,7 2 "Apple M2")"
+expect_exact_line "Mac14,7 Pro thermal line" "thermal_class=cooled" "${pro_text}"
+expect_exact_line "Mac14,7 Pro image is cooled 768" \
+  "image_profile=flux2|flux2-klein-4b|4|4|768|768|1" "${pro_text}"
 
 # RAM fence: 8 GB never gets 7B even on a fast chip
 expect_eq "fast constrained still 3B (RAM wins)" \
