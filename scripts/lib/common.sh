@@ -1246,8 +1246,35 @@ ensure_mlx_workspace_marker() {
   log_info "Wrote workspace marker ${dest}"
 }
 
+# True when root itself is a Hugging Face tree: a hub directory or a token file.
+path_is_hf_tree() {
+  local root="$1"
+  [[ -n "${root}" ]] || return 1
+  [[ -d "${root}/hub" || -f "${root}/token" ]]
+}
+
+# True when root is an HF tree, or contains huggingface/ or .huggingface/ that is.
+# Callers pass both the unresolved path and its canonical path. A .cache symlink
+# canonicalizes to another basename, so the unresolved path must be checked too.
+path_contains_hf_tree() {
+  local root="$1"
+  local name base
+  [[ -n "${root}" ]] || return 1
+  base="$(basename "${root}")"
+  case "${base}" in
+    huggingface|.huggingface)
+      path_is_hf_tree "${root}" && return 0
+      ;;
+  esac
+  for name in huggingface .huggingface; do
+    path_is_hf_tree "${root}/${name}" && return 0
+  done
+  return 1
+}
+
 # True when removing this directory would also remove Hugging Face home,
-# the hub cache, or a huggingface tree inside .cache.
+# the hub cache, or a huggingface tree (including through a .cache symlink
+# and a top-level huggingface/ or .huggingface/ workspace cache).
 workspace_cache_holds_huggingface() {
   local cache="$1"
   local cache_c hf_home hf_home_c hf_hub hf_hub_c
@@ -1263,12 +1290,10 @@ workspace_cache_holds_huggingface() {
   if path_is_within "${hf_hub_c}" "${cache_c}"; then
     return 0
   fi
-  if [[ "$(basename "${cache_c}")" == ".cache" ]]; then
-    if [[ -e "${cache_c}/huggingface" || -e "${cache_c}/.huggingface" ]]; then
-      return 0
-    fi
+  if path_contains_hf_tree "${cache}"; then
+    return 0
   fi
-  return 1
+  path_contains_hf_tree "${cache_c}"
 }
 
 assert_venv_under_workspace() {

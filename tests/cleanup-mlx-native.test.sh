@@ -359,6 +359,45 @@ assert_exists "${hf_ws}/.cache/huggingface/hub/model.bin"
 assert_missing "${hf_ws}/models"
 assert_missing "${hf_ws}/outputs"
 
+link_ws="${TMP}/link-ws"
+mkdir -p "${link_ws}/cache-data/huggingface/hub" "${link_ws}/models" "${other_home}/.cache/huggingface/hub"
+printf 'token\n' >"${link_ws}/cache-data/huggingface/token"
+printf 'blob\n' >"${link_ws}/cache-data/huggingface/hub/x"
+printf 'weight\n' >"${link_ws}/models/w"
+ln -s cache-data "${link_ws}/.cache"
+printf '%s\n' marker >"${link_ws}/.mlx-workspace"
+expect_ok "purge keeps a symlinked .cache that holds huggingface/token" \
+  env HOME="${other_home}" \
+    HF_HOME="${other_home}/.cache/huggingface" \
+    HF_HUB_CACHE="${other_home}/.cache/huggingface/hub" \
+    MLX_WORKSPACE="${link_ws}" MLX_VENV="${link_ws}/.venv" \
+    MLX_MODELS_ENV="${link_ws}/config/models.env" \
+  "${CLEANUP}" --purge --force
+assert_exists "${link_ws}/cache-data/huggingface/token"
+if [[ -L "${link_ws}/.cache" ]]; then
+  pass "purge left the .cache symlink in place"
+else
+  fail "purge left the .cache symlink in place"
+fi
+assert_missing "${link_ws}/models"
+
+top_hf_ws="${TMP}/top-hf-ws"
+mkdir -p "${top_hf_ws}/huggingface/hub" "${top_hf_ws}/models"
+printf 'token\n' >"${top_hf_ws}/huggingface/token"
+printf 'blob\n' >"${top_hf_ws}/huggingface/hub/x"
+printf 'weight\n' >"${top_hf_ws}/models/w"
+printf '%s\n' marker >"${top_hf_ws}/.mlx-workspace"
+expect_ok "purge keeps a top-level huggingface tree when HF_HOME is elsewhere" \
+  env HOME="${other_home}" \
+    HF_HOME="${other_home}/.cache/huggingface" \
+    HF_HUB_CACHE="${other_home}/.cache/huggingface/hub" \
+    MLX_WORKSPACE="${top_hf_ws}" MLX_VENV="${top_hf_ws}/.venv" \
+    MLX_MODELS_ENV="${top_hf_ws}/config/models.env" \
+  "${CLEANUP}" --purge --force
+assert_exists "${top_hf_ws}/huggingface/token"
+assert_exists "${top_hf_ws}/huggingface/hub/x"
+assert_missing "${top_hf_ws}/models"
+
 marker_ws="${TMP}/marker-write"
 mkdir -p "${marker_ws}"
 # shellcheck source=scripts/lib/common.sh
