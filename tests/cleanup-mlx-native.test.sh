@@ -402,6 +402,13 @@ marker_ws="${TMP}/marker-write"
 mkdir -p "${marker_ws}"
 # shellcheck source=scripts/lib/common.sh
 source "${ROOT}/scripts/lib/common.sh"
+for forbidden_root in / /private/var/tmp /private/etc /System/Volumes/Data /Users/Shared; do
+  if workspace_purge_forbidden "${forbidden_root}"; then
+    pass "purge forbidden for ${forbidden_root}"
+  else
+    fail "purge forbidden for ${forbidden_root}"
+  fi
+done
 if workspace_is_repo_root "${ROOT}"; then
   pass "workspace identity matches this checkout"
 else

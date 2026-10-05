@@ -1140,9 +1140,17 @@ canonical_path() {
 }
 
 # True when inner is outer, or a path under outer (after callers canonicalize).
+# An outer of / contains every path. Strip trailing slashes only after that
+# check: ${path%/} turns / into the empty string.
 path_is_within() {
-  local inner="${1%/}"
-  local outer="${2%/}"
+  local inner="$1"
+  local outer="$2"
+  [[ -n "${inner}" && -n "${outer}" ]] || return 1
+  if [[ "${outer}" == "/" ]]; then
+    return 0
+  fi
+  inner="${inner%/}"
+  outer="${outer%/}"
   [[ -n "${inner}" && -n "${outer}" ]] || return 1
   [[ "${inner}" == "${outer}" || "${inner}" == "${outer}/"* ]]
 }
@@ -1156,10 +1164,14 @@ assert_workspace_safe() {
 }
 
 # Volume roots and other directories that are not a project workspace.
+# macOS canonicalizes /var/tmp to /private/var/tmp and /etc to /private/etc.
 workspace_is_system_root() {
-  local ws="${1%/}"
+  local ws="$1"
+  [[ "${ws}" == "/" ]] && return 0
+  ws="${ws%/}"
+  [[ -n "${ws}" ]] || return 0
   case "${ws}" in
-    /|/Users|/home|/Volumes|/opt|/private|/tmp|/var|/usr|/bin|/sbin|/etc|/System|/Library|/Applications|/dev|/proc|/private/tmp|/private/var|/var/tmp|/opt/homebrew|/usr/local)
+    /|/Users|/home|/Volumes|/opt|/private|/tmp|/var|/usr|/bin|/sbin|/etc|/System|/Library|/Applications|/dev|/proc|/private/tmp|/private/var|/private/etc|/private/var/tmp|/private/var/folders|/var/tmp|/opt/homebrew|/usr/local|/System/Volumes/Data|/System/Volumes/Data/Users|/Users/Shared)
       return 0
       ;;
   esac
