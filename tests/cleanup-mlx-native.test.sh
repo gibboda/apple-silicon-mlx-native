@@ -267,25 +267,74 @@ if [[ -d /usr ]]; then
     "${CLEANUP}" --purge --force
 fi
 
-repo_ws="${TMP}/repo-ws"
-mkdir -p "${repo_ws}/scripts/lib" "${repo_ws}/models" "${repo_ws}/outputs"
-printf 'all:\n' >"${repo_ws}/Makefile"
-printf '# test\n' >"${repo_ws}/scripts/lib/common.sh"
-printf 'weight\n' >"${repo_ws}/models/w"
-printf 'out\n' >"${repo_ws}/outputs/o"
-repo_out="$(
-  HOME="${other_home}" MLX_WORKSPACE="${repo_ws}" MLX_VENV="${repo_ws}/.venv" \
+lookalike_ws="${TMP}/lookalike-ws"
+mkdir -p "${lookalike_ws}/scripts/lib" "${lookalike_ws}/models" "${lookalike_ws}/outputs" "${lookalike_ws}/tmp"
+printf 'all:\n' >"${lookalike_ws}/Makefile"
+printf '# unrelated\n' >"${lookalike_ws}/scripts/lib/common.sh"
+printf 'weight\n' >"${lookalike_ws}/models/w"
+printf 'out\n' >"${lookalike_ws}/outputs/o"
+printf 'temp\n' >"${lookalike_ws}/tmp/t"
+lookalike_status=0
+lookalike_out="$(
+  HOME="${other_home}" MLX_WORKSPACE="${lookalike_ws}" MLX_VENV="${lookalike_ws}/.venv" \
+    "${CLEANUP}" --workspace-caches --keep-venv --force 2>&1
+)" || lookalike_status=$?
+if [[ "${lookalike_status}" -ne 0 ]]; then
+  pass "look-alike repository without a marker is refused"
+else
+  fail "look-alike repository without a marker is refused"
+fi
+if [[ "${lookalike_out}" == *"without a toolkit marker"* ]]; then
+  pass "look-alike refusal names the missing marker"
+else
+  fail "look-alike refusal names the missing marker"
+fi
+assert_exists "${lookalike_ws}/models/w"
+assert_exists "${lookalike_ws}/outputs/o"
+assert_exists "${lookalike_ws}/tmp/t"
+assert_exists "${lookalike_ws}/Makefile"
+
+marked_ws="${TMP}/marked-ws"
+mkdir -p "${marked_ws}/models" "${marked_ws}/outputs"
+printf 'weight\n' >"${marked_ws}/models/w"
+printf 'out\n' >"${marked_ws}/outputs/o"
+printf '%s\n' "# apple-silicon-mlx-native workspace" >"${marked_ws}/.mlx-workspace"
+marked_out="$(
+  HOME="${other_home}" MLX_WORKSPACE="${marked_ws}" MLX_VENV="${marked_ws}/.venv" \
     "${CLEANUP}" --workspace-caches --keep-venv --force 2>&1
 )" || true
-if [[ ! -e "${repo_ws}/models" && ! -e "${repo_ws}/outputs" && -f "${repo_ws}/Makefile" ]]; then
-  pass "repository marker allows purge of its own caches"
+if [[ ! -e "${marked_ws}/models" && ! -e "${marked_ws}/outputs" && -f "${marked_ws}/.mlx-workspace" ]]; then
+  pass "sentinel allows purge of its own caches"
 else
-  fail "repository marker allows purge of its own caches"
+  fail "sentinel allows purge of its own caches"
 fi
-if [[ "${repo_out}" == *"The following paths will be removed:"* && "${repo_out}" == *"${repo_ws}/models"* ]]; then
+if [[ "${marked_out}" == *"The following paths will be removed:"* && "${marked_out}" == *"${marked_ws}/models"* ]]; then
   pass "force still prints the removal list"
 else
   fail "force still prints the removal list"
+fi
+
+checkout_busy=0
+for checkout_name in models .cache huggingface .huggingface transformers mlx_models outputs generated tmp temp .tmp; do
+  if [[ -e "${ROOT}/${checkout_name}" || -L "${ROOT}/${checkout_name}" ]]; then
+    checkout_busy=1
+  fi
+done
+if (( checkout_busy )); then
+  pass "skipped checkout purge because cache directories already exist"
+else
+  mkdir -p "${ROOT}/models" "${ROOT}/outputs"
+  printf 'weight\n' >"${ROOT}/models/w"
+  printf 'out\n' >"${ROOT}/outputs/o"
+  checkout_status=0
+  HOME="${other_home}" MLX_WORKSPACE="${ROOT}" MLX_VENV="${ROOT}/.venv" \
+    "${CLEANUP}" --workspace-caches --keep-venv --force >/dev/null 2>&1 || checkout_status=$?
+  if [[ "${checkout_status}" -eq 0 && ! -e "${ROOT}/models" && ! -e "${ROOT}/outputs" ]]; then
+    pass "this repository checkout purges its own caches without a marker"
+  else
+    fail "this repository checkout purges its own caches without a marker"
+  fi
+  rm -rf "${ROOT}/models" "${ROOT}/outputs"
 fi
 
 hf_ws="${TMP}/hf-ws"
@@ -314,6 +363,16 @@ marker_ws="${TMP}/marker-write"
 mkdir -p "${marker_ws}"
 # shellcheck source=scripts/lib/common.sh
 source "${ROOT}/scripts/lib/common.sh"
+if workspace_is_repo_root "${ROOT}"; then
+  pass "workspace identity matches this checkout"
+else
+  fail "workspace identity matches this checkout"
+fi
+if workspace_is_repo_root "${lookalike_ws}"; then
+  fail "workspace identity rejects a look-alike tree"
+else
+  pass "workspace identity rejects a look-alike tree"
+fi
 saved_ws="${MLX_WORKSPACE}"
 saved_venv="${MLX_VENV}"
 saved_home="${HOME}"

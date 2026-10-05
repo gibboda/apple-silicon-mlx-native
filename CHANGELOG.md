@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - MacBook Air model identifiers after M1 are fanless. Apple Support lists M2–M4 as `Mac14,2`, `Mac14,15`, `Mac15,12`, `Mac15,13`, `Mac16,12`, and `Mac16,13`. `Mac17,3` and `Mac17,4` are included from third-party M5 Air listings. A 16 GB Air stays on the 3B / 2048 / 512² 4-bit profile instead of the cooled fast path
-- `make clean --purge` and `--workspace-caches` refuse `$HOME`, a parent of `$HOME`, and system roots such as `/`, `/Users`, and `/opt`, including with `--force`. They also refuse a directory that is not this repository and has no `.mlx-workspace` marker. A workspace `.cache` that contains the Hugging Face cache or `HF_HOME` is left in place; `--huggingface-cache` remains the only way to remove the hub cache. `--force` still prints the path list before removing anything
+- `make clean --purge` and `--workspace-caches` refuse `$HOME`, a parent of `$HOME`, and system roots such as `/`, `/Users`, and `/opt`, including with `--force`. They also refuse a directory that is not this repository checkout and has no `.mlx-workspace` marker. A look-alike tree that only contains a `Makefile` and `scripts/lib/common.sh` is not this checkout. A workspace `.cache` that contains the Hugging Face cache or `HF_HOME` is left in place; `--huggingface-cache` remains the only way to remove the hub cache. `--force` still prints the path list before removing anything
 
 ### Changed
 

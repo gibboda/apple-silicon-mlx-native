@@ -1180,9 +1180,14 @@ workspace_purge_forbidden() {
   workspace_is_system_root "${ws}"
 }
 
+# True only for this checkout. Another tree that happens to contain a Makefile
+# and scripts/lib/common.sh is not this repository and needs .mlx-workspace.
 workspace_is_repo_root() {
   local ws="${1:-${MLX_WORKSPACE}}"
-  [[ -f "${ws}/Makefile" && -f "${ws}/scripts/lib/common.sh" ]]
+  local ws_c root_c
+  ws_c="$(canonical_path "${ws}")" || return 1
+  root_c="$(canonical_path "${REPO_ROOT}")" || return 1
+  [[ "${ws_c}" == "${root_c}" ]]
 }
 
 workspace_has_purge_marker() {
@@ -1208,7 +1213,7 @@ assert_workspace_purge_safe() {
     die "Refusing to purge system path: ${ws}"
   fi
   if ! workspace_has_purge_marker "${ws}"; then
-    die "Refusing to purge ${ws} without a toolkit marker (${MLX_WORKSPACE_SENTINEL_NAME} or this repository's Makefile and scripts/lib/common.sh)"
+    die "Refusing to purge ${ws} without a toolkit marker (${MLX_WORKSPACE_SENTINEL_NAME} or this repository checkout)"
   fi
 }
 

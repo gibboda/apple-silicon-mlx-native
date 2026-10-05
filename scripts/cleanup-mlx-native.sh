@@ -71,7 +71,7 @@ Options:
 
 --purge and --workspace-caches refuse $HOME, a parent of $HOME, and system
 roots (for example /Users, /Volumes/<name>, /opt), with or without --force.
-They also refuse a directory that is not this repository and has no
+They also refuse a directory that is not this repository checkout and has no
 .mlx-workspace marker. make venv writes that marker for a dedicated workspace.
 A .cache directory that contains the Hugging Face cache is left in place;
 use --huggingface-cache for the hub cache.
