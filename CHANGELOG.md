@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-10-05
+
 ### Fixed
 
 - MacBook Air model identifiers after M1 are fanless. Apple Support lists M2–M4 as `Mac14,2`, `Mac14,15`, `Mac15,12`, `Mac15,13`, `Mac16,12`, and `Mac16,13`. `Mac17,3` and `Mac17,4` are included from third-party M5 Air listings. A 16 GB Air stays on the 3B / 2048 / 512² 4-bit profile instead of the cooled fast path
@@ -198,7 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.6...v0.2.7
