@@ -61,6 +61,7 @@ log_info "Memory: ${MLX_MEM_GIB} GiB — physical tier: ${MLX_PHYSICAL_TIER_ID} 
 log_header "Workspace"
 mkdir -p "${MLX_WORKSPACE}"
 assert_install_venv_paths
+ensure_mlx_workspace_marker
 log_ok "Workspace validated: ${MLX_WORKSPACE}"
 
 log_header "Prerequisites"

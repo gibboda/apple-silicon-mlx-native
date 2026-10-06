@@ -67,6 +67,7 @@ log_ok "Homebrew validated at $(homebrew_prefix)"
 # Validate expected workspace
 assert_workspace_safe
 assert_venv_under_workspace
+ensure_mlx_workspace_marker
 
 log_ok "Workspace validated: ${MLX_WORKSPACE}"
 

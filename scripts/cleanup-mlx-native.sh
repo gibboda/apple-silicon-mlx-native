@@ -69,6 +69,13 @@ Options:
   --purge                --config + --workspace-caches (not Hugging Face, not Homebrew)
   -h, --help             Show this help
 
+--purge and --workspace-caches refuse $HOME, a parent of $HOME, and system
+roots (for example /Users, /Volumes/<name>, /opt), with or without --force.
+They also refuse a directory that is not this repository checkout and has no
+.mlx-workspace marker. make venv writes that marker for a dedicated workspace.
+A .cache directory that contains the Hugging Face cache is left in place;
+use --huggingface-cache for the hub cache.
+
 Default: remove .venv only.
 
 Environment:
@@ -93,11 +100,6 @@ while [[ $# -gt 0 ]]; do
     *) die "Unknown argument: $1" ;;
   esac
 done
-
-huggingface_hub_cache() {
-  local hf_home="${HF_HOME:-${HOME}/.cache/huggingface}"
-  echo "${HF_HUB_CACHE:-${hf_home}/hub}"
-}
 
 assert_huggingface_hub_cache_safe() {
   local orig="$1"
@@ -164,19 +166,16 @@ remove_path() {
 
 confirm_unless_forced() {
   local i
-  if (( DRY_RUN )); then
-    return 0
-  fi
-  if (( FORCE )); then
+  printf '\n%sThe following paths will be removed:%s\n' "${COLOR_BOLD}" "${COLOR_RESET}"
+  for i in "${!PLANNED_PATHS[@]}"; do
+    printf '  %s  (%s)\n' "${PLANNED_PATHS[$i]}" "${PLANNED_REASONS[$i]}"
+  done
+  if (( DRY_RUN || FORCE )); then
     return 0
   fi
   if [[ ! -t 0 ]]; then
     die "Refusing non-interactive cleanup without --force"
   fi
-  printf '\n%sThe following paths will be removed:%s\n' "${COLOR_BOLD}" "${COLOR_RESET}"
-  for i in "${!PLANNED_PATHS[@]}"; do
-    printf '  %s  (%s)\n' "${PLANNED_PATHS[$i]}" "${PLANNED_REASONS[$i]}"
-  done
   printf 'Proceed? [y/N] '
   read -r answer
   case "${answer}" in
@@ -188,7 +187,7 @@ confirm_unless_forced() {
 print_leftovers() {
   local brew_prefix pkg hf_hub hf_home xcode_path
   hf_home="${HF_HOME:-${HOME}/.cache/huggingface}"
-  hf_hub="$(huggingface_hub_cache)"
+  hf_hub="$(huggingface_hub_cache_dir)"
 
   log_header "Left in place (not exclusively owned by this toolkit)"
 
@@ -249,6 +248,11 @@ log_header "Apple Silicon MLX native — cleanup"
 assert_workspace_safe
 assert_venv_under_workspace
 log_ok "Workspace validated: ${MLX_WORKSPACE}"
+
+# Refuse before any removal, including .venv. --force does not override this.
+if (( REMOVE_WORKSPACE_CACHES )); then
+  assert_workspace_purge_safe
+fi
 
 # --- .venv (default) ---
 if (( KEEP_VENV )); then
@@ -322,6 +326,10 @@ if (( REMOVE_WORKSPACE_CACHES )); then
         log_warn "Skipping non-directory workspace cache path: ${cache_path}"
         continue
       fi
+      if workspace_cache_holds_huggingface "${cache_path}"; then
+        log_warn "Skipping ${cache_path} (contains Hugging Face cache or HF_HOME; use --huggingface-cache)"
+        continue
+      fi
       queue_remove "${cache_path}" "workspace cache/output"
     fi
   done
@@ -329,7 +337,7 @@ fi
 
 # --- Hugging Face hub cache (opt-in, shared with other tools) ---
 if (( REMOVE_HF_CACHE )); then
-  hf_hub="$(canonical_path "$(huggingface_hub_cache)")" || die "Cannot resolve Hugging Face hub cache"
+  hf_hub="$(canonical_path "$(huggingface_hub_cache_dir)")" || die "Cannot resolve Hugging Face hub cache"
   assert_huggingface_hub_cache_safe "${hf_hub}"
   queue_remove "${hf_hub}" "Hugging Face hub cache (downloaded models; shared with other tools)"
 fi

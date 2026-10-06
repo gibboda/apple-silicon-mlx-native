@@ -148,6 +148,21 @@ expect_eq "16 GB fanless fast 7B is tight" \
   "$(model_list_fit mlx-community/Mistral-7B-Instruct-v0.3-4bit standard fast fanless)" \
   "tight"
 
+for air_model in MacBookAir10,1 Mac14,2 Mac14,15 Mac15,12 Mac15,13 Mac16,12 Mac16,13 Mac17,3 Mac17,4; do
+  air_thermal="$(classify_thermal_class "${air_model}")"
+  expect_eq "${air_model} list thermal is fanless" "${air_thermal}" "fanless"
+  expect_eq "${air_model} list default stays 3B" \
+    "$(model_list_fit mlx-community/Llama-3.2-3B-Instruct-4bit standard fast "${air_thermal}")" \
+    "default"
+  expect_eq "${air_model} list 7B is tight" \
+    "$(model_list_fit mlx-community/Mistral-7B-Instruct-v0.3-4bit standard fast "${air_thermal}")" \
+    "tight"
+done
+expect_eq "Mac14,7 list thermal is cooled" "$(classify_thermal_class Mac14,7)" "cooled"
+expect_eq "Mac14,7 list 7B is the cooled fast default" \
+  "$(model_list_fit mlx-community/Mistral-7B-Instruct-v0.3-4bit standard fast cooled)" \
+  "default"
+
 expect_eq "8 GB fanless default is 3B" \
   "$(model_list_fit mlx-community/Llama-3.2-3B-Instruct-4bit constrained slow fanless)" \
   "default"

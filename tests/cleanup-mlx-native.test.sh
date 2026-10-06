@@ -51,6 +51,7 @@ mkdir -p "${HOME}" "${WS}/config" "${WS}/models"
 make_venv "${MLX_VENV}"
 printf 'MLX_DEFAULT_MODEL=test\n' >"${WS}/config/models.env"
 printf 'fake-weight\n' >"${WS}/models/weights.txt"
+printf '%s\n' "# apple-silicon-mlx-native workspace" >"${WS}/.mlx-workspace"
 # Committed-looking example must never be deleted even if pointed at.
 printf 'example\n' >"${WS}/config/models.example.env"
 export MLX_MODELS_ENV="${WS}/config/models.env"
@@ -209,6 +210,238 @@ fi
 kill "${live_partial_pid}" 2>/dev/null || true
 wait "${live_partial_pid}" 2>/dev/null || true
 rm -rf "${WS}/.venv.partial.${live_partial_pid}"
+
+# 19. --purge refuses $HOME, a parent of $HOME, a system root, and a directory
+# without a marker. Files must still be there afterwards.
+other_home="${TMP}/other-home"
+mkdir -p "${other_home}"
+
+home_ws="${TMP}/as-home"
+mkdir -p "${home_ws}/models" "${home_ws}/.venv/bin"
+printf 'home-secret\n' >"${home_ws}/models/secret.txt"
+printf 'home = /usr\n' >"${home_ws}/.venv/pyvenv.cfg"
+printf '%s\n' marker >"${home_ws}/.mlx-workspace"
+home_purge_status=0
+home_purge_out="$(
+  HOME="${home_ws}" MLX_WORKSPACE="${home_ws}" MLX_VENV="${home_ws}/.venv" \
+    "${CLEANUP}" --purge --force 2>&1
+)" || home_purge_status=$?
+if [[ "${home_purge_status}" -ne 0 ]]; then
+  pass "purge refuses workspace equal to HOME"
+else
+  fail "purge refuses workspace equal to HOME"
+fi
+if [[ "${home_purge_out}" == *"Refusing to purge workspace that is \$HOME"* ]]; then
+  pass "HOME purge names the refusal"
+else
+  fail "HOME purge names the refusal"
+fi
+assert_exists "${home_ws}/models/secret.txt"
+assert_exists "${home_ws}/.venv/pyvenv.cfg"
+
+parent_ws="${TMP}/parent-ws"
+parent_home="${parent_ws}/user"
+mkdir -p "${parent_home}" "${parent_ws}/models" "${parent_ws}/outputs"
+printf 'keep\n' >"${parent_home}/secret"
+printf 'weight\n' >"${parent_ws}/models/w"
+printf 'out\n' >"${parent_ws}/outputs/o"
+printf '%s\n' marker >"${parent_ws}/.mlx-workspace"
+expect_fail "purge refuses a parent of HOME" \
+  env HOME="${parent_home}" MLX_WORKSPACE="${parent_ws}" MLX_VENV="${parent_ws}/.venv" \
+  "${CLEANUP}" --workspace-caches --keep-venv --force
+assert_exists "${parent_home}/secret"
+assert_exists "${parent_ws}/models/w"
+assert_exists "${parent_ws}/outputs/o"
+
+plain_ws="${TMP}/plain-ws"
+mkdir -p "${plain_ws}/models"
+printf 'weight\n' >"${plain_ws}/models/w"
+expect_fail "purge refuses a workspace without a marker" \
+  env HOME="${other_home}" MLX_WORKSPACE="${plain_ws}" MLX_VENV="${plain_ws}/.venv" \
+  "${CLEANUP}" --purge --force
+assert_exists "${plain_ws}/models/w"
+
+if [[ -d /usr ]]; then
+  expect_fail "purge refuses system root /usr" \
+    env HOME="${other_home}" MLX_WORKSPACE=/usr MLX_VENV=/usr/.venv \
+    "${CLEANUP}" --purge --force
+fi
+
+lookalike_ws="${TMP}/lookalike-ws"
+mkdir -p "${lookalike_ws}/scripts/lib" "${lookalike_ws}/models" "${lookalike_ws}/outputs" "${lookalike_ws}/tmp"
+printf 'all:\n' >"${lookalike_ws}/Makefile"
+printf '# unrelated\n' >"${lookalike_ws}/scripts/lib/common.sh"
+printf 'weight\n' >"${lookalike_ws}/models/w"
+printf 'out\n' >"${lookalike_ws}/outputs/o"
+printf 'temp\n' >"${lookalike_ws}/tmp/t"
+lookalike_status=0
+lookalike_out="$(
+  HOME="${other_home}" MLX_WORKSPACE="${lookalike_ws}" MLX_VENV="${lookalike_ws}/.venv" \
+    "${CLEANUP}" --workspace-caches --keep-venv --force 2>&1
+)" || lookalike_status=$?
+if [[ "${lookalike_status}" -ne 0 ]]; then
+  pass "look-alike repository without a marker is refused"
+else
+  fail "look-alike repository without a marker is refused"
+fi
+if [[ "${lookalike_out}" == *"without a toolkit marker"* ]]; then
+  pass "look-alike refusal names the missing marker"
+else
+  fail "look-alike refusal names the missing marker"
+fi
+assert_exists "${lookalike_ws}/models/w"
+assert_exists "${lookalike_ws}/outputs/o"
+assert_exists "${lookalike_ws}/tmp/t"
+assert_exists "${lookalike_ws}/Makefile"
+
+marked_ws="${TMP}/marked-ws"
+mkdir -p "${marked_ws}/models" "${marked_ws}/outputs"
+printf 'weight\n' >"${marked_ws}/models/w"
+printf 'out\n' >"${marked_ws}/outputs/o"
+printf '%s\n' "# apple-silicon-mlx-native workspace" >"${marked_ws}/.mlx-workspace"
+marked_out="$(
+  HOME="${other_home}" MLX_WORKSPACE="${marked_ws}" MLX_VENV="${marked_ws}/.venv" \
+    "${CLEANUP}" --workspace-caches --keep-venv --force 2>&1
+)" || true
+if [[ ! -e "${marked_ws}/models" && ! -e "${marked_ws}/outputs" && -f "${marked_ws}/.mlx-workspace" ]]; then
+  pass "sentinel allows purge of its own caches"
+else
+  fail "sentinel allows purge of its own caches"
+fi
+if [[ "${marked_out}" == *"The following paths will be removed:"* && "${marked_out}" == *"${marked_ws}/models"* ]]; then
+  pass "force still prints the removal list"
+else
+  fail "force still prints the removal list"
+fi
+
+checkout_busy=0
+for checkout_name in models .cache huggingface .huggingface transformers mlx_models outputs generated tmp temp .tmp; do
+  if [[ -e "${ROOT}/${checkout_name}" || -L "${ROOT}/${checkout_name}" ]]; then
+    checkout_busy=1
+  fi
+done
+if (( checkout_busy )); then
+  pass "skipped checkout purge because cache directories already exist"
+else
+  mkdir -p "${ROOT}/models" "${ROOT}/outputs"
+  printf 'weight\n' >"${ROOT}/models/w"
+  printf 'out\n' >"${ROOT}/outputs/o"
+  checkout_status=0
+  HOME="${other_home}" MLX_WORKSPACE="${ROOT}" MLX_VENV="${ROOT}/.venv" \
+    "${CLEANUP}" --workspace-caches --keep-venv --force >/dev/null 2>&1 || checkout_status=$?
+  if [[ "${checkout_status}" -eq 0 && ! -e "${ROOT}/models" && ! -e "${ROOT}/outputs" ]]; then
+    pass "this repository checkout purges its own caches without a marker"
+  else
+    fail "this repository checkout purges its own caches without a marker"
+  fi
+  rm -rf "${ROOT}/models" "${ROOT}/outputs"
+fi
+
+hf_ws="${TMP}/hf-ws"
+mkdir -p "${hf_ws}/.cache/huggingface/hub" "${hf_ws}/models" "${hf_ws}/outputs"
+printf 'token\n' >"${hf_ws}/.cache/huggingface/token"
+printf 'blob\n' >"${hf_ws}/.cache/huggingface/hub/model.bin"
+printf 'weight\n' >"${hf_ws}/models/w"
+printf 'out\n' >"${hf_ws}/outputs/o"
+printf '%s\n' marker >"${hf_ws}/.mlx-workspace"
+mkdir -p "${hf_ws}/config"
+printf 'MLX_DEFAULT_MODEL=test\n' >"${hf_ws}/config/models.env"
+expect_ok "purge skips .cache that holds HF_HOME" \
+  env HOME="${other_home}" \
+    HF_HOME="${hf_ws}/.cache/huggingface" \
+    HF_HUB_CACHE="${hf_ws}/.cache/huggingface/hub" \
+    MLX_WORKSPACE="${hf_ws}" MLX_VENV="${hf_ws}/.venv" \
+    MLX_MODELS_ENV="${hf_ws}/config/models.env" \
+  "${CLEANUP}" --purge --force
+assert_missing "${hf_ws}/config/models.env"
+assert_exists "${hf_ws}/.cache/huggingface/token"
+assert_exists "${hf_ws}/.cache/huggingface/hub/model.bin"
+assert_missing "${hf_ws}/models"
+assert_missing "${hf_ws}/outputs"
+
+link_ws="${TMP}/link-ws"
+mkdir -p "${link_ws}/cache-data/huggingface/hub" "${link_ws}/models" "${other_home}/.cache/huggingface/hub"
+printf 'token\n' >"${link_ws}/cache-data/huggingface/token"
+printf 'blob\n' >"${link_ws}/cache-data/huggingface/hub/x"
+printf 'weight\n' >"${link_ws}/models/w"
+ln -s cache-data "${link_ws}/.cache"
+printf '%s\n' marker >"${link_ws}/.mlx-workspace"
+expect_ok "purge keeps a symlinked .cache that holds huggingface/token" \
+  env HOME="${other_home}" \
+    HF_HOME="${other_home}/.cache/huggingface" \
+    HF_HUB_CACHE="${other_home}/.cache/huggingface/hub" \
+    MLX_WORKSPACE="${link_ws}" MLX_VENV="${link_ws}/.venv" \
+    MLX_MODELS_ENV="${link_ws}/config/models.env" \
+  "${CLEANUP}" --purge --force
+assert_exists "${link_ws}/cache-data/huggingface/token"
+if [[ -L "${link_ws}/.cache" ]]; then
+  pass "purge left the .cache symlink in place"
+else
+  fail "purge left the .cache symlink in place"
+fi
+assert_missing "${link_ws}/models"
+
+top_hf_ws="${TMP}/top-hf-ws"
+mkdir -p "${top_hf_ws}/huggingface/hub" "${top_hf_ws}/models"
+printf 'token\n' >"${top_hf_ws}/huggingface/token"
+printf 'blob\n' >"${top_hf_ws}/huggingface/hub/x"
+printf 'weight\n' >"${top_hf_ws}/models/w"
+printf '%s\n' marker >"${top_hf_ws}/.mlx-workspace"
+expect_ok "purge keeps a top-level huggingface tree when HF_HOME is elsewhere" \
+  env HOME="${other_home}" \
+    HF_HOME="${other_home}/.cache/huggingface" \
+    HF_HUB_CACHE="${other_home}/.cache/huggingface/hub" \
+    MLX_WORKSPACE="${top_hf_ws}" MLX_VENV="${top_hf_ws}/.venv" \
+    MLX_MODELS_ENV="${top_hf_ws}/config/models.env" \
+  "${CLEANUP}" --purge --force
+assert_exists "${top_hf_ws}/huggingface/token"
+assert_exists "${top_hf_ws}/huggingface/hub/x"
+assert_missing "${top_hf_ws}/models"
+
+marker_ws="${TMP}/marker-write"
+mkdir -p "${marker_ws}"
+# shellcheck source=scripts/lib/common.sh
+source "${ROOT}/scripts/lib/common.sh"
+for forbidden_root in / /private/var/tmp /private/etc /System/Volumes/Data /Users/Shared; do
+  if workspace_purge_forbidden "${forbidden_root}"; then
+    pass "purge forbidden for ${forbidden_root}"
+  else
+    fail "purge forbidden for ${forbidden_root}"
+  fi
+done
+if workspace_is_repo_root "${ROOT}"; then
+  pass "workspace identity matches this checkout"
+else
+  fail "workspace identity matches this checkout"
+fi
+if workspace_is_repo_root "${lookalike_ws}"; then
+  fail "workspace identity rejects a look-alike tree"
+else
+  pass "workspace identity rejects a look-alike tree"
+fi
+saved_ws="${MLX_WORKSPACE}"
+saved_venv="${MLX_VENV}"
+saved_home="${HOME}"
+MLX_WORKSPACE="${marker_ws}"
+MLX_VENV="${marker_ws}/.venv"
+ensure_mlx_workspace_marker
+if [[ -f "${marker_ws}/.mlx-workspace" ]]; then
+  pass "toolkit writes .mlx-workspace outside the repo"
+else
+  fail "toolkit writes .mlx-workspace outside the repo"
+fi
+MLX_WORKSPACE="${other_home}"
+MLX_VENV="${other_home}/.venv"
+HOME="${other_home}"
+ensure_mlx_workspace_marker
+MLX_WORKSPACE="${saved_ws}"
+MLX_VENV="${saved_venv}"
+HOME="${saved_home}"
+if [[ ! -e "${other_home}/.mlx-workspace" ]]; then
+  pass "toolkit does not mark HOME as a purge workspace"
+else
+  fail "toolkit does not mark HOME as a purge workspace"
+fi
 
 if (( failures > 0 )); then
   printf 'CLEANUP_SELFTEST_RESULT=fail (%s)\n' "${failures}" >&2
