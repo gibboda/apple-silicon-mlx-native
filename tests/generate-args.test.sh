@@ -67,6 +67,104 @@ fi
 plan_video="$(make -C "${ROOT}" video VIDEO_PROMPT='a fox' GENERATE_VIDEO_ARGS='--dump-plan')"
 expect_contains "video args reach the generator" "family=" "${plan_video}"
 
+# Prompts go through as one argv word. Make 3.81 must not expand $VAR or $(...)
+# and must not split newlines. A stub records the exact --prompt value.
+stub_dir="${TMP}/stub-scripts"
+stub_out="${TMP}/stub-out"
+mkdir -p "${stub_dir}" "${stub_out}"
+cat >"${stub_dir}/record-prompt.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+out="${STUB_OUT:?}"
+base="$(basename "$0")"
+if [[ "$#" -gt 0 ]]; then
+  printf '%s\0' "$@" >"${out}/${base}.argv"
+else
+  : >"${out}/${base}.argv"
+fi
+EOF
+chmod +x "${stub_dir}/record-prompt.sh"
+for stub_name in generate-mlx-image.sh generate-mlx-video.sh generate-mlx-text.sh; do
+  cp "${stub_dir}/record-prompt.sh" "${stub_dir}/${stub_name}"
+  chmod +x "${stub_dir}/${stub_name}"
+done
+
+prompt_marker="${TMP}/prompt-marker"
+# Literal payload: quotes, backtick command, $HOME, $(id), comma, hash,
+# backslash, and a newline. Escapes keep this shell from expanding any of that.
+prompt_payload="say \"hi\" 'x' \`touch ${prompt_marker}\` \$HOME \$(id) a,b #hash back\\slash"$'\n''second'
+
+argv_prompt() {
+  local file="$1"
+  local arg seen=0
+  PROMPT_ARG=""
+  while IFS= read -r -d '' arg || [[ -n "${arg}" ]]; do
+    if [[ "${seen}" -eq 1 ]]; then
+      PROMPT_ARG="${arg}"
+      return 0
+    fi
+    if [[ "${arg}" == "--prompt" ]]; then
+      seen=1
+    fi
+  done <"${file}"
+  return 1
+}
+
+expect_make_prompt() {
+  local label="$1"
+  local target="$2"
+  local var_name="$3"
+  local script_name="$4"
+  local mode="$5"
+  local argv_file="${stub_out}/${script_name}.argv"
+  rm -f "${prompt_marker}" "${argv_file}"
+  local rc=0
+  if [[ "${mode}" == "env" ]]; then
+    env "${var_name}=${prompt_payload}" STUB_OUT="${stub_out}" \
+      make -C "${ROOT}" "${target}" SCRIPTS="${stub_dir}" >/dev/null 2>&1 || rc=$?
+  else
+    STUB_OUT="${stub_out}" \
+      make -C "${ROOT}" "${target}" SCRIPTS="${stub_dir}" "${var_name}=${prompt_payload}" >/dev/null 2>&1 || rc=$?
+  fi
+  if [[ "${rc}" -ne 0 ]]; then
+    fail "${label} (make exited ${rc})"
+    return
+  fi
+  if [[ -e "${prompt_marker}" ]]; then
+    fail "${label} (prompt was executed)"
+    return
+  fi
+  if ! argv_prompt "${argv_file}"; then
+    fail "${label} (missing --prompt)"
+    return
+  fi
+  if [[ "${PROMPT_ARG}" == "${prompt_payload}" ]]; then
+    pass "${label}"
+  else
+    fail "${label} (prompt bytes differ)"
+  fi
+}
+
+expect_make_prompt "image command-line prompt is literal" image IMAGE_PROMPT generate-mlx-image.sh cmdline
+expect_make_prompt "video command-line prompt is literal" video VIDEO_PROMPT generate-mlx-video.sh cmdline
+expect_make_prompt "text command-line prompt is literal" generate-text PROMPT generate-mlx-text.sh cmdline
+expect_make_prompt "image environment prompt is literal" image IMAGE_PROMPT generate-mlx-image.sh env
+expect_make_prompt "video environment prompt is literal" video VIDEO_PROMPT generate-mlx-video.sh env
+expect_make_prompt "text environment prompt is literal" generate-text PROMPT generate-mlx-text.sh env
+
+rm -f "${stub_out}/generate-mlx-image.sh.argv"
+set +e
+make -C "${ROOT}" image SCRIPTS="${stub_dir}" STUB_OUT="${stub_out}" >/dev/null 2>&1
+missing_rc=$?
+set -e
+if [[ "${missing_rc}" -eq 0 ]]; then
+  fail "image without IMAGE_PROMPT succeeded"
+elif [[ -e "${stub_out}/generate-mlx-image.sh.argv" ]]; then
+  fail "image without IMAGE_PROMPT invoked the generator"
+else
+  pass "image without IMAGE_PROMPT does not run the generator"
+fi
+
 if (( failures > 0 )); then
   printf 'FAIL: %s generate-args check(s) failed\n' "${failures}" >&2
   exit 1

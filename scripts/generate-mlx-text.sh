@@ -15,7 +15,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-PROMPT=""
+# A PROMPT already set in the environment is kept. --prompt overrides it.
+# make generate-text passes the prompt as --prompt and does not expand it.
+PROMPT="${PROMPT-}"
 MODEL=""
 MAX_TOKENS=""
 MAX_KV=""
@@ -36,7 +38,7 @@ Larger machines keep MLX defaults. mlx_lm.generate itself is unchanged
 if you call it directly.
 
 Options:
-  --prompt TEXT       Prompt (required unless --dump-plan)
+  --prompt TEXT       Prompt (required unless --dump-plan; or PROMPT from the environment)
   --model NAME        Model id or local path (default: MLX_DEFAULT_MODEL or composed recommendation)
   --max-tokens N      Generation cap (default: MLX_MAX_TOKENS when set in models.env)
   --max-kv-size N     KV cache cap (default: MLX_RECOMMENDED_CONTEXT)
@@ -49,6 +51,8 @@ config/models.env is parsed as MLX_* assignments (not executed).
 Max tokens and KV size must be positive integers. Temperature, when set,
 must be a finite non-negative number. An empty value is invalid. Invalid
 values, including flags after --, fail before launch.
+make generate-text passes PROMPT through without shell expansion. An
+environment PROMPT is used only when --prompt is omitted.
 EOF
 }
 

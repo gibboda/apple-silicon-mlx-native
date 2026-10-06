@@ -101,6 +101,25 @@ require_positive_integer() {
   fi
 }
 
+# Non-negative decimal integer with no sign and no leading zero: 0, 1, 42.
+require_nonnegative_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+    die "${name} must be a non-negative integer (got '${value}')"
+  fi
+}
+
+# mflux --quantize bits. 7 is not a supported weight width.
+require_quantize_bits() {
+  local name="$1"
+  local value="$2"
+  case "${value}" in
+    3|4|5|6|8) ;;
+    *) die "${name} must be 3, 4, 5, 6, or 8 (got '${value}')" ;;
+  esac
+}
+
 # Finite non-negative decimal: 0, 0.7, 10, .5, 5., 1.
 # Signs, exponents, nan, inf, and strings longer than 16 characters are
 # rejected so Python cannot turn the value into infinity.
@@ -2781,10 +2800,13 @@ video_model_conflicts_with_family() {
 }
 
 # Round frames down to 4n+1 (Wan) or 8n+1 (LTX). Minimum one period + 1.
+# Reject non-integers before any arithmetic so a models.env or flag value
+# cannot be evaluated as a bash expression.
 video_align_frames() {
   local family="$1"
   local frames="$2"
   local period=4
+  require_positive_integer "frame count" "${frames}"
   [[ "${family}" == "ltx2" ]] && period=8
   if (( frames < 1 )); then
     echo $((period + 1))
@@ -2805,6 +2827,8 @@ video_align_frames() {
 video_align_dim() {
   local value="$1"
   local multiple="$2"
+  require_positive_integer "dimension" "${value}"
+  require_positive_integer "dimension multiple" "${multiple}"
   if (( value < multiple )); then
     echo "${multiple}"
     return
