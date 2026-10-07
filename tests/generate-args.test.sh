@@ -90,9 +90,11 @@ for stub_name in generate-mlx-image.sh generate-mlx-video.sh generate-mlx-text.s
 done
 
 prompt_marker="${TMP}/prompt-marker"
-# Literal payload: quotes, backtick command, $HOME, $(id), comma, hash,
-# backslash, and a newline. Escapes keep this shell from expanding any of that.
-prompt_payload="say \"hi\" 'x' \`touch ${prompt_marker}\` \$HOME \$(id) a,b #hash back\\slash"$'\n''second'
+# Literal payload: quotes, backtick command, $HOME, $(id), Make $(shell …), comma,
+# hash, backslash, and a newline. Escapes keep this shell from expanding any of that.
+prompt_payload="say \"hi\" 'x' \`touch ${prompt_marker}\` \$HOME \$(id) \$(shell touch ${prompt_marker}) a,b #hash back\\slash"$'\n''second'
+# Exercises mlx_lit backslash doubling: $'…' escapes and a trailing backslash.
+prompt_escape_payload=$'a\nb \t \\ \047 end\\'
 
 argv_prompt() {
   local file="$1"
@@ -116,15 +118,16 @@ expect_make_prompt() {
   local var_name="$3"
   local script_name="$4"
   local mode="$5"
+  local payload="$6"
   local argv_file="${stub_out}/${script_name}.argv"
   rm -f "${prompt_marker}" "${argv_file}"
   local rc=0
   if [[ "${mode}" == "env" ]]; then
-    env "${var_name}=${prompt_payload}" STUB_OUT="${stub_out}" \
+    env "${var_name}=${payload}" STUB_OUT="${stub_out}" \
       make -C "${ROOT}" "${target}" SCRIPTS="${stub_dir}" >/dev/null 2>&1 || rc=$?
   else
     STUB_OUT="${stub_out}" \
-      make -C "${ROOT}" "${target}" SCRIPTS="${stub_dir}" "${var_name}=${prompt_payload}" >/dev/null 2>&1 || rc=$?
+      make -C "${ROOT}" "${target}" SCRIPTS="${stub_dir}" "${var_name}=${payload}" >/dev/null 2>&1 || rc=$?
   fi
   if [[ "${rc}" -ne 0 ]]; then
     fail "${label} (make exited ${rc})"
@@ -138,19 +141,26 @@ expect_make_prompt() {
     fail "${label} (missing --prompt)"
     return
   fi
-  if [[ "${PROMPT_ARG}" == "${prompt_payload}" ]]; then
+  if [[ "${PROMPT_ARG}" == "${payload}" ]]; then
     pass "${label}"
   else
     fail "${label} (prompt bytes differ)"
   fi
 }
 
-expect_make_prompt "image command-line prompt is literal" image IMAGE_PROMPT generate-mlx-image.sh cmdline
-expect_make_prompt "video command-line prompt is literal" video VIDEO_PROMPT generate-mlx-video.sh cmdline
-expect_make_prompt "text command-line prompt is literal" generate-text PROMPT generate-mlx-text.sh cmdline
-expect_make_prompt "image environment prompt is literal" image IMAGE_PROMPT generate-mlx-image.sh env
-expect_make_prompt "video environment prompt is literal" video VIDEO_PROMPT generate-mlx-video.sh env
-expect_make_prompt "text environment prompt is literal" generate-text PROMPT generate-mlx-text.sh env
+expect_make_prompt "image command-line prompt is literal" image IMAGE_PROMPT generate-mlx-image.sh cmdline "${prompt_payload}"
+expect_make_prompt "video command-line prompt is literal" video VIDEO_PROMPT generate-mlx-video.sh cmdline "${prompt_payload}"
+expect_make_prompt "text command-line prompt is literal" generate-text PROMPT generate-mlx-text.sh cmdline "${prompt_payload}"
+expect_make_prompt "image environment prompt is literal" image IMAGE_PROMPT generate-mlx-image.sh env "${prompt_payload}"
+expect_make_prompt "video environment prompt is literal" video VIDEO_PROMPT generate-mlx-video.sh env "${prompt_payload}"
+expect_make_prompt "text environment prompt is literal" generate-text PROMPT generate-mlx-text.sh env "${prompt_payload}"
+
+expect_make_prompt "image command-line mlx_lit escapes preserved" image IMAGE_PROMPT generate-mlx-image.sh cmdline "${prompt_escape_payload}"
+expect_make_prompt "video command-line mlx_lit escapes preserved" video VIDEO_PROMPT generate-mlx-video.sh cmdline "${prompt_escape_payload}"
+expect_make_prompt "text command-line mlx_lit escapes preserved" generate-text PROMPT generate-mlx-text.sh cmdline "${prompt_escape_payload}"
+expect_make_prompt "image environment mlx_lit escapes preserved" image IMAGE_PROMPT generate-mlx-image.sh env "${prompt_escape_payload}"
+expect_make_prompt "video environment mlx_lit escapes preserved" video VIDEO_PROMPT generate-mlx-video.sh env "${prompt_escape_payload}"
+expect_make_prompt "text environment mlx_lit escapes preserved" generate-text PROMPT generate-mlx-text.sh env "${prompt_escape_payload}"
 
 rm -f "${stub_out}/generate-mlx-image.sh.argv"
 set +e
