@@ -101,6 +101,16 @@ require_positive_integer() {
   fi
 }
 
+# Image/video width, height, frames, and steps. Six digits stay inside bash's
+# signed 64-bit arithmetic, so a longer value cannot wrap and look valid.
+require_media_count() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[1-9][0-9]{0,5}$ ]]; then
+    die "${name} must be a positive integer from 1 to 999999 (got '${value}')"
+  fi
+}
+
 # Non-negative decimal integer with no sign and no leading zero: 0, 1, 42.
 require_nonnegative_integer() {
   local name="$1"
@@ -2806,7 +2816,7 @@ video_align_frames() {
   local family="$1"
   local frames="$2"
   local period=4
-  require_positive_integer "frame count" "${frames}"
+  require_media_count "frame count" "${frames}"
   [[ "${family}" == "ltx2" ]] && period=8
   if (( frames < 1 )); then
     echo $((period + 1))
@@ -2827,8 +2837,8 @@ video_align_frames() {
 video_align_dim() {
   local value="$1"
   local multiple="$2"
-  require_positive_integer "dimension" "${value}"
-  require_positive_integer "dimension multiple" "${multiple}"
+  require_media_count "dimension" "${value}"
+  require_media_count "dimension multiple" "${multiple}"
   if (( value < multiple )); then
     echo "${multiple}"
     return

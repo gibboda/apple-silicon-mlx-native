@@ -86,16 +86,17 @@ install-image: ## Install mflux into the existing venv (does not recreate .venv)
 	@$(SCRIPTS)/install-mlx-image.sh
 
 image: ## Generate a PNG with mflux (IMAGE_PROMPT required)
-	@if [[ -z $(call mlx_lit,$(value IMAGE_PROMPT)) ]]; then \
+	@prompt=$(call mlx_lit,$(value IMAGE_PROMPT)); \
+	if [[ -z "$$prompt" ]]; then \
 	  echo 'Set IMAGE_PROMPT=... e.g. make image IMAGE_PROMPT="a red fox in snow"'; \
 	  exit 1; \
 	fi; \
 	extra=$(call sq,$(GENERATE_IMAGE_ARGS)); \
 	if [[ -n "$$extra" ]]; then \
 	  read -r -a image_args <<<"$$extra"; \
-	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt $(call mlx_lit,$(value IMAGE_PROMPT)) "$${image_args[@]}"; \
+	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$$prompt" "$${image_args[@]}"; \
 	else \
-	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt $(call mlx_lit,$(value IMAGE_PROMPT)); \
+	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$$prompt"; \
 	fi
 
 install-video: ## Install mlx-video into the existing venv (does not recreate .venv)
@@ -105,26 +106,28 @@ prepare-video: ## Download and convert Wan2.1 T2V 1.3B (needs torch in .venv)
 	@$(SCRIPTS)/prepare-mlx-video-wan.sh
 
 generate-text: ## Generate text with mlx_lm (PROMPT required); caps MLX cache on ≤8 GB
-	@if [[ -z $(call mlx_lit,$(value PROMPT)) ]]; then \
+	@prompt=$(call mlx_lit,$(value PROMPT)); \
+	if [[ -z "$$prompt" ]]; then \
 	  echo 'Set PROMPT=... e.g. make generate-text PROMPT="Hello from MLX"'; \
 	  exit 1; \
 	fi; \
-	"$(SCRIPTS)/generate-mlx-text.sh" --prompt $(call mlx_lit,$(value PROMPT))
+	"$(SCRIPTS)/generate-mlx-text.sh" --prompt "$$prompt"
 
 serve: ## Start mlx_lm.server; on ≤8 GB pin GPU and cap MLX memory to the Metal working set
 	@"$(SCRIPTS)/serve-mlx.sh"
 
 video: ## Generate an MP4 with mlx-video (VIDEO_PROMPT required)
-	@if [[ -z $(call mlx_lit,$(value VIDEO_PROMPT)) ]]; then \
+	@prompt=$(call mlx_lit,$(value VIDEO_PROMPT)); \
+	if [[ -z "$$prompt" ]]; then \
 	  echo 'Set VIDEO_PROMPT=... e.g. make video VIDEO_PROMPT="a red fox running through snow"'; \
 	  exit 1; \
 	fi; \
 	extra=$(call sq,$(GENERATE_VIDEO_ARGS)); \
 	if [[ -n "$$extra" ]]; then \
 	  read -r -a video_args <<<"$$extra"; \
-	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt $(call mlx_lit,$(value VIDEO_PROMPT)) "$${video_args[@]}"; \
+	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$$prompt" "$${video_args[@]}"; \
 	else \
-	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt $(call mlx_lit,$(value VIDEO_PROMPT)); \
+	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$$prompt"; \
 	fi
 
 clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew

@@ -42,9 +42,9 @@ Options:
   --family NAME     flux2 | z-image-turbo | schnell (CLI/checkpoint; default: memory-tier profile)
   --model NAME      mflux --model value (FLUX.2 Klein id, HF repo, or local path)
   --quantize N      Weight quantize bits: 3, 4, 5, 6, or 8. Alias: -q
-  --steps N         Denoising steps (positive integer)
-  --width N         Image width (positive integer)
-  --height N        Image height (positive integer)
+  --steps N         Denoising steps (positive integer, 1–999999)
+  --width N         Image width (positive integer, 1–999999)
+  --height N        Image height (positive integer, 1–999999)
   --seed N          RNG seed (non-negative integer)
   --output PATH     Output PNG (default: outputs/images/mlx-<timestamp>.png)
   --low-ram         Force mflux --low-ram
@@ -59,7 +59,7 @@ then config/models.env (MLX_IMAGE_*). --family changes the mflux CLI and default
 checkpoint only; width/height/steps/quantize/--low-ram still follow the composed
 profile unless you set those flags or MLX_IMAGE_*.
 
-Width, height, and steps must be positive integers. Quantize must be 3, 4, 5,
+Width, height, and steps must be positive integers from 1 to 999999. Quantize must be 3, 4, 5,
 6, or 8. Seed, when set, must be a non-negative integer. The same rules apply
 to MLX_IMAGE_* in the environment and config/models.env. Invalid values fail
 before venv setup. make image passes IMAGE_PROMPT through without shell
@@ -131,19 +131,19 @@ while [[ $# -gt 0 ]]; do
       ;;
     --steps)
       [[ $# -ge 2 ]] || die "--steps requires N"
-      require_positive_integer "--steps" "$2"
+      require_media_count "--steps" "$2"
       STEPS="$2"
       shift 2
       ;;
     --width)
       [[ $# -ge 2 ]] || die "--width requires N"
-      require_positive_integer "--width" "$2"
+      require_media_count "--width" "$2"
       WIDTH="$2"
       shift 2
       ;;
     --height)
       [[ $# -ge 2 ]] || die "--height requires N"
-      require_positive_integer "--height" "$2"
+      require_media_count "--height" "$2"
       HEIGHT="$2"
       shift 2
       ;;
@@ -185,15 +185,15 @@ if [[ -z "${QUANTIZE}" && -n "${MLX_IMAGE_QUANTIZE+x}" ]]; then
   QUANTIZE="${MLX_IMAGE_QUANTIZE}"
 fi
 if [[ -z "${STEPS}" && -n "${MLX_IMAGE_STEPS+x}" ]]; then
-  require_positive_integer "MLX_IMAGE_STEPS" "${MLX_IMAGE_STEPS}"
+  require_media_count "MLX_IMAGE_STEPS" "${MLX_IMAGE_STEPS}"
   STEPS="${MLX_IMAGE_STEPS}"
 fi
 if [[ -z "${WIDTH}" && -n "${MLX_IMAGE_WIDTH+x}" ]]; then
-  require_positive_integer "MLX_IMAGE_WIDTH" "${MLX_IMAGE_WIDTH}"
+  require_media_count "MLX_IMAGE_WIDTH" "${MLX_IMAGE_WIDTH}"
   WIDTH="${MLX_IMAGE_WIDTH}"
 fi
 if [[ -z "${HEIGHT}" && -n "${MLX_IMAGE_HEIGHT+x}" ]]; then
-  require_positive_integer "MLX_IMAGE_HEIGHT" "${MLX_IMAGE_HEIGHT}"
+  require_media_count "MLX_IMAGE_HEIGHT" "${MLX_IMAGE_HEIGHT}"
   HEIGHT="${MLX_IMAGE_HEIGHT}"
 fi
 if [[ -z "${SEED}" && -n "${MLX_IMAGE_SEED+x}" ]]; then
@@ -221,9 +221,12 @@ STEPS="${STEPS:-${def_steps}}"
 WIDTH="${WIDTH:-${def_width}}"
 HEIGHT="${HEIGHT:-${def_height}}"
 require_quantize_bits "MLX_IMAGE_QUANTIZE/--quantize" "${QUANTIZE}"
-require_positive_integer "MLX_IMAGE_STEPS/--steps" "${STEPS}"
-require_positive_integer "MLX_IMAGE_WIDTH/--width" "${WIDTH}"
-require_positive_integer "MLX_IMAGE_HEIGHT/--height" "${HEIGHT}"
+require_media_count "MLX_IMAGE_STEPS/--steps" "${STEPS}"
+require_media_count "MLX_IMAGE_WIDTH/--width" "${WIDTH}"
+require_media_count "MLX_IMAGE_HEIGHT/--height" "${HEIGHT}"
+if [[ -n "${SEED}" ]]; then
+  require_nonnegative_integer "MLX_IMAGE_SEED/--seed" "${SEED}"
+fi
 if [[ -z "${LOW_RAM}" ]]; then
   LOW_RAM="${MLX_IMAGE_LOW_RAM:-${def_low_ram}}"
 fi
@@ -274,14 +277,14 @@ if (( CUSTOM_OUTPUT )); then
 fi
 
 if (( DUMP_PLAN == 1 )); then
-  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nthroughput_class=%s\nthermal_class=%s\nchip_family=%s\nchip_sku=%s\ngpu_cores=%s\nquantize=%s\nsteps=%s\nwidth=%s\nheight=%s\nlow_ram=%s\nvae_tiling=%s\n' \
+  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nthroughput_class=%s\nthermal_class=%s\nchip_family=%s\nchip_sku=%s\ngpu_cores=%s\nquantize=%s\nsteps=%s\nwidth=%s\nheight=%s\nlow_ram=%s\nvae_tiling=%s\nseed=%s\n' \
     "${FAMILY}" "${MODEL}" "${cli_name}" "${MLX_TIER_ID}" \
     "${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-}}" \
     "${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}" \
     "${MLX_POLICY_CHIP_FAMILY:-${MLX_CHIP_FAMILY:-}}" \
     "${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-}}" \
     "${MLX_POLICY_GPU_CORES:-${MLX_GPU_CORES:-}}" \
-    "${QUANTIZE}" "${STEPS}" "${WIDTH}" "${HEIGHT}" "${LOW_RAM}" "${VAE_TILING}"
+    "${QUANTIZE}" "${STEPS}" "${WIDTH}" "${HEIGHT}" "${LOW_RAM}" "${VAE_TILING}" "${SEED}"
   exit 0
 fi
 

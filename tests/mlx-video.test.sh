@@ -280,6 +280,12 @@ reject_video_number "CLI steps injection" "--steps" \
   "${GENERATE}" --dump-plan --prompt plan --steps "${vinject}"
 reject_video_number "CLI seed injection" "--seed" \
   "${GENERATE}" --dump-plan --prompt plan --seed "${vinject}"
+reject_video_number "CLI seed negative" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed -1
+reject_video_number "CLI seed empty" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed ""
+reject_video_number "CLI frames above 999999" "999999" \
+  "${GENERATE}" --dump-plan --prompt plan --frames 18446744073709551617
 
 printf '%s\n' "MLX_VIDEO_FRAMES='${vinject}'" >"${TMP}/bad-video-frames.env"
 reject_video_number "models.env frames injection" "MLX_VIDEO_FRAMES" \
@@ -295,6 +301,19 @@ reject_video_number "env frames injection" "MLX_VIDEO_FRAMES" \
   env MLX_VIDEO_FRAMES="${vinject}" MLX_MODELS_ENV="${empty_video_env}" \
   "${GENERATE}" --dump-plan --prompt plan
 
+printf '%s\n' "MLX_VIDEO_SEED=-1" >"${TMP}/bad-video-seed-neg.env"
+reject_video_number "models.env seed negative" "MLX_VIDEO_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-seed-neg.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_VIDEO_SEED=abc" >"${TMP}/bad-video-seed-abc.env"
+reject_video_number "models.env seed abc" "MLX_VIDEO_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-seed-abc.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_VIDEO_SEED=" >"${TMP}/bad-video-seed-empty.env"
+reject_video_number "models.env seed empty" "MLX_VIDEO_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-seed-empty.env" "${GENERATE}" --dump-plan --prompt plan
+reject_video_number "env seed negative" "MLX_VIDEO_SEED" \
+  env MLX_VIDEO_SEED=-1 MLX_MODELS_ENV="${empty_video_env}" \
+  "${GENERATE}" --dump-plan --prompt plan
+
 plan_width="$(
   env MLX_MODELS_ENV="${empty_video_env}" \
     "${GENERATE}" --dump-plan --prompt plan --width 100 --height 96 --frames 21 --steps 4 --seed 0
@@ -303,6 +322,7 @@ expect_contains "wan width 100 accepted" "width=100" "${plan_width}"
 expect_contains "wan height 96 accepted" "height=96" "${plan_width}"
 expect_contains "wan frames 21 accepted" "frames=21" "${plan_width}"
 expect_contains "wan steps 4 accepted" "steps=4" "${plan_width}"
+expect_contains "wan seed 0 accepted" "seed=0" "${plan_width}"
 
 expect_fail "ltx width not divisible by 64 still rejected" \
   env MLX_MODELS_ENV="${empty_video_env}" \

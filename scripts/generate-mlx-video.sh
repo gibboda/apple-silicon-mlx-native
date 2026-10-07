@@ -55,10 +55,10 @@ Options:
   --model NAME        Wan converted dir name / path, or LTX Hugging Face repo
   --model-dir PATH    Wan converted MLX directory (overrides --model for wan21)
   --model-repo REPO   LTX Hugging Face repo (overrides --model for ltx2)
-  --width N           Video width (positive integer)
-  --height N          Video height (positive integer)
-  --frames N          Frame count (positive integer; Wan: 4n+1; LTX: 8n+1)
-  --steps N           Diffusion steps (positive integer; Wan; LTX distilled ignores this)
+  --width N           Video width (positive integer, 1–999999)
+  --height N          Video height (positive integer, 1–999999)
+  --frames N          Frame count (positive integer, 1–999999; Wan: 4n+1; LTX: 8n+1)
+  --steps N           Diffusion steps (positive integer, 1–999999; Wan; LTX distilled ignores this)
   --seed N            RNG seed (non-negative integer)
   --output PATH       Output MP4 (default: outputs/videos/mlx-<timestamp>.mp4)
   --image PATH        Optional first-frame image (I2V; must exist under MLX_WORKSPACE)
@@ -76,7 +76,7 @@ default checkpoint only; width/height/frames/steps/tiling still follow the compo
 profile unless you set those flags or MLX_VIDEO_*. Dimensions and frames are aligned
 to the selected family (Wan 4n+1 / LTX 8n+1 and 64px).
 
-Width, height, frames, and steps must be positive integers before any
+Width, height, frames, and steps must be positive integers from 1 to 999999 before any
 arithmetic. Seed, when set, must be a non-negative integer. The same rules
 apply to MLX_VIDEO_* in the environment and config/models.env. Invalid values
 fail before venv setup. make video passes VIDEO_PROMPT through without shell
@@ -116,28 +116,28 @@ while [[ $# -gt 0 ]]; do
       ;;
     --width)
       [[ $# -ge 2 ]] || die "--width requires N"
-      require_positive_integer "--width" "$2"
+      require_media_count "--width" "$2"
       CLI_WIDTH="$2"
       WIDTH="$2"
       shift 2
       ;;
     --height)
       [[ $# -ge 2 ]] || die "--height requires N"
-      require_positive_integer "--height" "$2"
+      require_media_count "--height" "$2"
       CLI_HEIGHT="$2"
       HEIGHT="$2"
       shift 2
       ;;
     --frames)
       [[ $# -ge 2 ]] || die "--frames requires N"
-      require_positive_integer "--frames" "$2"
+      require_media_count "--frames" "$2"
       CLI_FRAMES="$2"
       FRAMES="$2"
       shift 2
       ;;
     --steps)
       [[ $# -ge 2 ]] || die "--steps requires N"
-      require_positive_integer "--steps" "$2"
+      require_media_count "--steps" "$2"
       CLI_STEPS="$2"
       STEPS="$2"
       shift 2
@@ -193,16 +193,16 @@ IMAGE="${IMAGE:-${MLX_VIDEO_IMAGE:-}}"
 # CLI flags were checked in the parser. Check env and models.env before any
 # venv or profile work so a bad value cannot reach arithmetic.
 if [[ -z "${CLI_WIDTH}" && -n "${MLX_VIDEO_WIDTH+x}" ]]; then
-  require_positive_integer "MLX_VIDEO_WIDTH" "${MLX_VIDEO_WIDTH}"
+  require_media_count "MLX_VIDEO_WIDTH" "${MLX_VIDEO_WIDTH}"
 fi
 if [[ -z "${CLI_HEIGHT}" && -n "${MLX_VIDEO_HEIGHT+x}" ]]; then
-  require_positive_integer "MLX_VIDEO_HEIGHT" "${MLX_VIDEO_HEIGHT}"
+  require_media_count "MLX_VIDEO_HEIGHT" "${MLX_VIDEO_HEIGHT}"
 fi
 if [[ -z "${CLI_FRAMES}" && -n "${MLX_VIDEO_FRAMES+x}" ]]; then
-  require_positive_integer "MLX_VIDEO_FRAMES" "${MLX_VIDEO_FRAMES}"
+  require_media_count "MLX_VIDEO_FRAMES" "${MLX_VIDEO_FRAMES}"
 fi
 if [[ -z "${CLI_STEPS}" && -n "${MLX_VIDEO_STEPS+x}" ]]; then
-  require_positive_integer "MLX_VIDEO_STEPS" "${MLX_VIDEO_STEPS}"
+  require_media_count "MLX_VIDEO_STEPS" "${MLX_VIDEO_STEPS}"
 fi
 if [[ -z "${SEED}" && -n "${MLX_VIDEO_SEED+x}" ]]; then
   require_nonnegative_integer "MLX_VIDEO_SEED" "${MLX_VIDEO_SEED}"
@@ -259,11 +259,14 @@ elif [[ -n "${MLX_VIDEO_STEPS+x}" ]]; then
 else
   STEPS="${def_steps}"
 fi
-require_positive_integer "MLX_VIDEO_WIDTH/--width" "${WIDTH}"
-require_positive_integer "MLX_VIDEO_HEIGHT/--height" "${HEIGHT}"
-require_positive_integer "MLX_VIDEO_FRAMES/--frames" "${FRAMES}"
+require_media_count "MLX_VIDEO_WIDTH/--width" "${WIDTH}"
+require_media_count "MLX_VIDEO_HEIGHT/--height" "${HEIGHT}"
+require_media_count "MLX_VIDEO_FRAMES/--frames" "${FRAMES}"
 if [[ -n "${STEPS}" ]]; then
-  require_positive_integer "MLX_VIDEO_STEPS/--steps" "${STEPS}"
+  require_media_count "MLX_VIDEO_STEPS/--steps" "${STEPS}"
+fi
+if [[ -n "${SEED}" ]]; then
+  require_nonnegative_integer "MLX_VIDEO_SEED/--seed" "${SEED}"
 fi
 TILING="${CLI_TILING:-${MLX_VIDEO_TILING:-${def_tiling}}}"
 PIPELINE="${CLI_PIPELINE:-${MLX_VIDEO_LTX_PIPELINE:-distilled}}"
@@ -350,7 +353,7 @@ fi
 
 STEPS_PLAN="${STEPS:-default}"
 if (( DUMP_PLAN == 1 )); then
-  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nthroughput_class=%s\nthermal_class=%s\nchip_family=%s\nchip_sku=%s\ngpu_cores=%s\nwidth=%s\nheight=%s\nframes=%s\nsteps=%s\ntiling=%s\npipeline=%s\nmodel_dir=%s\nmodel_repo=%s\nforce_required=%s\n' \
+  printf 'family=%s\nmodel=%s\ncli=%s\ntier=%s\nthroughput_class=%s\nthermal_class=%s\nchip_family=%s\nchip_sku=%s\ngpu_cores=%s\nwidth=%s\nheight=%s\nframes=%s\nsteps=%s\ntiling=%s\npipeline=%s\nmodel_dir=%s\nmodel_repo=%s\nforce_required=%s\nseed=%s\n' \
     "${FAMILY}" "${MODEL}" "${cli_mod}" "${MLX_TIER_ID}" \
     "${MLX_POLICY_THROUGHPUT_CLASS:-${MLX_THROUGHPUT_CLASS:-}}" \
     "${MLX_POLICY_THERMAL_CLASS:-${MLX_THERMAL_CLASS:-}}" \
@@ -358,7 +361,7 @@ if (( DUMP_PLAN == 1 )); then
     "${MLX_POLICY_CHIP_SKU:-${MLX_CHIP_SKU:-}}" \
     "${MLX_POLICY_GPU_CORES:-${MLX_GPU_CORES:-}}" \
     "${WIDTH}" "${HEIGHT}" "${FRAMES}" "${STEPS_PLAN}" "${TILING}" "${PIPELINE}" "${MODEL_DIR}" "${MODEL_REPO}" \
-    "${MLX_VIDEO_FORCE_REQUIRED:-0}"
+    "${MLX_VIDEO_FORCE_REQUIRED:-0}" "${SEED}"
   exit 0
 fi
 

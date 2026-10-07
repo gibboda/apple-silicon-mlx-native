@@ -109,6 +109,14 @@ expect_contains "text plan model" "model=example/model" "${text_plan}"
 expect_contains "text plan tokens" "max_tokens=8" "${text_plan}"
 assert_fence_follows_physical "constrained override text" "${text_plan}"
 
+prompt_env_rc=0
+prompt_env_out="$(PROMPT='%n@%m %1~ %# ' "${ROOT}/scripts/generate-mlx-text.sh" 2>&1)" || prompt_env_rc=$?
+if [[ "${prompt_env_rc}" -ne 0 && "${prompt_env_out}" == *"Missing --prompt"* && "${prompt_env_out}" != *"Python venv not found"* ]]; then
+  pass "environment PROMPT is not the text prompt"
+else
+  fail "environment PROMPT is not the text prompt"
+fi
+
 standard_plan="$(
   OVERRIDE_MEMORY_TIER=standard \
     "${ROOT}/scripts/generate-mlx-text.sh" --dump-plan

@@ -240,6 +240,12 @@ reject_image_number "CLI quantize empty" "--quantize" \
   "${GENERATE}" --dump-plan --prompt plan --quantize ""
 reject_image_number "CLI seed injection" "--seed" \
   "${GENERATE}" --dump-plan --prompt plan --seed "${inject}"
+reject_image_number "CLI seed negative" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed -1
+reject_image_number "CLI seed empty" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed ""
+reject_image_number "CLI width above 999999" "999999" \
+  "${GENERATE}" --dump-plan --prompt plan --width 1000000
 
 printf '%s\n' "MLX_IMAGE_WIDTH='${inject}'" >"${TMP}/bad-image-width.env"
 reject_image_number "models.env width injection" "MLX_IMAGE_WIDTH" \
@@ -255,6 +261,19 @@ reject_image_number "env width injection" "MLX_IMAGE_WIDTH" \
   env MLX_IMAGE_WIDTH="${inject}" MLX_MODELS_ENV="${empty_image_env}" \
   "${GENERATE}" --dump-plan --prompt plan
 
+printf '%s\n' "MLX_IMAGE_SEED=-1" >"${TMP}/bad-image-seed-neg.env"
+reject_image_number "models.env seed negative" "MLX_IMAGE_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-seed-neg.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_IMAGE_SEED=abc" >"${TMP}/bad-image-seed-abc.env"
+reject_image_number "models.env seed abc" "MLX_IMAGE_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-seed-abc.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_IMAGE_SEED=" >"${TMP}/bad-image-seed-empty.env"
+reject_image_number "models.env seed empty" "MLX_IMAGE_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-seed-empty.env" "${GENERATE}" --dump-plan --prompt plan
+reject_image_number "env seed negative" "MLX_IMAGE_SEED" \
+  env MLX_IMAGE_SEED=-1 MLX_MODELS_ENV="${empty_image_env}" \
+  "${GENERATE}" --dump-plan --prompt plan
+
 plan_numbers="$(
   env MLX_MODELS_ENV="${empty_image_env}" \
     "${GENERATE}" --dump-plan --prompt plan --quantize 6 --width 640 --height 768 --steps 2 --seed 0
@@ -263,6 +282,12 @@ expect_contains "quantize 6 accepted" "quantize=6" "${plan_numbers}"
 expect_contains "width 640 accepted" "width=640" "${plan_numbers}"
 expect_contains "height 768 accepted" "height=768" "${plan_numbers}"
 expect_contains "steps 2 accepted" "steps=2" "${plan_numbers}"
+expect_contains "seed 0 accepted" "seed=0" "${plan_numbers}"
+plan_max_width="$(
+  env MLX_MODELS_ENV="${empty_image_env}" \
+    "${GENERATE}" --dump-plan --prompt plan --width 999999
+)"
+expect_contains "width 999999 accepted" "width=999999" "${plan_max_width}"
 
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
