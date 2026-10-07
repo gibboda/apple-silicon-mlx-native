@@ -16,6 +16,8 @@ sq = '$(subst ','\'',$(1))'
 # raw newline splits the recipe line. mlx_lit is a bash $'...' word: backslash,
 # apostrophe (as \047), and newline are escaped, so the shell sees the original
 # bytes. Do not export the prompt variables; the recipe passes them as --prompt.
+# Make strips leading whitespace from a VAR=value command-line assignment; use
+# IMAGE_PROMPT='  text' make image (or the env form for VIDEO_PROMPT / PROMPT).
 # Make 3.81 drops one trailing newline from define, so this body keeps two.
 define mlx_nl
 
