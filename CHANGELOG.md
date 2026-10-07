@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `make image`, `make video`, and `make generate-text` pass the prompt through unchanged. Backticks, `$VAR`, `$(...)`, quotes, backslashes, and newlines stay literal on macOS Make 3.81. Make strips leading whitespace from a `VAR=value` command-line assignment; set the variable in the environment instead (e.g. `IMAGE_PROMPT='  text' make image`) to keep it
+- Image and video generation reject a non-integer width, height, frames, steps, quantize, or seed from the command line, the environment, or `config/models.env` before arithmetic and before venv setup. Width, height, frames, and steps must be from 1 to 999999 so bash arithmetic cannot wrap them. Quantize must be 3, 4, 5, 6, or 8. Seed, when set, must be a non-negative integer and is printed by `--dump-plan`
+
 ## [0.2.10] - 2026-10-05
 
 ### Fixed

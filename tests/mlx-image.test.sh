@@ -189,6 +189,106 @@ else
   pass "models.env command line is not executed"
 fi
 
+image_marker="${TMP}/image-numeric-marker"
+empty_image_env="${TMP}/empty-image.env"
+: >"${empty_image_env}"
+
+reject_image_number() {
+  local label="$1"
+  local needle="$2"
+  shift 2
+  local out rc
+  rm -f "${image_marker}"
+  set +e
+  out="$("$@" 2>&1)"
+  rc=$?
+  set -e
+  if [[ "${rc}" -eq 0 ]]; then
+    fail "${label} (expected non-zero exit)"
+    return
+  fi
+  if [[ -e "${image_marker}" ]]; then
+    fail "${label} (marker file was created)"
+    return
+  fi
+  if [[ "${out}" == *"Python venv not found"* || "${out}" == *"syntax error"* || "${out}" == *"invalid arithmetic"* ]]; then
+    fail "${label} (ran arithmetic or venv work)"
+    return
+  fi
+  expect_contains "${label}" "${needle}" "${out}"
+}
+
+# $(touch ...) is the payload text. This shell must not run it.
+inject="HOME[\$(touch ${image_marker})]"
+reject_image_number "CLI width injection" "--width" \
+  "${GENERATE}" --prompt plan --width "${inject}"
+reject_image_number "CLI width 17abc" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width 17abc
+reject_image_number "CLI width 0" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width 0
+reject_image_number "CLI width negative" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width -1
+reject_image_number "CLI width empty" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width ""
+reject_image_number "CLI height injection" "--height" \
+  "${GENERATE}" --dump-plan --prompt plan --height "${inject}"
+reject_image_number "CLI steps injection" "--steps" \
+  "${GENERATE}" --dump-plan --prompt plan --steps "${inject}"
+reject_image_number "CLI quantize 7" "--quantize" \
+  "${GENERATE}" --dump-plan --prompt plan --quantize 7
+reject_image_number "CLI quantize empty" "--quantize" \
+  "${GENERATE}" --dump-plan --prompt plan --quantize ""
+reject_image_number "CLI seed injection" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed "${inject}"
+reject_image_number "CLI seed negative" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed -1
+reject_image_number "CLI seed empty" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed ""
+reject_image_number "CLI width above 999999" "999999" \
+  "${GENERATE}" --dump-plan --prompt plan --width 1000000
+
+printf '%s\n' "MLX_IMAGE_WIDTH='${inject}'" >"${TMP}/bad-image-width.env"
+reject_image_number "models.env width injection" "MLX_IMAGE_WIDTH" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-width.env" "${GENERATE}" --prompt plan
+printf '%s\n' "MLX_IMAGE_QUANTIZE=" >"${TMP}/bad-image-quant.env"
+reject_image_number "models.env quantize empty" "MLX_IMAGE_QUANTIZE" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-quant.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_IMAGE_STEPS=0" >"${TMP}/bad-image-steps.env"
+reject_image_number "models.env steps 0" "MLX_IMAGE_STEPS" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-steps.env" "${GENERATE}" --dump-plan --prompt plan
+
+reject_image_number "env width injection" "MLX_IMAGE_WIDTH" \
+  env MLX_IMAGE_WIDTH="${inject}" MLX_MODELS_ENV="${empty_image_env}" \
+  "${GENERATE}" --dump-plan --prompt plan
+
+printf '%s\n' "MLX_IMAGE_SEED=-1" >"${TMP}/bad-image-seed-neg.env"
+reject_image_number "models.env seed negative" "MLX_IMAGE_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-seed-neg.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_IMAGE_SEED=abc" >"${TMP}/bad-image-seed-abc.env"
+reject_image_number "models.env seed abc" "MLX_IMAGE_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-seed-abc.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_IMAGE_SEED=" >"${TMP}/bad-image-seed-empty.env"
+reject_image_number "models.env seed empty" "MLX_IMAGE_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-image-seed-empty.env" "${GENERATE}" --dump-plan --prompt plan
+reject_image_number "env seed negative" "MLX_IMAGE_SEED" \
+  env MLX_IMAGE_SEED=-1 MLX_MODELS_ENV="${empty_image_env}" \
+  "${GENERATE}" --dump-plan --prompt plan
+
+plan_numbers="$(
+  env MLX_MODELS_ENV="${empty_image_env}" \
+    "${GENERATE}" --dump-plan --prompt plan --quantize 6 --width 640 --height 768 --steps 2 --seed 0
+)"
+expect_contains "quantize 6 accepted" "quantize=6" "${plan_numbers}"
+expect_contains "width 640 accepted" "width=640" "${plan_numbers}"
+expect_contains "height 768 accepted" "height=768" "${plan_numbers}"
+expect_contains "steps 2 accepted" "steps=2" "${plan_numbers}"
+expect_contains "seed 0 accepted" "seed=0" "${plan_numbers}"
+plan_max_width="$(
+  env MLX_MODELS_ENV="${empty_image_env}" \
+    "${GENERATE}" --dump-plan --prompt plan --width 999999
+)"
+expect_contains "width 999999 accepted" "width=999999" "${plan_max_width}"
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1

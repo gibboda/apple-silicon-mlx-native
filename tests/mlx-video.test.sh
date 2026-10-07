@@ -223,6 +223,116 @@ else
   pass "24 GB M3 Pro 18-core plan stays 33 frames"
 fi
 
+video_marker="${TMP}/video-numeric-marker"
+empty_video_env="${TMP}/empty-video.env"
+: >"${empty_video_env}"
+
+reject_video_number() {
+  local label="$1"
+  local needle="$2"
+  shift 2
+  local out rc
+  rm -f "${video_marker}"
+  set +e
+  out="$("$@" 2>&1)"
+  rc=$?
+  set -e
+  if [[ "${rc}" -eq 0 ]]; then
+    fail "${label} (expected non-zero exit)"
+    return
+  fi
+  if [[ -e "${video_marker}" ]]; then
+    fail "${label} (marker file was created)"
+    return
+  fi
+  if [[ "${out}" == *"Python venv not found"* || "${out}" == *"syntax error"* || "${out}" == *"invalid arithmetic"* ]]; then
+    fail "${label} (ran arithmetic or venv work)"
+    return
+  fi
+  expect_contains "${label}" "${needle}" "${out}"
+}
+
+# $(touch ...) is the payload text. This shell must not run it.
+vinject="HOME[\$(touch ${video_marker})]"
+reject_video_number "CLI width injection on ltx2" "--width" \
+  "${GENERATE}" --prompt plan --family ltx2 --width "${vinject}"
+reject_video_number "CLI width 17abc" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width 17abc
+reject_video_number "CLI width 0" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width 0
+reject_video_number "CLI width negative" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width -1
+reject_video_number "CLI width empty" "--width" \
+  "${GENERATE}" --dump-plan --prompt plan --width ""
+reject_video_number "CLI height injection" "--height" \
+  "${GENERATE}" --dump-plan --prompt plan --height "${vinject}"
+reject_video_number "CLI frames injection" "--frames" \
+  "${GENERATE}" --dump-plan --prompt plan --frames "${vinject}"
+reject_video_number "CLI frames 17abc" "--frames" \
+  "${GENERATE}" --dump-plan --prompt plan --frames 17abc
+reject_video_number "CLI frames 0" "--frames" \
+  "${GENERATE}" --dump-plan --prompt plan --frames 0
+reject_video_number "CLI frames negative" "--frames" \
+  "${GENERATE}" --dump-plan --prompt plan --frames -1
+reject_video_number "CLI frames empty" "--frames" \
+  "${GENERATE}" --dump-plan --prompt plan --frames ""
+reject_video_number "CLI steps injection" "--steps" \
+  "${GENERATE}" --dump-plan --prompt plan --steps "${vinject}"
+reject_video_number "CLI seed injection" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed "${vinject}"
+reject_video_number "CLI seed negative" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed -1
+reject_video_number "CLI seed empty" "--seed" \
+  "${GENERATE}" --dump-plan --prompt plan --seed ""
+reject_video_number "CLI frames above 999999" "999999" \
+  "${GENERATE}" --dump-plan --prompt plan --frames 18446744073709551617
+
+printf '%s\n' "MLX_VIDEO_FRAMES='${vinject}'" >"${TMP}/bad-video-frames.env"
+reject_video_number "models.env frames injection" "MLX_VIDEO_FRAMES" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-frames.env" "${GENERATE}" --prompt plan
+printf '%s\n' "MLX_VIDEO_WIDTH=" >"${TMP}/bad-video-width.env"
+reject_video_number "models.env width empty" "MLX_VIDEO_WIDTH" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-width.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_VIDEO_STEPS=-1" >"${TMP}/bad-video-steps.env"
+reject_video_number "models.env steps negative" "MLX_VIDEO_STEPS" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-steps.env" "${GENERATE}" --dump-plan --prompt plan
+
+reject_video_number "env frames injection" "MLX_VIDEO_FRAMES" \
+  env MLX_VIDEO_FRAMES="${vinject}" MLX_MODELS_ENV="${empty_video_env}" \
+  "${GENERATE}" --dump-plan --prompt plan
+
+printf '%s\n' "MLX_VIDEO_SEED=-1" >"${TMP}/bad-video-seed-neg.env"
+reject_video_number "models.env seed negative" "MLX_VIDEO_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-seed-neg.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_VIDEO_SEED=abc" >"${TMP}/bad-video-seed-abc.env"
+reject_video_number "models.env seed abc" "MLX_VIDEO_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-seed-abc.env" "${GENERATE}" --dump-plan --prompt plan
+printf '%s\n' "MLX_VIDEO_SEED=" >"${TMP}/bad-video-seed-empty.env"
+reject_video_number "models.env seed empty" "MLX_VIDEO_SEED" \
+  env MLX_MODELS_ENV="${TMP}/bad-video-seed-empty.env" "${GENERATE}" --dump-plan --prompt plan
+reject_video_number "env seed negative" "MLX_VIDEO_SEED" \
+  env MLX_VIDEO_SEED=-1 MLX_MODELS_ENV="${empty_video_env}" \
+  "${GENERATE}" --dump-plan --prompt plan
+
+plan_width="$(
+  env MLX_MODELS_ENV="${empty_video_env}" \
+    "${GENERATE}" --dump-plan --prompt plan --width 100 --height 96 --frames 21 --steps 4 --seed 0
+)"
+expect_contains "wan width 100 accepted" "width=100" "${plan_width}"
+expect_contains "wan height 96 accepted" "height=96" "${plan_width}"
+expect_contains "wan frames 21 accepted" "frames=21" "${plan_width}"
+expect_contains "wan steps 4 accepted" "steps=4" "${plan_width}"
+expect_contains "wan seed 0 accepted" "seed=0" "${plan_width}"
+
+expect_fail "ltx width not divisible by 64 still rejected" \
+  env MLX_MODELS_ENV="${empty_video_env}" \
+  "${GENERATE}" --dump-plan --prompt plan --family ltx2 --width 100
+ltx_width_out="$(
+  env MLX_MODELS_ENV="${empty_video_env}" \
+    "${GENERATE}" --dump-plan --prompt plan --family ltx2 --width 100 2>&1 || true
+)"
+expect_contains "ltx width error names the rule" "divisible by 64" "${ltx_width_out}"
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1

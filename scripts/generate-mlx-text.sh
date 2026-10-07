@@ -15,6 +15,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
+# make generate-text passes the prompt as --prompt. Do not read PROMPT from
+# the environment: that name is zsh's prompt and is often exported.
 PROMPT=""
 MODEL=""
 MAX_TOKENS=""
@@ -49,6 +51,7 @@ config/models.env is parsed as MLX_* assignments (not executed).
 Max tokens and KV size must be positive integers. Temperature, when set,
 must be a finite non-negative number. An empty value is invalid. Invalid
 values, including flags after --, fail before launch.
+make generate-text passes PROMPT through without shell expansion.
 EOF
 }
 

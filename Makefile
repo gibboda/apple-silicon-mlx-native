@@ -11,6 +11,22 @@ SCRIPTS := scripts
 # Single-quote a Make value so the recipe shell does not evaluate metacharacters.
 sq = '$(subst ','\'',$(1))'
 
+# macOS ships GNU Make 3.81. A command-line IMAGE_PROMPT is expanded when Make
+# exports it ($H in $HOME disappears, and $(...) runs as a Make function) and a
+# raw newline splits the recipe line. mlx_lit is a bash $'...' word: backslash,
+# apostrophe (as \047), and newline are escaped, so the shell sees the original
+# bytes. Do not export the prompt variables; the recipe passes them as --prompt.
+# Make strips leading whitespace from a VAR=value command-line assignment; use
+# IMAGE_PROMPT='  text' make image (or the env form for VIDEO_PROMPT / PROMPT).
+# Make 3.81 drops one trailing newline from define, so this body keeps two.
+define mlx_nl
+
+
+endef
+mlx_bs := $(subst ,,\)
+unexport IMAGE_PROMPT VIDEO_PROMPT PROMPT
+mlx_lit = $$'$(subst $(mlx_nl),\n,$(subst ',\047,$(subst $(mlx_bs),$(mlx_bs)$(mlx_bs),$(value 1))))'
+
 .PHONY: help detect recommend list list-image list-video venv install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
 
 help: ## Show available targets
@@ -70,13 +86,17 @@ install-image: ## Install mflux into the existing venv (does not recreate .venv)
 	@$(SCRIPTS)/install-mlx-image.sh
 
 image: ## Generate a PNG with mflux (IMAGE_PROMPT required)
-	@test -n "$(IMAGE_PROMPT)" || { echo 'Set IMAGE_PROMPT=... e.g. make image IMAGE_PROMPT="a red fox in snow"'; exit 1; }
-	@extra=$(call sq,$(GENERATE_IMAGE_ARGS)); \
+	@prompt=$(call mlx_lit,$(value IMAGE_PROMPT)); \
+	if [[ -z "$$prompt" ]]; then \
+	  echo 'Set IMAGE_PROMPT=... e.g. make image IMAGE_PROMPT="a red fox in snow"'; \
+	  exit 1; \
+	fi; \
+	extra=$(call sq,$(GENERATE_IMAGE_ARGS)); \
 	if [[ -n "$$extra" ]]; then \
 	  read -r -a image_args <<<"$$extra"; \
-	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$(IMAGE_PROMPT)" "$${image_args[@]}"; \
+	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$$prompt" "$${image_args[@]}"; \
 	else \
-	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$(IMAGE_PROMPT)"; \
+	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$$prompt"; \
 	fi
 
 install-video: ## Install mlx-video into the existing venv (does not recreate .venv)
@@ -86,20 +106,28 @@ prepare-video: ## Download and convert Wan2.1 T2V 1.3B (needs torch in .venv)
 	@$(SCRIPTS)/prepare-mlx-video-wan.sh
 
 generate-text: ## Generate text with mlx_lm (PROMPT required); caps MLX cache on ≤8 GB
-	@test -n "$(PROMPT)" || { echo 'Set PROMPT=... e.g. make generate-text PROMPT="Hello from MLX"'; exit 1; }
-	@"$(SCRIPTS)/generate-mlx-text.sh" --prompt "$(PROMPT)"
+	@prompt=$(call mlx_lit,$(value PROMPT)); \
+	if [[ -z "$$prompt" ]]; then \
+	  echo 'Set PROMPT=... e.g. make generate-text PROMPT="Hello from MLX"'; \
+	  exit 1; \
+	fi; \
+	"$(SCRIPTS)/generate-mlx-text.sh" --prompt "$$prompt"
 
 serve: ## Start mlx_lm.server; on ≤8 GB pin GPU and cap MLX memory to the Metal working set
 	@"$(SCRIPTS)/serve-mlx.sh"
 
 video: ## Generate an MP4 with mlx-video (VIDEO_PROMPT required)
-	@test -n "$(VIDEO_PROMPT)" || { echo 'Set VIDEO_PROMPT=... e.g. make video VIDEO_PROMPT="a red fox running through snow"'; exit 1; }
-	@extra=$(call sq,$(GENERATE_VIDEO_ARGS)); \
+	@prompt=$(call mlx_lit,$(value VIDEO_PROMPT)); \
+	if [[ -z "$$prompt" ]]; then \
+	  echo 'Set VIDEO_PROMPT=... e.g. make video VIDEO_PROMPT="a red fox running through snow"'; \
+	  exit 1; \
+	fi; \
+	extra=$(call sq,$(GENERATE_VIDEO_ARGS)); \
 	if [[ -n "$$extra" ]]; then \
 	  read -r -a video_args <<<"$$extra"; \
-	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$(VIDEO_PROMPT)" "$${video_args[@]}"; \
+	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$$prompt" "$${video_args[@]}"; \
 	else \
-	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$(VIDEO_PROMPT)"; \
+	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$$prompt"; \
 	fi
 
 clean uninstall: ## Remove toolkit-owned .venv; do not uninstall Homebrew

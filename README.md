@@ -162,6 +162,8 @@ make generate-text PROMPT="Hello from MLX"
 scripts/generate-mlx-text.sh --prompt "Hello from MLX" --max-tokens 64
 ```
 
+`make generate-text` passes `PROMPT` through unchanged (no shell expansion). Make strips leading whitespace from a `VAR=value` command-line assignment; to keep it, set the variable in the environment instead, e.g. `PROMPT='  text' make generate-text`.
+
 Model matrix and memory notes: [docs/models.md](docs/models.md).
 
 ## Persistent `mlx_lm.server`
@@ -229,7 +231,7 @@ make install-image
 make image IMAGE_PROMPT="a red fox in snow"
 ```
 
-On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. 16 GB slow/moderate base chips (M1, M2/M3/M4 base) stay conservative (768² 4-bit `--low-ram`); 16 GB M5 and 18 GB Pro SKUs may use the 768² 8-bit path, not the 24 GB `z-image-turbo` 1024² profile. Fanless Airs keep the conservative image profile. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the composed profile. See [docs/media.md](docs/media.md).
+On 8 GB this uses FLUX.2 Klein **4B**, 4-bit, 512×512, and `--low-ram`. Expect swap; stop `mlx_lm.server` first. 16 GB slow/moderate base chips (M1, M2/M3/M4 base) stay conservative (768² 4-bit `--low-ram`); 16 GB M5 and 18 GB Pro SKUs may use the 768² 8-bit path, not the 24 GB `z-image-turbo` 1024² profile. Fanless Airs keep the conservative image profile. First generate downloads several GB of weights. `make install-image` also pulls a `torch` wheel for weight loading; generation itself is MLX. `--family` only switches CLI/checkpoint — size and steps still follow the composed profile. `make image` passes `IMAGE_PROMPT` through unchanged (no shell expansion). Make strips leading whitespace from a `VAR=value` command-line assignment; to keep it, set the variable in the environment instead, e.g. `IMAGE_PROMPT='  text' make image`. Width, height, and steps must be positive integers from 1 to 999999. Quantize must be 3, 4, 5, 6, or 8. Seed, when set, must be a non-negative integer. The same rules apply to `MLX_IMAGE_*` in the environment and `config/models.env`. Invalid values fail before launch. See [docs/media.md](docs/media.md).
 
 ## Video generation
 
@@ -241,7 +243,7 @@ make prepare-video   # Wan2.1 1.3B 4-bit; needs torch to load original .pth file
 make video VIDEO_PROMPT="a red fox running through snow"
 ```
 
-On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB, 16 GB slow/moderate base chips, and fanless Airs refuse generate unless `--force`. Stop `mlx_lm.server` first. Do not advertise LTX on machines that are RAM-too-small. On ≥36 GB cooled workstations the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the composed profile (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
+On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB, 16 GB slow/moderate base chips, and fanless Airs refuse generate unless `--force`. Stop `mlx_lm.server` first. Do not advertise LTX on machines that are RAM-too-small. On ≥36 GB cooled workstations the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the composed profile (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). `make video` passes `VIDEO_PROMPT` through unchanged (no shell expansion). Make strips leading whitespace from a `VAR=value` command-line assignment; to keep it, set the variable in the environment instead, e.g. `VIDEO_PROMPT='  text' make video`. Width, height, frames, and steps must be positive integers from 1 to 999999. Seed, when set, must be a non-negative integer. The same rules apply to `MLX_VIDEO_*` in the environment and `config/models.env`. Invalid values fail before launch. See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
 
 ## Repository structure
 
