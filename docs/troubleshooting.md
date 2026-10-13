@@ -123,6 +123,33 @@ Allowed types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `build` `ci`
 
 GitHub merge commits are exempt by default. See `scripts/conventional-commits-audit.sh --help`.
 
+## Python version (`.venv`)
+
+This toolkit targets Homebrew **`python@3.12`** (`MLX_PYTHON_VERSION`, default `3.12` in `scripts/lib/common.sh`). Your `.venv` should report the latest **3.12** patch Homebrew ships (for example `3.12.15` in `pyvenv.cfg` and `make validate`).
+
+Homebrew’s default **`python3`** may be a newer major release (for example 3.15). Do **not** create or reuse `.venv` with that interpreter unless you change `MLX_PYTHON_VERSION` and rebuild on purpose. `make venv` refuses a venv whose Python minor does not match `MLX_PYTHON_VERSION`.
+
+The pinned **`mlx`** package ships prebuilt macOS arm64 wheels only for specific CPython tags. For the default pin (`mlx==0.32.2`), PyPI wheels exist for **3.10–3.14** (`cp310`–`cp314`), not **3.15** (`cp315`). Until upstream publishes a matching wheel for your pinned `mlx` version, **`python@3.15` cannot satisfy `make install`** as written.
+
+To stay current on the supported line:
+
+```bash
+brew upgrade python@3.12
+make rebuild
+make validate
+```
+
+To **experiment** with a newer supported minor (for example 3.13) without changing the repository default:
+
+```bash
+brew install python@3.13
+MLX_PYTHON_VERSION=3.13 make rebuild
+make validate
+# optional: make install-image / make install-video if you use those targets
+```
+
+If that trial succeeds and you want 3.13 to become the project default, bump `MLX_PYTHON_VERSION` in `scripts/lib/common.sh`, update README/CHANGELOG, and re-run validation. Media extras (`mflux`, git-pinned `mlx-video`, optional `torch`) still need their own smoke tests on the new interpreter.
+
 ## Install refused to reuse `.venv`
 
 `make venv` creates `.venv` only when that path is missing. A venv that install can use has `pyvenv.cfg`, an executable `bin/python`, and a working `pip` module. `bin/python3` alone, a non-executable `bin/python`, or a tree left behind when `python -m venv` dies before `ensurepip` is not enough. Remove or rename that path, or run `make rebuild` (it accepts either marker via `looks_like_venv`). `make venv` will not repair it. `make install` does not create the venv. Fresh clones run `make venv` once before `make install`. An existing complete `.venv` does not need that extra step.
