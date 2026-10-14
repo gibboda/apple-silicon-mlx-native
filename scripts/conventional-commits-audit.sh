@@ -27,6 +27,7 @@
 #   AUDIT_BASE_REF        Base ref for PR-style ranges (default: origin/main)
 #   AUDIT_BASE_SHA        PR base SHA (preferred over reserved GITHUB_SHA)
 #   AUDIT_HEAD_SHA        PR head SHA (preferred over reserved GITHUB_SHA)
+#   PR_TITLE              Pull request title (squash-merge subject on main)
 #   EXEMPT_MERGE_COMMITS  true|false (default: true)
 #
 # Note: Do not rely on overriding GITHUB_SHA in GitHub Actions — that variable
@@ -136,6 +137,14 @@ is_exempt_merge() {
   return 1
 }
 
+subject_complies() {
+  local subject="$1"
+  if is_exempt_merge "${subject}"; then
+    return 0
+  fi
+  printf '%s\n' "${subject}" | grep -Eq "${CC_REGEX}"
+}
+
 log_header "Conventional Commits audit"
 log_info "Range: ${RANGE}"
 
@@ -159,6 +168,21 @@ violations=0
 audited=0
 exempted=0
 
+if [[ -n "${PR_TITLE:-}" ]]; then
+  if is_exempt_merge "${PR_TITLE}"; then
+    exempted=$((exempted + 1))
+    log_info "exempt  PR title  ${PR_TITLE}"
+  elif subject_complies "${PR_TITLE}"; then
+    audited=$((audited + 1))
+    log_ok "pass    PR title  ${PR_TITLE}"
+  else
+    violations=$((violations + 1))
+    audited=$((audited + 1))
+    log_error "FAIL    PR title  ${PR_TITLE}"
+    log_error "        Expected: <type>[scope][!]: <description>"
+  fi
+fi
+
 while IFS= read -r sha; do
   [[ -n "${sha}" ]] || continue
   subject="$(git log -1 --format='%s' "${sha}")"
@@ -168,7 +192,7 @@ while IFS= read -r sha; do
     continue
   fi
   audited=$((audited + 1))
-  if printf '%s\n' "${subject}" | grep -Eq "${CC_REGEX}"; then
+  if subject_complies "${subject}"; then
     log_ok "pass    ${sha:0:8}  ${subject}"
   else
     violations=$((violations + 1))
