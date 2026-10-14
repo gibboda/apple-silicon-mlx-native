@@ -73,6 +73,7 @@ jobs:
           set -euo pipefail
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
+          /bin/bash --version | head -1
           case "$(/bin/bash --version)" in
             *"version 3.2."*) ;;
             *)
