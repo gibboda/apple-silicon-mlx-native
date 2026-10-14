@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Shell self-tests share `tests/lib/assert.sh` (`expect_line`, `skip`, subshell-safe `expect_fail`). Wrapper argv is recorded via fake CLIs in `tests/wrapper-argv.test.sh`. Plan `key=value` checks use exact-line matching so mutations like `steps=40` no longer pass when asserting `steps=4`
+
 ### Fixed
 
 - `make image`, `make video`, and `make generate-text` pass the prompt through unchanged. Backticks, `$VAR`, `$(...)`, quotes, backslashes, and newlines stay literal on macOS Make 3.81. Make strips leading whitespace from a `VAR=value` command-line assignment; set the variable in the environment instead (e.g. `IMAGE_PROMPT='  text' make image`) to keep it

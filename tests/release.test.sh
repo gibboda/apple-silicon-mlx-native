@@ -16,52 +16,9 @@ export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL="${TMP}/empty.gitconfig"
 : >"${GIT_CONFIG_GLOBAL}"
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    pass "${label}"
-  else
-    fail "${label} (expected success)"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
-expect_missing() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    fail "${label} (unexpected ${needle})"
-  else
-    pass "${label}"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 write_changelog() {
   local dest="$1"
   cat >"${dest}" <<'EOF'
@@ -664,8 +621,4 @@ git -C "${rcprev}" add CHANGELOG.md
 git -C "${rcprev}" commit -q -m "chore: seed rc changelog"
 expect_fail "auto-bump refuses pre-release previous version" run_release "${rcprev}" --dry-run
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s failure(s)\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: release self-test passed\n'
+assert_finish "release self-test passed"

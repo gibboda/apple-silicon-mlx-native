@@ -288,6 +288,11 @@ apple-silicon-mlx-native/
 │   ├── serve-mlx.sh
 │   └── validate-mlx.sh
 ├── tests/
+│   ├── lib/
+│   │   ├── argv.sh
+│   │   ├── assert.sh
+│   │   ├── fake-darwin.sh
+│   │   └── fake_venv_python.py
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
 │   ├── conventional-commits-audit.test.sh
@@ -302,7 +307,8 @@ apple-silicon-mlx-native/
 │   ├── model-list.test.sh
 │   ├── models-env.test.sh
 │   ├── readme-tree.test.sh
-│   └── release.test.sh
+│   ├── release.test.sh
+│   └── wrapper-argv.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE

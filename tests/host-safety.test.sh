@@ -11,41 +11,9 @@ COMMON="${ROOT}/scripts/lib/common.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    pass "${label}"
-  else
-    fail "${label} (expected success)"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 BIN="${TMP}/bin"
 mkdir -p "${BIN}"
 REAL_UNAME="$(command -v uname)"
@@ -637,7 +605,7 @@ EOF
     fail "EXIT trap restore removed the created venv"
   fi
 else
-  pass "skip venv identity tests (python3 -m venv unavailable)"
+  skip "venv identity tests (python3 -m venv unavailable)"
 fi
 
 # Failure after the create trap is installed must still run the caller's EXIT trap.
@@ -851,9 +819,4 @@ else
   fail "script modified cfg-only venv"
 fi
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s failure(s)\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: host-safety self-test passed\n'
-exit 0
+assert_finish "host-safety self-test passed"
