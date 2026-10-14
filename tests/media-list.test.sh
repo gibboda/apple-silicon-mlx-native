@@ -367,6 +367,18 @@ expect_eq "diffusers vae-only snapshot is not cached" \
   "$(HF_HUB_CACHE="${vae_only_cache}" media_repo_cached black-forest-labs/FLUX.2-klein-4B && echo yes || echo no)" \
   "no"
 
+no_main_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-no-main.XXXXXX")"
+no_main_snap="${no_main_cache}/models--black-forest-labs--FLUX.2-klein-4B/snapshots/no-main"
+mkdir -p "${no_main_snap}"
+cat >"${no_main_snap}/model_index.json" <<'EOF'
+{"text_encoder":["transformers","CLIPTextModel"],"vae":["diffusers","AutoencoderKL"]}
+EOF
+write_diffusers_component "${no_main_snap}/text_encoder"
+write_diffusers_component "${no_main_snap}/vae" "diffusion_pytorch_model.safetensors"
+expect_eq "diffusers index without transformer or unet is not cached" \
+  "$(HF_HUB_CACHE="${no_main_cache}" media_repo_cached black-forest-labs/FLUX.2-klein-4B && echo yes || echo no)" \
+  "no"
+
 partial_transformer_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-partial-tr.XXXXXX")"
 partial_transformer_snap="${partial_transformer_cache}/models--black-forest-labs--FLUX.2-klein-4B/snapshots/partial-tr"
 mkdir -p "${partial_transformer_snap}"
@@ -377,7 +389,7 @@ printf 'shard1\n' >"${partial_transformer_snap}/transformer/model-00001-of-00002
 expect_eq "diffusers transformer missing index shard is not cached" \
   "$(HF_HUB_CACHE="${partial_transformer_cache}" media_repo_cached black-forest-labs/FLUX.2-klein-4B && echo yes || echo no)" \
   "no"
-rm -rf "${vae_only_cache}" "${partial_transformer_cache}"
+rm -rf "${vae_only_cache}" "${no_main_cache}" "${partial_transformer_cache}"
 
 dangling="${cache_dir}/models--Tongyi-MAI--Z-Image-Turbo/snapshots/abc"
 mkdir -p "${dangling}"

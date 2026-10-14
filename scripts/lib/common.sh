@@ -741,6 +741,9 @@ diffusers_snapshot_weights_ready() {
     esac
   done < <(_model_index_weight_components "${index}")
   if (( saw == 1 )); then
+    # model_index is authoritative, but a tree with no transformer/UNet is not
+    # a complete image checkpoint (VAE-only indexes must not report cached).
+    (( has_main == 1 )) || return 1
     return 0
   fi
   saw=0
