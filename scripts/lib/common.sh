@@ -581,8 +581,13 @@ detect_macos_version() {
 
 detect_disk_available_gib() {
   # Available space (whole GiB) on the volume containing the path.
+  # Returns empty when df fails (do not treat as 0 GiB free).
   local target="${1:-/}"
-  df -g "${target}" 2>/dev/null | awk 'NR==2 {print $4}'
+  local avail=""
+  avail="$(df -g "${target}" 2>/dev/null | awk 'NR==2 {print $4}')" || true
+  if [[ "${avail}" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "${avail}"
+  fi
 }
 
 # Remember a caller-supplied MLX_DISK_AVAIL_GIB before detection overwrites it.
@@ -2100,7 +2105,7 @@ Working set:      ${ws_disp}
 GPU arch:         ${MLX_GPU_ARCH:-unavailable}
 CPU cores:        ${MLX_CPU_CORES}
 macOS version:    ${MLX_MACOS_VERSION}
-Disk available:   ${MLX_DISK_AVAIL_GIB} GiB (workspace volume)
+Disk available:   ${MLX_DISK_AVAIL_GIB:-unknown} GiB (workspace volume)
 Python version:   $(detect_python_version)
 Workspace:        ${MLX_WORKSPACE}
 Recommended:      ${MLX_TIER_HINT}
@@ -2164,7 +2169,11 @@ print_detect_env() {
   printf 'MLX_TIER_HINT=%q\n' "${MLX_TIER_HINT:-}"
   printf 'MLX_CPU_CORES=%q\n' "${MLX_CPU_CORES:-}"
   printf 'MLX_MACOS_VERSION=%q\n' "${MLX_MACOS_VERSION:-}"
-  printf 'MLX_DISK_AVAIL_GIB=%q\n' "${MLX_DISK_AVAIL_GIB:-0}"
+  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" && "${MLX_DISK_AVAIL_GIB}" =~ ^[0-9]+$ ]]; then
+    printf 'MLX_DISK_AVAIL_GIB=%q\n' "${MLX_DISK_AVAIL_GIB}"
+  else
+    printf 'MLX_DISK_AVAIL_GIB=%q\n' "unknown"
+  fi
   printf 'MLX_PYTHON_VERSION_DETECTED=%q\n' "$(detect_python_version)"
   printf 'MLX_HOMEBREW=%q\n' "${brew_ok}"
   printf 'MLX_HOMEBREW_PREFIX=%q\n' "${brew_prefix}"

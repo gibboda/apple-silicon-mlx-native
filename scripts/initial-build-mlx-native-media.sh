@@ -178,12 +178,13 @@ server_kv=""
 if mlx_lm_help_has_flag mlx_lm.server --max-kv-size; then
   server_kv=" -- --max-kv-size ${context}"
 fi
+venv_activate_hint="$(printf '  source %q/bin/activate' "${MLX_VENV}")"
 cat <<EOF
 
 ${COLOR_BOLD}Next commands${COLOR_RESET}
 
   # Activate the environment
-  source ${MLX_VENV}/bin/activate
+${venv_activate_hint}
 
   # One-shot generation (downloads model on first use; ≤8 GB applies the MLX cache cap)
   # generate-mlx-text.sh also passes --max-kv-size ${context} unless overridden
