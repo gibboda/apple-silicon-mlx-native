@@ -336,7 +336,7 @@ The tree lists every tracked file. `tests/readme-tree.test.sh` fails when a trac
 | `make video` | Generate an MP4 (`VIDEO_PROMPT=...`) |
 | `make clean` / `make uninstall` | Remove `.venv`; report leftover system tools |
 | `make audit` | Conventional Commits audit |
-| `make lint` | ShellCheck |
+| `make lint` | ShellCheck (CI pins v0.11.0; see [troubleshooting](docs/troubleshooting.md#shellcheck-not-found-locally)) |
 | `make test` | Portable shell self-tests |
 
 ## Conventional Commits policy
