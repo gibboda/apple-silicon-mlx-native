@@ -1813,10 +1813,13 @@ resolve_homebrew_python() {
 # rerun_cmd is printed when Homebrew is missing.
 install_homebrew_install_script() {
   local url="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
-  local tmp sha
+  local tmp sha saved_exit_trap quoted_tmp
   tmp="$(mktemp)"
-  # shellcheck disable=SC2064
-  trap "rm -f -- '${tmp}'" EXIT
+  quoted_tmp="$(printf '%q' "${tmp}")"
+  saved_exit_trap="$(_exit_trap_spec)"
+  # Chain onto the caller EXIT trap so a failed download still cleans the temp
+  # file without dropping the caller's cleanup.
+  _install_owned_exit_trap "rm -f -- ${quoted_tmp}" "${saved_exit_trap}"
   curl -fsSL "${url}" -o "${tmp}"
   if command -v sha256sum >/dev/null 2>&1; then
     sha="$(sha256sum "${tmp}" | awk '{print $1}')"
@@ -1826,8 +1829,8 @@ install_homebrew_install_script() {
   log_info "Homebrew install script SHA-256: ${sha}"
   log_info "Homebrew install script URL: ${url}"
   NONINTERACTIVE=1 /bin/bash "${tmp}"
-  trap - EXIT
   rm -f -- "${tmp}"
+  _restore_exit_trap "${saved_exit_trap}"
 }
 
 ensure_homebrew_ready() {

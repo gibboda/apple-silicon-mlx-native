@@ -180,6 +180,44 @@ else
   fail "rebuild script contains non-interactive venv guard"
 fi
 
+# --- Homebrew install must not drop the caller EXIT trap ---
+
+FAKE_CURL_BIN="${TMP}/fake-curl-bin"
+mkdir -p "${FAKE_CURL_BIN}"
+cat >"${FAKE_CURL_BIN}/curl" <<'EOF'
+#!/bin/sh
+out=""
+prev=""
+for arg in "$@"; do
+  if [ "${prev}" = "-o" ]; then
+    out="${arg}"
+  fi
+  prev="${arg}"
+done
+if [ -z "${out}" ]; then
+  exit 1
+fi
+printf '%s\n' '#!/bin/sh' 'exit 0' >"${out}"
+chmod +x "${out}"
+EOF
+chmod +x "${FAKE_CURL_BIN}/curl"
+brew_flag="${TMP}/brew-caller-exit"
+brew_check="$(
+  PATH="${FAKE_CURL_BIN}:${PATH}" bash -c '
+    set -euo pipefail
+    source "$1"
+    flag="$2"
+    trap "printf ran > \"${flag}\"" EXIT
+    install_homebrew_install_script
+    trap -p EXIT
+  ' bash "${COMMON}" "${brew_flag}"
+)" || brew_check=""
+if [[ "${brew_check}" == *"printf ran"* ]]; then
+  pass "homebrew install restores caller EXIT trap"
+else
+  fail "homebrew install restores caller EXIT trap"
+fi
+
 if (( failures > 0 )); then
   printf 'FAIL: %s robustness check(s) failed\n' "${failures}" >&2
   exit 1

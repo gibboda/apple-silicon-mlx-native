@@ -79,12 +79,16 @@ branch_delete_ref_name_protected() {
 
 branch_delete_ref_protected_on_github() {
   local ref="$1"
-  local encoded body
+  local encoded body status
   encoded="$(percent_encode "${ref}")"
-  body=""
   set +e
   body="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/branches/${encoded}" 2>&1)"
+  status=$?
   set -e
+  if (( status != 0 )) || ! grep -Eq '"protected"[[:space:]]*:' <<<"${body}"; then
+    log_error "Could not read branch protection for '${ref}'. Refusing to delete."
+    exit 1
+  fi
   grep -Eq '"protected"[[:space:]]*:[[:space:]]*true' <<<"${body}"
 }
 

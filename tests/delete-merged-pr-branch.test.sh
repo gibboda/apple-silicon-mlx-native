@@ -92,6 +92,10 @@ if [[ "${1:-}" == "api" ]]; then
   printf 'METHOD=%s PATH=%s\n' "${method}" "${path}" >>"${GH_LOG}"
   if [[ "${method}" == "GET" ]]; then
     if [[ "${path}" == *"/branches/"* ]]; then
+      if [[ "${FAKE_BRANCH_LOOKUP_STATUS:-0}" != "0" ]]; then
+        printf '%s\n' "${FAKE_BRANCH_LOOKUP_BODY:-lookup failed}"
+        exit "${FAKE_BRANCH_LOOKUP_STATUS}"
+      fi
       case "${FAKE_BRANCH_PROTECTED:-0}" in
         1|true|TRUE|yes|YES|on|ON)
           printf '{"protected":true,"name":"protected"}\n'
@@ -139,6 +143,7 @@ FAKE_GET_BODY=""
 FAKE_DELETE_STATUS="0"
 FAKE_DELETE_BODY=""
 FAKE_BRANCH_PROTECTED="0"
+FAKE_BRANCH_LOOKUP_STATUS="0"
 
 invoke() {
   : >"${GH_LOG}"
@@ -158,6 +163,7 @@ invoke() {
     FAKE_DELETE_STATUS="${FAKE_DELETE_STATUS}" \
     FAKE_DELETE_BODY="${FAKE_DELETE_BODY}" \
     FAKE_BRANCH_PROTECTED="${FAKE_BRANCH_PROTECTED}" \
+    FAKE_BRANCH_LOOKUP_STATUS="${FAKE_BRANCH_LOOKUP_STATUS}" \
     "${DELETE}"
 }
 
@@ -176,6 +182,7 @@ reset_case() {
   FAKE_DELETE_STATUS="0"
   FAKE_DELETE_BODY=""
   FAKE_BRANCH_PROTECTED="0"
+  FAKE_BRANCH_LOOKUP_STATUS="0"
 }
 
 reset_case
@@ -226,6 +233,21 @@ BASE_REF="main"
 FAKE_BRANCH_PROTECTED="1"
 out="$(invoke)"
 expect_contains "github protected branch skips" "Refusing to delete protected branch 'feature/github-protected'" "${out}"
+
+reset_case
+HEAD_REF="feature/lookup-failed"
+FAKE_BRANCH_LOOKUP_STATUS="1"
+set +e
+lookup_out="$(invoke 2>&1)"
+lookup_status=$?
+set -e
+if [[ "${lookup_status}" -ne 0 ]]; then
+  pass "branch protection lookup failure refuses delete"
+else
+  fail "branch protection lookup failure refuses delete"
+fi
+expect_contains "lookup failure names the refusal" "Could not read branch protection" "${lookup_out}"
+expect_not_contains "lookup failure does not DELETE" "METHOD=DELETE" "$(cat "${GH_LOG}")"
 
 reset_case
 HEAD_REF="develop"
