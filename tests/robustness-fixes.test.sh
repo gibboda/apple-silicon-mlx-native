@@ -135,26 +135,25 @@ printf '#!/bin/sh\nexit 0\n' >"${REBUILD_VENV}/bin/pip"
 chmod +x "${REBUILD_VENV}/bin/python" "${REBUILD_VENV}/bin/pip"
 
 run_rebuild_venv_remove_gate() {
-  env MLX_VENV="$1" FORCE=0 MLX_ASSUME_YES=0 bash -c '
-    set -euo pipefail
-    source "'"${COMMON}"'"
-    if [[ -e "${MLX_VENV}" ]]; then
-      if [[ ! -d "${MLX_VENV}" ]]; then
+  env MLX_VENV="$1" FORCE=0 MLX_ASSUME_YES=0 bash -c \
+    "set -euo pipefail
+    source \"${COMMON}\"
+    if [[ -e \"\${MLX_VENV}\" ]]; then
+      if [[ ! -d \"\${MLX_VENV}\" ]]; then
         exit 2
       fi
-      if ! looks_like_venv "${MLX_VENV}"; then
+      if ! looks_like_venv \"\${MLX_VENV}\"; then
         exit 3
       fi
-      if (( FORCE == 0 )) && ! is_truthy "${MLX_ASSUME_YES:-0}"; then
+      if (( FORCE == 0 )) && ! is_truthy \"\${MLX_ASSUME_YES:-0}\"; then
         if [[ -t 0 ]]; then
           exit 4
         else
-          die "Refusing to remove ${MLX_VENV} without a TTY. Re-run with --force or MLX_ASSUME_YES=1."
+          die \"Refusing to remove \${MLX_VENV} without a TTY. Re-run with --force or MLX_ASSUME_YES=1.\"
         fi
       fi
-      rm -rf "${MLX_VENV}"
-    fi
-  ' </dev/null
+      rm -rf \"\${MLX_VENV}\"
+    fi" </dev/null
 }
 
 gate_err=""

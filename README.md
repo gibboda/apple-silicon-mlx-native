@@ -302,7 +302,8 @@ apple-silicon-mlx-native/
 │   ├── model-list.test.sh
 │   ├── models-env.test.sh
 │   ├── readme-tree.test.sh
-│   └── release.test.sh
+│   ├── release.test.sh
+│   └── robustness-fixes.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
