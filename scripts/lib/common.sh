@@ -2286,10 +2286,51 @@ unquote_posix_single() {
   printf '%s' "${out}"
 }
 
+# True when KEY is already set in the shell (including empty). Process env wins
+# over config/models.env assignments for the same key.
+models_env_key_already_set() {
+  local key="$1"
+  local marker=""
+  eval "marker=\${${key}+x}"
+  [[ -n "${marker}" ]]
+}
+
+# User-set MLX_RECOMMENDED_CONTEXT (CLI/env/models.env) before compose overwrites
+# the exported composed default. Cleared by capture_user_recommended_context.
+capture_user_recommended_context() {
+  unset USER_MLX_RECOMMENDED_CONTEXT
+  if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    USER_MLX_RECOMMENDED_CONTEXT="${MLX_RECOMMENDED_CONTEXT}"
+  fi
+}
+
+# CLI --max-kv-size > user MLX_RECOMMENDED_CONTEXT > composed default.
+resolve_text_max_kv_size() {
+  local cli_max_kv="${1:-}"
+  if [[ -n "${cli_max_kv}" ]]; then
+    printf '%s' "${cli_max_kv}"
+    return 0
+  fi
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
+# Effective server context cap (no server --max-kv-size in mlx-lm 0.31.3).
+resolve_serve_context() {
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
 # Parse config/models.env as data. Only documented MLX_* config keys are
 # exported. Lines are never executed (no command substitution, PATH=, or
 # HF_TOKEN). Runtime identity keys (workspace/venv/paths) are skipped.
-# Missing file is OK.
+# Process environment beats file for each allowlisted key. Missing file is OK.
 load_models_env() {
   local file="${1:-${MLX_MODELS_ENV}}"
   local line key value decoded
@@ -2316,6 +2357,9 @@ load_models_env() {
       fi
       if is_models_env_runtime_key "${key}"; then
         log_warn "Skipping runtime key ${key} in ${file}"
+        continue
+      fi
+      if models_env_key_already_set "${key}"; then
         continue
       fi
       printf -v "${key}" '%s' "${decoded}"

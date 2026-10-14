@@ -461,6 +461,7 @@ env_boundary="$(
     "${TEXT}" --dump-plan
 )"
 expect_eq "env boundary max tokens" "$(plan_field max_tokens "${env_boundary}")" "1"
+expect_eq "env boundary max kv" "$(plan_field max_kv_size "${env_boundary}")" "1"
 expect_eq "env boundary temp" "$(plan_field temp "${env_boundary}")" "0.0"
 
 port_low="$(
