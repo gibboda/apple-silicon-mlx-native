@@ -64,7 +64,7 @@ fi
 log_info "Installing ${MLX_IMAGE_PACKAGE} into ${MLX_VENV}"
 warn_or_die_disk_headroom image-pip
 install_packaging_tools
-"${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
+mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
 
 if "${PY}" -c "import mflux" >/dev/null 2>&1; then
   ver="$("${PY}" -c 'import importlib.metadata as m; print(m.version("mflux"))')"

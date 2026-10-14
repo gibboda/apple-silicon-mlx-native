@@ -24,7 +24,8 @@ MLX_WORKSPACE_SENTINEL_NAME=".mlx-workspace"
 
 # Deliberately selected Python packages (Pure MLX core + selected media).
 # Image/video packages are NOT installed by default — see docs/media.md.
-# Core and mlx-audio are pinned so two installs on different days match.
+# Core specs live here and in requirements/constraints.txt; pip uses
+# PIP_CONSTRAINT so transitive deps stay bounded (not a full lockfile yet).
 # Override a spec to track upstream, for example:
 #   MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 # Do not add PyTorch/MPS as a generation backend.
@@ -51,6 +52,8 @@ MLX_PACKAGING_LIB_PACKAGE="${MLX_PACKAGING_LIB_PACKAGE:-packaging==26.3}"
 MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}" "${MLX_PACKAGING_LIB_PACKAGE}")
 # pip 26+ applies this to PEP 517 isolated build envs (venv setuptools/wheel are ignored).
 MLX_PIP_BUILD_CONSTRAINT_FILE="${MLX_PIP_BUILD_CONSTRAINT_FILE:-${MLX_WORKSPACE}/.mlx-pip-build-constraint.txt}"
+# Shared install constraints (core + key transitive pins); see requirements/constraints.txt.
+MLX_PIP_CONSTRAINT_FILE="${MLX_PIP_CONSTRAINT_FILE:-${REPO_ROOT}/requirements/constraints.txt}"
 MLX_VIDEO_WAN_SOURCE_REPO="${MLX_VIDEO_WAN_SOURCE_REPO:-Wan-AI/Wan2.1-T2V-1.3B}"
 MLX_VIDEO_WAN_MODEL_NAME="${MLX_VIDEO_WAN_MODEL_NAME:-wan21-t2v-1.3b-q4}"
 MLX_VIDEO_LTX_REPO="${MLX_VIDEO_LTX_REPO:-prince-canuma/LTX-2-distilled}"
@@ -850,7 +853,7 @@ image_generate_disk_profile() {
 disk_probe_paths() {
   local profile="${1:-}"
   case "${profile}" in
-    media-pip|image-pip|video-pip|image-generate)
+    core-pip|media-pip|image-pip|video-pip|image-generate)
       printf '%s\n' "${MLX_WORKSPACE}"
       ;;
     image-weights|video-weights)
@@ -895,11 +898,12 @@ tightest_disk_for_profile() {
 
 # Conservative free-space floors (whole GiB) before large downloads.
 # Override one floor with the matching MLX_DISK_MIN_* variable.
-# Profiles: media-pip, image-pip, video-pip, image-weights, image-generate,
-# video-weights, wan-generate, wan-prepare.
+# Profiles: core-pip, media-pip, image-pip, video-pip, image-weights,
+# image-generate, video-weights, wan-generate, wan-prepare.
 disk_floor_gib() {
   local profile="${1:-}"
   case "${profile}" in
+    core-pip) printf '%s\n' "${MLX_DISK_MIN_CORE_GIB:-12}" ;;
     media-pip) printf '%s\n' "${MLX_DISK_MIN_MEDIA_GIB:-4}" ;;
     image-pip) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GIB:-8}" ;;
     video-pip) printf '%s\n' "${MLX_DISK_MIN_VIDEO_GIB:-8}" ;;
@@ -1069,6 +1073,14 @@ for name in ("pip", "setuptools", "wheel", "packaging"):
   done <<< "${versions}"
 }
 
+# Export PIP_CONSTRAINT for dependency installs (core, media, and packaging).
+export_pip_constraint() {
+  if [[ ! -f "${MLX_PIP_CONSTRAINT_FILE}" ]]; then
+    die "Missing pip constraints file: ${MLX_PIP_CONSTRAINT_FILE}"
+  fi
+  export PIP_CONSTRAINT="${MLX_PIP_CONSTRAINT_FILE}"
+}
+
 # Write MLX_PACKAGING_PACKAGES to a constraints file and export PIP_BUILD_CONSTRAINT
 # so PEP 517 isolated builds (for example git mlx-video) use the same specs.
 export_pip_build_constraint() {
@@ -1079,6 +1091,22 @@ export_pip_build_constraint() {
     printf '%s\n' "${pkg}" >>"${constraint_file}"
   done
   export PIP_BUILD_CONSTRAINT="${constraint_file}"
+}
+
+# Run pip in the project venv with PIP_CONSTRAINT and PIP_BUILD_CONSTRAINT set.
+mlx_pip_install() {
+  local py
+  py="$(venv_python)"
+  if [[ ! -x "${py}" ]]; then
+    if [[ -d "${MLX_VENV}" ]]; then
+      die "Python venv at ${MLX_VENV} is not usable. Run: make rebuild"
+    fi
+    die "Python venv not found at ${py}. Run: make venv && make install"
+  fi
+  export_pip_constraint
+  export_pip_build_constraint
+  export PIP_DISABLE_PIP_VERSION_CHECK=1
+  "${py}" -m pip install --disable-pip-version-check "$@"
 }
 
 # Install the shared packaging-tool pins into the active venv.
@@ -1092,10 +1120,8 @@ install_packaging_tools() {
     die "Python venv not found at ${py}. Run: make venv && make install"
   fi
   log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
-  # Silence "you should upgrade pip" for this process, including later installs.
-  export PIP_DISABLE_PIP_VERSION_CHECK=1
-  "${py}" -m pip install --disable-pip-version-check --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
-  export_pip_build_constraint
+  mlx_pip_install --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
+  log_info "Dependency installs constrained via PIP_CONSTRAINT=${MLX_PIP_CONSTRAINT_FILE}"
   log_info "PEP 517 build isolation constrained via PIP_BUILD_CONSTRAINT=${MLX_PIP_BUILD_CONSTRAINT_FILE}"
   report_packaging_tools "${py}"
 }

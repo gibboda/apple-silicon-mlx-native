@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `requirements/constraints.txt` with MLX core pins and key transitive pins (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every pip install path exports `PIP_CONSTRAINT` via `mlx_pip_install` so media installs cannot float core MLX packages. Dependabot watches `requirements/` for pip updates. `core-pip` disk headroom (default 12 GiB, `MLX_DISK_MIN_CORE_GIB`) runs before core installs in `make install` / `make rebuild`
+
 ### Changed
 
 - Document Python version policy in `docs/troubleshooting.md`: default Homebrew `python@3.12`, pinned `mlx` macOS arm64 wheels through CPython 3.14 (3.15 blocked until upstream ships `cp315` wheels), optional `MLX_PYTHON_VERSION=3.13` trial (`export`, rollback, macOS 14+ / torch wheel notes), README link, and a non-stale pointer comment at `MLX_PYTHON_VERSION`
