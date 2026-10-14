@@ -2,6 +2,7 @@ name: ShellCheck
 
 on:
   push:
+    branches: [main]
     paths:
       - "scripts/**"
       - "tests/**"
@@ -22,8 +23,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install ShellCheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Install pinned ShellCheck
+        env:
+          SHELLCHECK_VERSION: "0.11.0"
+          SHELLCHECK_SHA256: "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+        run: |
+          set -euo pipefail
+          url="https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          archive="${RUNNER_TEMP}/shellcheck.tar.xz"
+          curl -fsSL -o "${archive}" "${url}"
+          echo "${SHELLCHECK_SHA256}  ${archive}" | sha256sum -c -
+          tar -xJf "${archive}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/shellcheck-v${SHELLCHECK_VERSION}" >> "${GITHUB_PATH}"
 
       - name: Run ShellCheck
         run: |
@@ -44,9 +55,9 @@ jobs:
         run: make test
 
   # GitHub-hosted macos-latest is Apple Silicon. The macos-26-arm64 image ships
-  # Bash 3.2.57, so the host-safety step is the real bash 3.2 coverage for the
-  # EXIT-trap fix. This job does not install models or MLX packages. It is part
-  # of the required ShellCheck gate, so a hang must not block merges for hours.
+  # Bash 3.2.57, so running tests with /bin/bash is the real bash 3.2 coverage.
+  # This job does not install models or MLX packages. It is part of the required
+  # ShellCheck gate, so a hang must not block merges for hours.
   macos-smoke:
     name: macOS Apple Silicon smoke
     runs-on: macos-latest
@@ -57,12 +68,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Confirm Darwin arm64
+      - name: Confirm Darwin arm64 and Bash 3.2
         run: |
           set -euo pipefail
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
-          bash --version
+          /bin/bash --version | head -1
+          case "$(/bin/bash --version)" in
+            *"version 3.2."*) ;;
+            *)
+              echo "expected /bin/bash 3.2.x on macOS runners" >&2
+              /bin/bash --version >&2 || true
+              exit 1
+              ;;
+          esac
 
       - name: Quiet Apple Silicon check
         run: scripts/detect-apple-silicon.sh --quiet
@@ -111,8 +130,14 @@ jobs:
           printf '%s\n' "${out}"
           grep -E -q '^recommended_model=.+' <<<"${out}"
 
-      - name: Host-safety self-test
-        run: bash tests/host-safety.test.sh
+      - name: Portable self-tests (bash 3.2)
+        run: |
+          set -euo pipefail
+          status=0
+          for t in tests/*.test.sh; do
+            /bin/bash "$t" || status=1
+          done
+          exit "$status"
 
   # Protect main requires context "ShellCheck" (workflow name). GitHub Actions
   # reports job names, so this gate posts that exact check.

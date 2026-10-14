@@ -107,8 +107,11 @@ Override a floor with `MLX_DISK_MIN_CORE_GIB`, `MLX_DISK_MIN_MEDIA_GIB`, `MLX_DI
 
 ## ShellCheck not found locally
 
+CI pins [ShellCheck v0.11.0](https://github.com/koalaman/shellcheck/releases/tag/v0.11.0) (linux x86_64 tarball, SHA-256 verified in `.github/workflows/shellcheck.yml`). Use the same major.minor locally so `make lint` matches CI.
+
 ```bash
 brew install shellcheck
+shellcheck --version   # expect 0.11.x
 make lint
 ```
 

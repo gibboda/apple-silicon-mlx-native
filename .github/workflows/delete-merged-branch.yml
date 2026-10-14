@@ -25,6 +25,4 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          chmod +x scripts/delete-merged-pr-branch.sh
-          scripts/delete-merged-pr-branch.sh
+        run: scripts/delete-merged-pr-branch.sh
