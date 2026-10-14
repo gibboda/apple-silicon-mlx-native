@@ -65,6 +65,39 @@ printf 'MLX_DEFAULT_MODEL=old\n' >"${ENV_FILE}"
 upsert_env_assignment "${ENV_FILE}" MLX_DEFAULT_MODEL "Bob's-model"
 expect_eq "upsert apostrophe keeps POSIX concatenation" "$(cat "${ENV_FILE}")" \
   "MLX_DEFAULT_MODEL='Bob'\\''s-model'"
+
+# --- upsert preserves mode, symlinks, and temp cleanup on failure ---
+
+REAL_ENV="${TMP}/real-models.env"
+LINK_ENV="${TMP}/models.env.link"
+printf 'MLX_DEFAULT_MODEL=old\n' >"${REAL_ENV}"
+chmod 644 "${REAL_ENV}"
+ln -sf "${REAL_ENV}" "${LINK_ENV}"
+upsert_env_assignment "${LINK_ENV}" MLX_DEFAULT_MODEL "mode-check"
+link_mode="$(stat -c '%a' "${REAL_ENV}" 2>/dev/null || stat -f '%Lp' "${REAL_ENV}")"
+expect_eq "upsert preserves file mode" "${link_mode}" "644"
+if [[ -L "${LINK_ENV}" ]]; then
+  pass "upsert preserves symlink"
+else
+  fail "upsert should not replace symlink with a regular file"
+fi
+expect_eq "upsert writes through symlink" "$(cat "${REAL_ENV}")" "MLX_DEFAULT_MODEL=mode-check"
+
+BROKEN_UPSERT="${TMP}/broken-upsert"
+mkdir "${BROKEN_UPSERT}"
+leftover_count=0
+set +e
+upsert_env_assignment "${BROKEN_UPSERT}" MLX_DEFAULT_MODEL "x" >/dev/null 2>&1
+set -e
+for f in "${TMP}"/broken-upsert.* "${TMP}"/real-models.env.*; do
+  [[ -e "${f}" ]] || continue
+  leftover_count=$((leftover_count + 1))
+done
+if (( leftover_count == 0 )); then
+  pass "upsert failure leaves no temp file"
+else
+  fail "upsert failure leaves no temp file"
+fi
 load_models_env "${ENV_FILE}" >/dev/null 2>&1
 expect_eq "load apostrophe round-trips" "${MLX_DEFAULT_MODEL}" "Bob's-model"
 sourced_apostrophe="$(MLX_DEFAULT_MODEL="" bash -c 'set -euo pipefail; source "$1"; printf %s "${MLX_DEFAULT_MODEL}"' bash "${ENV_FILE}")"

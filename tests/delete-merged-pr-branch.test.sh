@@ -91,6 +91,16 @@ if [[ "${1:-}" == "api" ]]; then
   done
   printf 'METHOD=%s PATH=%s\n' "${method}" "${path}" >>"${GH_LOG}"
   if [[ "${method}" == "GET" ]]; then
+    if [[ "${path}" == *"/branches/"* ]]; then
+      case "${FAKE_BRANCH_PROTECTED:-0}" in
+        1|true|TRUE|yes|YES|on|ON)
+          printf '{"protected":true,"name":"protected"}\n'
+          exit 0
+          ;;
+      esac
+      printf '{"protected":false,"name":"branch"}\n'
+      exit 0
+    fi
     if [[ "${FAKE_GET_STATUS:-0}" != "0" ]]; then
       printf '%s\n' "${FAKE_GET_BODY:-}"
       exit "${FAKE_GET_STATUS}"
@@ -191,6 +201,28 @@ reset_case
 HEAD_REF="main"
 out="$(invoke)"
 expect_contains "refuses default branch" "Refusing to delete default/base branch 'main'" "${out}"
+
+reset_case
+HEAD_REF="develop"
+BASE_REF="main"
+DEFAULT_BRANCH="main"
+out="$(invoke)"
+expect_contains "protected develop skips" "Refusing to delete protected branch 'develop'" "${out}"
+expect_not_contains "protected develop does not DELETE" "METHOD=DELETE" "$(cat "${GH_LOG}")"
+
+reset_case
+HEAD_REF="release/1.0"
+BASE_REF="main"
+DEFAULT_BRANCH="main"
+out="$(invoke)"
+expect_contains "protected release branch skips" "Refusing to delete protected branch 'release/1.0'" "${out}"
+
+reset_case
+HEAD_REF="feature/github-protected"
+BASE_REF="main"
+FAKE_BRANCH_PROTECTED="1"
+out="$(invoke)"
+expect_contains "github protected branch skips" "Refusing to delete protected branch 'feature/github-protected'" "${out}"
 
 reset_case
 HEAD_REF="develop"

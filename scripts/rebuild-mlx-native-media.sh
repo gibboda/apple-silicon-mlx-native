@@ -28,7 +28,7 @@ Usage: rebuild-mlx-native-media.sh [-h|--help] [--force]
 
 Rebuild the Python .venv for the MLX workspace.
 
-  --force   Skip interactive confirmation when removing .venv
+  --force   Skip confirmation when removing .venv (required for non-interactive runs)
   -h        Show this help
 
 Uses the same detect/compose path as install (OVERRIDE_MEMORY_TIER and
@@ -85,13 +85,17 @@ if [[ -e "${MLX_VENV}" ]]; then
   if ! looks_like_venv "${MLX_VENV}"; then
     die "Refusing to remove path that does not look like a venv: ${MLX_VENV}"
   fi
-  if (( FORCE == 0 )) && [[ -t 0 ]]; then
-    printf 'Remove and recreate %s? [y/N] ' "${MLX_VENV}"
-    read -r answer
-    case "${answer}" in
-      y|Y|yes|YES) ;;
-      *) die "Aborted by user." ;;
-    esac
+  if (( FORCE == 0 )) && ! is_truthy "${MLX_ASSUME_YES:-0}"; then
+    if [[ -t 0 ]]; then
+      printf 'Remove and recreate %s? [y/N] ' "${MLX_VENV}"
+      read -r answer
+      case "${answer}" in
+        y|Y|yes|YES) ;;
+        *) die "Aborted by user." ;;
+      esac
+    else
+      die "Refusing to remove ${MLX_VENV} without a TTY. Re-run with --force or MLX_ASSUME_YES=1."
+    fi
   fi
   log_info "Removing ${MLX_VENV}"
   rm -rf "${MLX_VENV}"

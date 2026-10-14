@@ -68,6 +68,32 @@ is_get_missing_ref() {
   grep -Fq 'get-a-reference' <<<"$1" && grep -Eq '"status":[[:space:]]*"404"' <<<"$1"
 }
 
+# Long-lived branches merged via PR into main should not be deleted automatically.
+branch_delete_ref_name_protected() {
+  case "${1:-}" in
+    develop|gh-pages) return 0 ;;
+    release/*) return 0 ;;
+  esac
+  return 1
+}
+
+branch_delete_ref_protected_on_github() {
+  local ref="$1"
+  local encoded body
+  encoded="$(percent_encode "${ref}")"
+  body=""
+  set +e
+  body="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/branches/${encoded}" 2>&1)"
+  set -e
+  grep -Eq '"protected"[[:space:]]*:[[:space:]]*true' <<<"${body}"
+}
+
+branch_delete_ref_protected() {
+  local ref="$1"
+  branch_delete_ref_name_protected "${ref}" && return 0
+  branch_delete_ref_protected_on_github "${ref}"
+}
+
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-}"
 HEAD_REPO="${HEAD_REPO:-}"
 HEAD_REF="${HEAD_REF:-}"
@@ -115,6 +141,11 @@ fi
 if ! command -v gh >/dev/null 2>&1; then
   log_error "Required command not found: gh"
   exit 1
+fi
+
+if branch_delete_ref_protected "${HEAD_REF}"; then
+  log_ok "Refusing to delete protected branch '${HEAD_REF}'."
+  exit 0
 fi
 
 stacked_count="$(
