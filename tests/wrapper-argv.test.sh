@@ -21,6 +21,8 @@ GENERATE_TEXT="${ROOT}/scripts/generate-mlx-text.sh"
 SERVE="${ROOT}/scripts/serve-mlx.sh"
 
 TMP="$(mktemp -d)"
+# macOS /var is a symlink to /private/var. Wrappers canonical_path via pwd -P.
+TMP="$(cd "${TMP}" && pwd -P)"
 trap 'rm -rf "${TMP}"' EXIT
 
 WS="${TMP}/ws"
