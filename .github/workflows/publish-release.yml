@@ -10,6 +10,11 @@ permissions:
 
 jobs:
   publish:
+    # Job-level so skipped (non-release) PR closes never join the group.
+    concurrency:
+      group: publish-release
+      cancel-in-progress: false
+      queue: max # queue all pending release runs; default single drops older pending
     name: Tag and GitHub Release
     if: >
       github.event.pull_request.merged == true &&
