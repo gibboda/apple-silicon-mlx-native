@@ -290,6 +290,7 @@ apple-silicon-mlx-native/
 ├── tests/
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
+│   ├── config-precedence.test.sh
 │   ├── conventional-commits-audit.test.sh
 │   ├── delete-merged-pr-branch.test.sh
 │   ├── disk-headroom.test.sh
