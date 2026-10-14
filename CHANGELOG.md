@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- CI runs the full portable test suite on macOS with `/bin/bash` 3.2, audits PR titles for Conventional Commits, pins ShellCheck v0.11.0, limits duplicate ShellCheck runs on same-repo PR pushes, and serializes release publishing
+- Document Python version policy in `docs/troubleshooting.md`: default Homebrew `python@3.12`, pinned `mlx` macOS arm64 wheels through CPython 3.14 (3.15 blocked until upstream ships `cp315` wheels), optional `MLX_PYTHON_VERSION=3.13` trial (`export`, rollback, macOS 14+ / torch wheel notes), README link, and a non-stale pointer comment at `MLX_PYTHON_VERSION`
+
 ### Fixed
 
 - `make image`, `make video`, and `make generate-text` pass the prompt through unchanged. Backticks, `$VAR`, `$(...)`, quotes, backslashes, and newlines stay literal on macOS Make 3.81. Make strips leading whitespace from a `VAR=value` command-line assignment; set the variable in the environment instead (e.g. `IMAGE_PROMPT='  text' make image`) to keep it
