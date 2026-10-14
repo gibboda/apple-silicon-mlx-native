@@ -160,7 +160,11 @@ expect_fail "invalid PR title fails even when commits pass" audit_in --range HEA
 
 PR_TITLE='chore(release): cut 1.2.3'
 expect_ok "release PR title form" audit_in --range HEAD
-unset PR_TITLE
+
+EXEMPT_MERGE_COMMITS=true
+PR_TITLE="Merge branch 'topic'"
+expect_fail "merge-style PR title is not exempt" audit_in --range HEAD
+unset PR_TITLE EXEMPT_MERGE_COMMITS
 
 if (( failures > 0 )); then
   printf 'FAIL: %s conventional-commits check(s) failed\n' "${failures}" >&2

@@ -27,7 +27,8 @@
 #   AUDIT_BASE_REF        Base ref for PR-style ranges (default: origin/main)
 #   AUDIT_BASE_SHA        PR base SHA (preferred over reserved GITHUB_SHA)
 #   AUDIT_HEAD_SHA        PR head SHA (preferred over reserved GITHUB_SHA)
-#   PR_TITLE              Pull request title (squash-merge subject on main)
+#   PR_TITLE              Pull request title (squash-merge subject on main; merge
+#                         commit exemptions do not apply to titles)
 #   EXEMPT_MERGE_COMMITS  true|false (default: true)
 #
 # Note: Do not rely on overriding GITHUB_SHA in GitHub Actions — that variable
@@ -145,6 +146,11 @@ subject_complies() {
   printf '%s\n' "${subject}" | grep -Eq "${CC_REGEX}"
 }
 
+title_complies() {
+  local title="$1"
+  printf '%s\n' "${title}" | grep -Eq "${CC_REGEX}"
+}
+
 log_header "Conventional Commits audit"
 log_info "Range: ${RANGE}"
 
@@ -169,15 +175,11 @@ audited=0
 exempted=0
 
 if [[ -n "${PR_TITLE:-}" ]]; then
-  if is_exempt_merge "${PR_TITLE}"; then
-    exempted=$((exempted + 1))
-    log_info "exempt  PR title  ${PR_TITLE}"
-  elif subject_complies "${PR_TITLE}"; then
-    audited=$((audited + 1))
+  audited=$((audited + 1))
+  if title_complies "${PR_TITLE}"; then
     log_ok "pass    PR title  ${PR_TITLE}"
   else
     violations=$((violations + 1))
-    audited=$((audited + 1))
     log_error "FAIL    PR title  ${PR_TITLE}"
     log_error "        Expected: <type>[scope][!]: <description>"
   fi
