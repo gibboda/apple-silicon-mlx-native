@@ -326,14 +326,58 @@ expect_contains "workstation video steps are pipeline default" "Steps:          
 expect_eq "printed workstation wan fits" \
   "$(list_column "${MLX_VIDEO_WAN_MODEL_NAME}" 1 "${vid_ws}")" "fits"
 
+write_diffusers_component() {
+  local dir="$1"
+  local shard="${2:-model.safetensors}"
+  mkdir -p "${dir}"
+  printf '{}\n' >"${dir}/config.json"
+  printf 'weights\n' >"${dir}/${shard}"
+}
+
+write_diffusers_model_index() {
+  local snap="$1"
+  cat >"${snap}/model_index.json" <<'EOF'
+{"transformer":["diffusers","FluxTransformer2DModel"],"text_encoder":["transformers","CLIPTextModel"],"text_encoder_2":["transformers","T5EncoderModel"],"vae":["diffusers","AutoencoderKL"]}
+EOF
+}
+
+write_complete_diffusers_snap() {
+  local snap="${1%/}"
+  mkdir -p "${snap}"
+  write_diffusers_model_index "${snap}"
+  write_diffusers_component "${snap}/transformer" "diffusion_model.safetensors"
+  write_diffusers_component "${snap}/text_encoder"
+  write_diffusers_component "${snap}/text_encoder_2"
+  write_diffusers_component "${snap}/vae" "diffusion_pytorch_model.safetensors"
+}
+
 cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-cache.XXXXXX")"
-klein="${cache_dir}/models--black-forest-labs--FLUX.2-klein-4B/snapshots/abc/transformer"
-mkdir -p "${klein}"
-printf '{}\n' >"${klein}/../model_index.json"
-printf 'weights\n' >"${klein}/diffusion_model.safetensors"
+klein_snap="${cache_dir}/models--black-forest-labs--FLUX.2-klein-4B/snapshots/abc"
+write_complete_diffusers_snap "${klein_snap}"
 expect_eq "diffusers klein snapshot is cached" \
   "$(HF_HUB_CACHE="${cache_dir}" media_repo_cached black-forest-labs/FLUX.2-klein-4B && echo yes || echo no)" \
   "yes"
+
+vae_only_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-vae-only.XXXXXX")"
+vae_only_snap="${vae_only_cache}/models--black-forest-labs--FLUX.2-klein-4B/snapshots/vae-only"
+mkdir -p "${vae_only_snap}"
+write_diffusers_model_index "${vae_only_snap}"
+write_diffusers_component "${vae_only_snap}/vae" "diffusion_pytorch_model.safetensors"
+expect_eq "diffusers vae-only snapshot is not cached" \
+  "$(HF_HUB_CACHE="${vae_only_cache}" media_repo_cached black-forest-labs/FLUX.2-klein-4B && echo yes || echo no)" \
+  "no"
+
+partial_transformer_cache="$(mktemp -d "${TMPDIR:-/tmp}/mlx-media-list-partial-tr.XXXXXX")"
+partial_transformer_snap="${partial_transformer_cache}/models--black-forest-labs--FLUX.2-klein-4B/snapshots/partial-tr"
+mkdir -p "${partial_transformer_snap}"
+write_complete_diffusers_snap "${partial_transformer_snap}"
+printf '{"weight_map":{"a":"model-00001-of-00002.safetensors","b":"model-00002-of-00002.safetensors"}}\n' \
+  >"${partial_transformer_snap}/transformer/model.safetensors.index.json"
+printf 'shard1\n' >"${partial_transformer_snap}/transformer/model-00001-of-00002.safetensors"
+expect_eq "diffusers transformer missing index shard is not cached" \
+  "$(HF_HUB_CACHE="${partial_transformer_cache}" media_repo_cached black-forest-labs/FLUX.2-klein-4B && echo yes || echo no)" \
+  "no"
+rm -rf "${vae_only_cache}" "${partial_transformer_cache}"
 
 dangling="${cache_dir}/models--Tongyi-MAI--Z-Image-Turbo/snapshots/abc"
 mkdir -p "${dangling}"

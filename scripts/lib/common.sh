@@ -646,7 +646,27 @@ for name in seen:
 PY
 }
 
-# config.json plus every shard named by model.safetensors.index.json in this directory.
+# Weight-bearing diffusers component names listed in model_index.json.
+_model_index_weight_components() {
+  local index="${1:-}"
+  [[ -f "${index}" ]] || return 1
+  python3 - "${index}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    data = json.load(fh)
+if not isinstance(data, dict):
+    sys.exit(0)
+for key in sorted(data.keys()):
+    if key.startswith("_"):
+        continue
+    if key in ("transformer", "unet", "vae") or key.startswith("text_encoder"):
+        print(key)
+PY
+}
+
+# config.json plus every non-empty shard named by model.safetensors.index.json.
 _indexed_component_ready() {
   local dir="${1%/}"
   local index="${dir}/model.safetensors.index.json"
@@ -657,9 +677,114 @@ _indexed_component_ready() {
     case "${shard}" in
       /*|*..*) return 1 ;;
     esac
-    [[ -f "${dir}/${shard}" ]] || return 1
+    [[ -s "${dir}/${shard}" ]] || return 1
     saw=1
   done < <(_index_shard_names "${index}")
+  (( saw == 1 ))
+}
+
+# Indexed shards or at least one non-empty *.safetensors in this component dir.
+_component_weights_ready() {
+  local dir="${1%/}"
+  local index="${dir}/model.safetensors.index.json"
+  local nullglob_state w saw=0
+  local -a weights
+  [[ -d "${dir}" ]] || return 1
+  if [[ -f "${index}" ]]; then
+    _indexed_component_ready "${dir}"
+    return
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${dir}/"*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  for w in "${weights[@]}"; do
+    [[ -s "${w}" ]] || continue
+    saw=1
+    break
+  done
+  (( saw == 1 ))
+}
+
+# Standard diffusers subdirs that exist under snap (when model_index lists none).
+_diffusers_component_dirs_present() {
+  local snap="${1%/}/"
+  local name="" nullglob_state
+  local -a encoders
+  for name in transformer unet vae text_encoder text_encoder_2 text_encoder_3; do
+    [[ -d "${snap}${name}" ]] && printf '%s\n' "${name}"
+  done
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  encoders=( "${snap}"text_encoder_*/ )
+  _restore_nullglob "${nullglob_state}"
+  for name in "${encoders[@]}"; do
+    [[ -d "${name}" ]] || continue
+    printf '%s\n' "${name##*/}"
+  done
+}
+
+# Every weight-bearing diffusers component has non-empty weights.
+diffusers_snapshot_weights_ready() {
+  local snap="${1%/}/"
+  local index="${snap}model_index.json"
+  local comp="" saw=0 has_main=0
+  [[ -f "${index}" ]] || return 1
+  while IFS= read -r comp; do
+    [[ -n "${comp}" ]] || continue
+    _component_weights_ready "${snap}${comp}" || return 1
+    saw=1
+    case "${comp}" in
+      transformer|unet) has_main=1 ;;
+    esac
+  done < <(_model_index_weight_components "${index}")
+  if (( saw == 1 )); then
+    return 0
+  fi
+  saw=0
+  has_main=0
+  while IFS= read -r comp; do
+    [[ -n "${comp}" ]] || continue
+    _component_weights_ready "${snap}${comp}" || return 1
+    saw=1
+    case "${comp}" in
+      transformer|unet) has_main=1 ;;
+      vae) ;;
+      text_encoder*) ;;
+      *) return 1 ;;
+    esac
+  done < <(_diffusers_component_dirs_present "${snap}")
+  if (( saw == 0 )); then
+    _snap_root_safetensors_ready "${snap}"
+    return
+  fi
+  (( has_main == 1 )) || return 1
+  _component_weights_ready "${snap}vae"
+}
+
+# Non-empty safetensors at the snapshot root (single-file hubs).
+_snap_root_safetensors_ready() {
+  local snap="${1%/}/"
+  local index="${snap}model.safetensors.index.json"
+  local nullglob_state w saw=0
+  local -a weights
+  if [[ -f "${index}" ]]; then
+    _indexed_component_ready "${snap%/}"
+    return
+  fi
+  if [[ -f "${snap}config.json" ]]; then
+    hub_snapshot_weights_complete "${snap}"
+    return
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${snap}"*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  for w in "${weights[@]}"; do
+    [[ -s "${w}" ]] || continue
+    saw=1
+    break
+  done
   (( saw == 1 ))
 }
 
@@ -682,7 +807,7 @@ hub_snapshot_weights_complete() {
   _restore_nullglob "${nullglob_state}"
   ((${#weights[@]} == 0)) && return 1
   for w in "${weights[@]}"; do
-    [[ -f "${w}" ]] || return 1
+    [[ -s "${w}" ]] || return 1
   done
   return 0
 }
@@ -723,14 +848,14 @@ hub_repo_download_incomplete() {
   ((${#incomplete[@]} > 0))
 }
 
-# True when dir holds at least one real safetensors file.
+# True when dir holds at least one non-empty safetensors file.
 _dir_has_safetensors() {
   local dir="${1%/}"
   local path=""
   [[ -d "${dir}" ]] || return 1
   while IFS= read -r path; do
     [[ -n "${path}" ]] || continue
-    [[ -f "${path}" ]] && return 0
+    [[ -s "${path}" ]] && return 0
   done < <(find "${dir}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
   return 1
 }
@@ -760,15 +885,13 @@ ltx_distilled_snapshot_ready() {
   (( saw == 1 ))
 }
 
-# True when a snapshot has model_index.json or config.json plus at least one
-# real safetensors file. Diffusers trees (mflux presets) keep weights in
-# subfolders, so this is broader than model_weights_cached. A snapshot that
-# has model.safetensors.index.json must include every indexed shard; one
-# leftover file is not enough. Incomplete blobs are rejected by
-# media_repo_cached before this runs. No network.
+# True when a snapshot is a complete MLX tree, a full diffusers tree, or a
+# single-file hub layout. Partial diffusers components and empty shards do
+# not count. Incomplete blobs are rejected by media_repo_cached first. No
+# network.
 hub_repo_has_weights() {
   local repo_id="${1:-}"
-  local cache folder snap nullglob_state path
+  local cache folder snap nullglob_state
   [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
   cache="$(huggingface_hub_cache_dir)"
   folder="${cache}/models--${repo_id//\//--}"
@@ -790,14 +913,18 @@ hub_repo_has_weights() {
       fi
       continue
     fi
-    if [[ -f "${snap}model_index.json" || -f "${snap}config.json" ]]; then
-      while IFS= read -r path; do
-        [[ -n "${path}" ]] || continue
-        if [[ -f "${path}" ]]; then
-          _restore_nullglob "${nullglob_state}"
-          return 0
-        fi
-      done < <(find "${snap}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
+    if [[ -f "${snap}model_index.json" ]]; then
+      if diffusers_snapshot_weights_ready "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
+      continue
+    fi
+    if [[ -f "${snap}config.json" ]]; then
+      if hub_snapshot_weights_complete "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
     fi
   done
   _restore_nullglob "${nullglob_state}"
@@ -2570,8 +2697,8 @@ Default context:  ${context}
 
 Weights are not total unified memory. KV cache, runtime, and macOS sit on top.
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
-cached is yes when that repo has config.json and every weight file on disk
-(including all shards listed in model.safetensors.index.json when present).
+cached is yes when that repo has config.json and every non-empty weight file on
+disk (including all shards listed in model.safetensors.index.json when present).
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'
@@ -2995,8 +3122,8 @@ Low RAM:          ${low_label}
 
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
 cached is yes when the Hugging Face cache holds that preset's upstream repo
-(model_index.json or config.json, plus a safetensors file, and no incomplete blob).
-Nothing is downloaded.
+(every diffusers weight component with non-empty shards, or a complete single-file
+layout, and no incomplete blob). Nothing is downloaded.
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'
