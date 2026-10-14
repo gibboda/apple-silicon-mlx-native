@@ -4,10 +4,6 @@ on:
   pull_request:
     types: [closed]
 
-concurrency:
-  group: publish-release
-  cancel-in-progress: false
-
 permissions:
   contents: write
   pull-requests: read
