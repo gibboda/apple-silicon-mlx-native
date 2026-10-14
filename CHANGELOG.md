@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- CI runs the full portable test suite on macOS with `/bin/bash` 3.2, audits PR titles for Conventional Commits, pins ShellCheck v0.11.0, limits duplicate ShellCheck runs on same-repo PR pushes, and serializes release publishing
+- Document Python version policy in `docs/troubleshooting.md`: default Homebrew `python@3.12`, pinned `mlx` macOS arm64 wheels through CPython 3.14 (3.15 blocked until upstream ships `cp315` wheels), optional `MLX_PYTHON_VERSION=3.13` trial (`export`, rollback, macOS 14+ / torch wheel notes), README link, and a non-stale pointer comment at `MLX_PYTHON_VERSION`
 - Shell self-tests share `tests/lib/assert.sh` (`expect_line`, `skip`, subshell-safe `expect_fail`). Wrapper argv is recorded via fake CLIs in `tests/wrapper-argv.test.sh`. Plan `key=value` checks use exact-line matching so mutations like `steps=40` no longer pass when asserting `steps=4`
 
 ### Fixed

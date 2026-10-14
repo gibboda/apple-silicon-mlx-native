@@ -32,6 +32,7 @@ audit_in() {
       AUDIT_BASE_SHA="${AUDIT_BASE_SHA:-}" \
       AUDIT_HEAD_SHA="${AUDIT_HEAD_SHA:-}" \
       COMMIT_RANGE="${COMMIT_RANGE:-}" \
+      PR_TITLE="${PR_TITLE:-}" \
       "${AUDIT}" "$@"
   )
 }
@@ -115,5 +116,22 @@ default_out="$(audit_in)"
 expect_contains "default ref range is two-dot" "main..HEAD" "${default_out}"
 expect_ok "default two-dot from feature ignores main-only commits" audit_in
 unset AUDIT_BASE_REF
+
+git -C "${REPO}" checkout -q main
+commit_msg "feat: baseline for PR title checks"
+
+PR_TITLE='feat(x): add widget'
+expect_ok "valid PR title" audit_in --range HEAD
+
+PR_TITLE='not a conventional title'
+expect_fail "invalid PR title fails even when commits pass" audit_in --range HEAD
+
+PR_TITLE='chore(release): cut 1.2.3'
+expect_ok "release PR title form" audit_in --range HEAD
+
+EXEMPT_MERGE_COMMITS=true
+PR_TITLE="Merge branch 'topic'"
+expect_fail "merge-style PR title is not exempt" audit_in --range HEAD
+unset PR_TITLE EXEMPT_MERGE_COMMITS
 
 assert_finish "conventional-commits audit"
