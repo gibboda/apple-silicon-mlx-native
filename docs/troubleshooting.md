@@ -106,8 +106,11 @@ Override a floor with `MLX_DISK_MIN_MEDIA_GIB`, `MLX_DISK_MIN_IMAGE_GIB`, `MLX_D
 
 ## ShellCheck not found locally
 
+CI pins [ShellCheck v0.11.0](https://github.com/koalaman/shellcheck/releases/tag/v0.11.0) (linux x86_64 tarball, SHA-256 verified in `.github/workflows/shellcheck.yml`). Use the same major.minor locally so `make lint` matches CI.
+
 ```bash
 brew install shellcheck
+shellcheck --version   # expect 0.11.x
 make lint
 ```
 
@@ -122,6 +125,44 @@ Subjects must match:
 Allowed types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `build` `ci` `chore` `revert`.
 
 GitHub merge commits are exempt by default. See `scripts/conventional-commits-audit.sh --help`.
+
+## Python version (`.venv`)
+
+This toolkit targets Homebrew **`python@3.12`** (`MLX_PYTHON_VERSION`, default `3.12` in `scripts/lib/common.sh`). Your `.venv` should report the latest **3.12** patch Homebrew ships (for example `3.12.15` in `pyvenv.cfg` and `make validate`).
+
+Homebrew’s default **`python3`** may be a newer minor release (currently **3.15**; Homebrew’s `python3` / `python` aliases point at `python@3.15`). Do **not** create or reuse `.venv` with that interpreter unless you change `MLX_PYTHON_VERSION` and rebuild on purpose. `make venv` refuses a venv whose Python minor does not match `MLX_PYTHON_VERSION`.
+
+The pinned **`mlx`** package ships prebuilt macOS **arm64** wheels (macOS **14+**, `macosx_14_0` and newer tags) only for specific CPython tags. For the default pin (`mlx==0.32.2`), PyPI wheels exist for **3.10–3.14** (`cp310`–`cp314`), not **3.15** (`cp315`). **`torch`** (pulled in by `make install-image`) also stops at **cp314**. Until upstream publishes matching wheels for your pinned versions, **`python@3.15` cannot satisfy `make install`** as written.
+
+To stay current on the supported line:
+
+```bash
+brew upgrade python@3.12
+make rebuild
+make validate
+```
+
+To **experiment** with a newer supported minor (for example 3.13) without changing the repository default:
+
+```bash
+brew install python@3.13
+export MLX_PYTHON_VERSION=3.13   # keep this for the whole trial (see below)
+make rebuild
+make validate
+# optional: make install-image / make install-video if you use those targets
+```
+
+`MLX_PYTHON_VERSION` is read per command. A one-off prefix such as `MLX_PYTHON_VERSION=3.13 make rebuild` builds a 3.13 `.venv`, but the next plain `make venv` fails with “Python 3.13.x does not match expected 3.12”, and a bare `make rebuild` silently recreates the default **3.12** venv. `make install` brew-installs `python@3.12` from `MLX_HOMEBREW_PACKAGES` unless you export the override. For the trial, either **`export MLX_PYTHON_VERSION=3.13`** in your shell or prefix **`MLX_PYTHON_VERSION=3.13`** on every `make venv`, `make rebuild`, and `make install*` you run. `make validate` and `make install-image` / `make install-video` do not check the minor, so they work with either venv.
+
+**Rollback** to the project default after the trial:
+
+```bash
+unset MLX_PYTHON_VERSION
+make rebuild
+make validate
+```
+
+If that trial succeeds and you want 3.13 to become the project default, bump `MLX_PYTHON_VERSION` in `scripts/lib/common.sh`, update README/CHANGELOG, and re-run validation. Media extras (`mflux`, git-pinned `mlx-video`, optional `torch`) still need their own smoke tests on the new interpreter.
 
 ## Install refused to reuse `.venv`
 
