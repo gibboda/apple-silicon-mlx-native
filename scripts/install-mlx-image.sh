@@ -45,7 +45,6 @@ log_header "Install MLX text-to-image (mflux)"
 
 require_install_venv
 PY="$(venv_python)"
-PIP="$(venv_pip)"
 
 assert_apple_silicon
 export_detect_env

@@ -266,6 +266,8 @@ apple-silicon-mlx-native/
 │   ├── media.md
 │   ├── models.md
 │   └── troubleshooting.md
+├── requirements/
+│   └── constraints.txt
 ├── scripts/
 │   ├── lib/
 │   │   ├── common.sh
@@ -301,6 +303,7 @@ apple-silicon-mlx-native/
 │   ├── mlx-video.test.sh
 │   ├── model-list.test.sh
 │   ├── models-env.test.sh
+│   ├── pip-constraints.test.sh
 │   ├── readme-tree.test.sh
 │   └── release.test.sh
 ├── .gitignore
