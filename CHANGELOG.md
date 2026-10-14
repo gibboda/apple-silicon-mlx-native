@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Document Python version policy in `docs/troubleshooting.md`: default Homebrew `python@3.12`, pinned `mlx` macOS arm64 wheels through CPython 3.14 (3.15 blocked until upstream ships `cp315` wheels), optional `MLX_PYTHON_VERSION=3.13` rebuild trial, and README link
+- Document Python version policy in `docs/troubleshooting.md`: default Homebrew `python@3.12`, pinned `mlx` macOS arm64 wheels through CPython 3.14 (3.15 blocked until upstream ships `cp315` wheels), optional `MLX_PYTHON_VERSION=3.13` trial (`export`, rollback, macOS 14+ / torch wheel notes), README link, and a non-stale pointer comment at `MLX_PYTHON_VERSION`
 
 ### Fixed
 

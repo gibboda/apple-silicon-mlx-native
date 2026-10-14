@@ -12,8 +12,8 @@ REPO_ROOT="$(cd "${SCRIPT_LIB_DIR}/../.." && pwd)"
 # Default workspace is the repository root (overridable).
 MLX_WORKSPACE="${MLX_WORKSPACE:-${REPO_ROOT}}"
 MLX_VENV="${MLX_VENV:-${MLX_WORKSPACE}/.venv}"
-# Default 3.12: mlx macOS arm64 wheels and make venv reuse checks assume this minor.
-# See docs/troubleshooting.md#python-version-venv before bumping (3.15 blocked by mlx wheels today).
+# Default 3.12 until project policy changes; venv guards follow MLX_PYTHON_VERSION.
+# See docs/troubleshooting.md#python-version-venv before changing the default.
 MLX_PYTHON_VERSION="${MLX_PYTHON_VERSION:-3.12}"
 MLX_CONFIG_DIR="${MLX_CONFIG_DIR:-${MLX_WORKSPACE}/config}"
 MLX_MODELS_ENV="${MLX_MODELS_ENV:-${MLX_CONFIG_DIR}/models.env}"
