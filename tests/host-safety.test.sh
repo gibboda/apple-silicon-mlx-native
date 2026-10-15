@@ -802,8 +802,8 @@ expect_exact_line() {
     fail "${label} (missing exact line ${line})"
   fi
 }
-expect_exact_line "detect --env disk unknown when df fails" \
-  "MLX_DISK_AVAIL_GIB=unknown" "${detect_env_out}"
+expect_exact_line "detect --env disk empty when df fails" \
+  "MLX_DISK_AVAIL_GIB=''" "${detect_env_out}"
 detect_json_fail_df="$(
   env -u MLX_INSTALL_HOMEBREW \
     MLX_WORKSPACE="${DETECT_ENV_WS}" MLX_VENV="${DETECT_ENV_WS}/.venv" MLX_SKIP_DEVICE_PROBE=1 \

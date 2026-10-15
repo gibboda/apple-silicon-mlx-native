@@ -620,7 +620,7 @@ note_disk_avail_override() {
     return 0
   fi
   MLX_DISK_OVERRIDE_NOTED=1
-  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" ]]; then
+  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" && "${MLX_DISK_AVAIL_GIB}" =~ ^[0-9]+$ ]]; then
     MLX_DISK_AVAIL_GIB_OVERRIDE="${MLX_DISK_AVAIL_GIB}"
   else
     MLX_DISK_AVAIL_GIB_OVERRIDE=""
@@ -2388,7 +2388,8 @@ print_detect_env() {
   if [[ -n "${MLX_DISK_AVAIL_GIB:-}" && "${MLX_DISK_AVAIL_GIB}" =~ ^[0-9]+$ ]]; then
     printf 'MLX_DISK_AVAIL_GIB=%q\n' "${MLX_DISK_AVAIL_GIB}"
   else
-    printf 'MLX_DISK_AVAIL_GIB=%q\n' "unknown"
+    # Empty when df failed: do not emit "unknown" (sourcing would disable later df checks).
+    printf 'MLX_DISK_AVAIL_GIB=%q\n' ""
   fi
   printf 'MLX_PYTHON_VERSION_DETECTED=%q\n' "$(detect_python_version)"
   printf 'MLX_HOMEBREW=%q\n' "${brew_ok}"

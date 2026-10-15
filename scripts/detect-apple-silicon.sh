@@ -33,7 +33,8 @@ Detect Apple Silicon hardware characteristics for MLX workstation defaults.
   --json        Machine-consumable JSON (physical facts + composed defaults)
   --env         KEY=value lines suitable for eval/sourcing
                 (MLX_TIER_ID is policy; MLX_PHYSICAL_TIER_ID is detected RAM;
-                 MLX_DISK_AVAIL_GIB is unknown when workspace df fails)
+                 MLX_DISK_AVAIL_GIB is empty when workspace df fails; human
+                 output shows unknown GiB)
   --recommend   Print a fresh composed profile only (does not write models.env)
   --list        List catalog text models with fit for this Mac (does not download)
   --list-image  List catalog image models with fit for this Mac (does not download)

@@ -91,6 +91,12 @@ expect_contains "low disk does not claim caches were deleted" "not deleted autom
 skip_out="$(run_check 1 wan-prepare MLX_SKIP_DISK_CHECK=1)"
 expect_contains "skip disk check" "Disk headroom check skipped" "${skip_out}"
 
+non_override="$(
+  bash -c "source \"${COMMON}\"; unset MLX_DISK_OVERRIDE_NOTED MLX_DISK_AVAIL_GIB_OVERRIDE; \
+    MLX_DISK_AVAIL_GIB=unknown; note_disk_avail_override; printf '%s' \"\${MLX_DISK_AVAIL_GIB_OVERRIDE:-}\""
+)"
+expect_eq "non-numeric disk env is not treated as override" "" "${non_override}"
+
 expect_fail "enforce aborts when low" run_check 1 wan-prepare MLX_DISK_ENFORCE=1
 enforce_out="$(run_check 1 media-pip MLX_DISK_ENFORCE=1 MLX_DISK_MIN_MEDIA_GIB=9 2>&1 || true)"
 expect_contains "enforce names the floor" "at least 9 GiB" "${enforce_out}"
