@@ -61,6 +61,8 @@ run_check() {
   env MLX_DISK_AVAIL_GIB="${avail}" "$@" bash -c "source \"${COMMON}\"; warn_or_die_disk_headroom \"${profile}\"" 2>&1
 }
 
+expect_eq "core pip floor default" "12" "$(floor_of core-pip)"
+expect_eq "core pip floor override" "6" "$(floor_of core-pip MLX_DISK_MIN_CORE_GIB=6)"
 expect_eq "media floor default" "4" "$(floor_of media-pip)"
 expect_eq "image pip floor default" "8" "$(floor_of image-pip)"
 expect_eq "video pip floor default" "8" "$(floor_of video-pip)"
@@ -92,6 +94,9 @@ expect_contains "skip disk check" "Disk headroom check skipped" "${skip_out}"
 expect_fail "enforce aborts when low" run_check 1 wan-prepare MLX_DISK_ENFORCE=1
 enforce_out="$(run_check 1 media-pip MLX_DISK_ENFORCE=1 MLX_DISK_MIN_MEDIA_GIB=9 2>&1 || true)"
 expect_contains "enforce names the floor" "at least 9 GiB" "${enforce_out}"
+core_enforce_out="$(run_check 5 core-pip MLX_DISK_ENFORCE=1 2>&1 || true)"
+expect_contains "core pip enforce names the floor" "at least 12 GiB" "${core_enforce_out}"
+expect_fail "core pip enforce aborts when low" run_check 5 core-pip MLX_DISK_ENFORCE=1
 
 pins="$(env bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_CORE_PACKAGES[@]}\" \"\${MLX_MEDIA_PACKAGES[@]}\"")"
 expect_contains "mlx pin" "mlx==0.32.2" "${pins}"
@@ -134,6 +139,7 @@ mkdir -p "${INSTALL_WS}/.venv/bin"
 cat >"${INSTALL_WS}/.venv/bin/python" <<EOF
 #!/bin/sh
 if [ "\$1" = "-m" ] && [ "\$2" = "pip" ]; then
+  printf 'PIP_CONSTRAINT=%s\n' "\${PIP_CONSTRAINT:-}" >> "${INSTALL_WS}/pip-env"
   printf '%s' "\$1" >> "${INSTALL_WS}/pip-args"
   shift
   for arg in "\$@"; do
@@ -147,6 +153,7 @@ EOF
 chmod +x "${INSTALL_WS}/.venv/bin/python"
 install_out="$(MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" bash -c "source \"${COMMON}\"; install_packaging_tools")"
 expect_eq "packaging install argv" "-m pip install --disable-pip-version-check --upgrade pip==26.2.1 setuptools==84.0.0 wheel==0.48.0 packaging==26.3" "$(cat "${INSTALL_WS}/pip-args")"
+expect_contains "packaging install sets PIP_CONSTRAINT" "PIP_CONSTRAINT=${ROOT}/requirements/constraints.txt" "$(cat "${INSTALL_WS}/pip-env")"
 expect_contains "installed pip is OK" "OK: Packaging tool pip 26.2.1" "${install_out}"
 expect_contains "installed setuptools is OK" "OK: Packaging tool setuptools 84.0.0" "${install_out}"
 expect_contains "installed wheel is OK" "OK: Packaging tool wheel 0.48.0" "${install_out}"
@@ -157,7 +164,7 @@ else
   pass "matching pip pin does not warn"
 fi
 
-rm -f "${INSTALL_WS}/pip-args"
+rm -f "${INSTALL_WS}/pip-args" "${INSTALL_WS}/pip-env"
 override_out="$(MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" MLX_PIP_PACKAGE='pip==1' MLX_SETUPTOOLS_PACKAGE='setuptools==2' MLX_WHEEL_PACKAGE='wheel==3' MLX_PACKAGING_LIB_PACKAGE='packaging==4' bash -c "source \"${COMMON}\"; install_packaging_tools" 2>&1)"
 expect_eq "packaging install override argv" "-m pip install --disable-pip-version-check --upgrade pip==1 setuptools==2 wheel==3 packaging==4" "$(cat "${INSTALL_WS}/pip-args")"
 expect_contains "override pip warns" "WARN: Packaging tool pip 26.2.1 (pin pip==1)" "${override_out}"

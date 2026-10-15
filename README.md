@@ -74,7 +74,7 @@ Default pins live in `scripts/lib/common.sh`: `mlx==0.32.2`, `mlx-lm==0.31.3`, `
 MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 ```
 
-The same file pins the packaging toolchain used by `make install`, `make rebuild`, `make install-image`, and `make install-video`: `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PACKAGING_LIB_PACKAGE`; `wheel` depends on `packaging`). Those specs are also written to `PIP_BUILD_CONSTRAINT` so isolated builds use them. `make validate` prints the versions in `.venv` and warns when an exact pin does not match. Bump the pins in `scripts/lib/common.sh` for a security fix, a Python requirement change, or an install failure, and record the bump in `CHANGELOG.md`. Dependabot here only updates GitHub Actions. To notice a newer packaging tool, run `pip index versions pip` (and the same for `setuptools`, `wheel`, and `packaging`) or watch those PyPI release feeds. To try a newer toolchain once:
+The same file pins the packaging toolchain used by `make install`, `make rebuild`, `make install-image`, and `make install-video`: `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PACKAGING_LIB_PACKAGE`; `wheel` depends on `packaging`). `requirements/constraints.txt` lists those pins plus the MLX core packages and selected transitive deps (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every install path exports `PIP_CONSTRAINT` from that file so media extras cannot float `mlx` / `mlx-lm` off their pins. `common.sh` reads those lines as its defaults, so a Dependabot edit of `requirements/constraints.txt` is the install pin without a second copy in the shell file. A one-off `MLX_*` spec rewrites the effective constraint (exact `name==version` replaces the line; a bare name drops it) so the manifest pin does not force the override back. The packaging specs are also written to `PIP_BUILD_CONSTRAINT` so isolated builds use them. `make validate` prints the versions in `.venv` and warns when an exact pin does not match. Bump `requirements/constraints.txt` for a security fix, a Python requirement change, or an install failure, and record the bump in `CHANGELOG.md`. Dependabot opens weekly PRs for GitHub Actions and the Python pins under `requirements/`. To try a newer toolchain once:
 
 ```bash
 MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel MLX_PACKAGING_LIB_PACKAGE=packaging make rebuild
@@ -266,6 +266,8 @@ apple-silicon-mlx-native/
 │   ├── media.md
 │   ├── models.md
 │   └── troubleshooting.md
+├── requirements/
+│   └── constraints.txt
 ├── scripts/
 │   ├── lib/
 │   │   ├── common.sh
@@ -302,6 +304,7 @@ apple-silicon-mlx-native/
 │   ├── mlx-video.test.sh
 │   ├── model-list.test.sh
 │   ├── models-env.test.sh
+│   ├── pip-constraints.test.sh
 │   ├── readme-tree.test.sh
 │   └── release.test.sh
 ├── .gitignore
