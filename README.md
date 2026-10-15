@@ -213,7 +213,7 @@ On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) an
 | ≤64 GB workstation | 14B 4-bit | 14B 4-bit |
 | >64 GB large | 32B 4-bit | 32B 4-bit |
 
-Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and whether it is already in the Hugging Face cache (`cached` `yes` or `no`). `make list-image` and `make list-video` do the same for the image and video catalogs (image and LTX cache are Hugging Face repos; Wan cache is the converted directory under `models/video/`). None of them download weights.
+Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and whether it is already in the Hugging Face cache (`cached` `yes` or `no`). `make list-image` and `make list-video` do the same for the image and video catalogs (image and LTX cache are Hugging Face repos with complete non-empty weight files; Wan cache is the converted directory under `models/video/`). None of them download weights.
 
 ## 8 GB Apple Silicon limitations
 
