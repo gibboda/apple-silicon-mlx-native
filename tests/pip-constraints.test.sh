@@ -118,10 +118,13 @@ rm -rf "${INSTALL_WS}"
 
 alt_constraints="$(mktemp)"
 sed 's/^mlx==.*/mlx==9.9.9/' "${CONSTRAINTS}" >"${alt_constraints}"
-manifest_pin="$(
-  env -u MLX_PACKAGE MLX_PIP_CONSTRAINT_FILE="${alt_constraints}" \
-    bash -c 'source "$1"; printf %s "${MLX_PACKAGE}"' bash "${COMMON}"
-)"
+read_manifest_pin() {
+  local constraints="$1"
+  local common="$2"
+  # shellcheck disable=SC2016
+  MLX_PIP_CONSTRAINT_FILE="${constraints}" bash -c 'unset MLX_PACKAGE; source "$1"; printf %s "${MLX_PACKAGE}"' bash "${common}"
+}
+manifest_pin="$(read_manifest_pin "${alt_constraints}" "${COMMON}")"
 expect_eq "common.sh mlx default comes from constraints manifest" "mlx==9.9.9" "${manifest_pin}"
 rm -f "${alt_constraints}"
 
