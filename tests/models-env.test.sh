@@ -97,15 +97,18 @@ else
 fi
 expect_eq "upsert writes through symlink chain" "$(cat "${MID_ENV}")" "MLX_DEFAULT_MODEL=chain-new"
 
-BROKEN_UPSERT="${TMP}/broken-upsert"
-mkdir "${BROKEN_UPSERT}"
+UNREAD_ENV="${TMP}/unreadable.env"
+printf 'MLX_DEFAULT_MODEL=old\n' >"${UNREAD_ENV}"
+chmod 000 "${UNREAD_ENV}"
 leftover_count=0
-if bash -c "set -euo pipefail; source \"${COMMON}\"; upsert_env_assignment \"${BROKEN_UPSERT}\" MLX_DEFAULT_MODEL x" >/dev/null 2>&1; then
+if bash -c "set -euo pipefail; source \"${COMMON}\"; upsert_env_assignment \"${UNREAD_ENV}\" MLX_DEFAULT_MODEL x" >/dev/null 2>&1; then
+  chmod 644 "${UNREAD_ENV}" 2>/dev/null || true
   fail "upsert failure should exit non-zero under errexit"
 else
   pass "upsert failure exits non-zero under errexit"
 fi
-for f in "${TMP}"/broken-upsert.* "${TMP}"/real-models.env.* "${TMP}"/mid-models.env.*; do
+chmod 644 "${UNREAD_ENV}" 2>/dev/null || true
+for f in "${TMP}"/unreadable.env.* "${TMP}"/real-models.env.* "${TMP}"/mid-models.env.*; do
   [[ -e "${f}" ]] || continue
   leftover_count=$((leftover_count + 1))
 done
