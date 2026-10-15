@@ -24,30 +24,51 @@ MLX_WORKSPACE_SENTINEL_NAME=".mlx-workspace"
 
 # Deliberately selected Python packages (Pure MLX core + selected media).
 # Image/video packages are NOT installed by default — see docs/media.md.
-# Core and mlx-audio are pinned so two installs on different days match.
+# requirements/constraints.txt is the pin manifest. Defaults below read that
+# file so a Dependabot edit is the install default. An explicit MLX_* spec
+# still wins, and export_pip_constraint rewrites PIP_CONSTRAINT so the old
+# pin does not force the override back. Not a full lockfile yet.
 # Override a spec to track upstream, for example:
 #   MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 # Do not add PyTorch/MPS as a generation backend.
-MLX_PACKAGE="${MLX_PACKAGE:-mlx==0.32.2}"
-MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-mlx-lm==0.31.3}"
-MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-mlx-audio==0.5.5}"
+MLX_PIP_CONSTRAINT_FILE="${MLX_PIP_CONSTRAINT_FILE:-${REPO_ROOT}/requirements/constraints.txt}"
+
+# Exact name==version line from the manifest, or the fallback when that line is absent.
+_pin_default() {
+  local name="$1"
+  local fallback="$2"
+  local line=""
+  if [[ -f "${MLX_PIP_CONSTRAINT_FILE}" ]]; then
+    line="$(grep -E "^${name}==[^[:space:]]+$" "${MLX_PIP_CONSTRAINT_FILE}" | head -n 1 || true)"
+  fi
+  if [[ -n "${line}" ]]; then
+    printf '%s' "${line}"
+  else
+    printf '%s' "${fallback}"
+  fi
+}
+
+MLX_PACKAGE="${MLX_PACKAGE:-$(_pin_default mlx mlx==0.32.2)}"
+MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-$(_pin_default mlx-lm mlx-lm==0.31.3)}"
+MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-$(_pin_default mlx-audio mlx-audio==0.5.5)}"
 MLX_CORE_PACKAGES=("${MLX_PACKAGE}" "${MLX_LM_PACKAGE}")
 MLX_MEDIA_PACKAGES=("${MLX_AUDIO_PACKAGE}")
-MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
+MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-$(_pin_default mflux mflux==0.19.1)}"
 # Pin mlx-video to a git SHA (not published on PyPI). Override with MLX_VIDEO_PACKAGE.
 MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837}"
 # Packaging tools are pinned so bootstrap, rebuild, and media installs match
-# across days. Bump these in this file for a security fix, a Python
+# across days. Bump requirements/constraints.txt for a security fix, a Python
 # requirement change, or an install failure, and record the bump in
 # CHANGELOG.md. Override a spec to try newer tooling once, for example
-# MLX_PIP_PACKAGE=pip.
-MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-pip==26.2.1}"
-MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-setuptools==84.0.0}"
-MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-wheel==0.48.0}"
+# MLX_PIP_PACKAGE=pip. Bump requirements/constraints.txt; these fallbacks apply
+# only when that manifest has no matching line.
+MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-$(_pin_default pip pip==26.2.1)}"
+MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-$(_pin_default setuptools setuptools==84.0.0)}"
+MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-$(_pin_default wheel wheel==0.48.0)}"
 # wheel 0.48.0 depends on packaging>=24.0. Pin the library itself so a fresh
 # venv does not float to whatever packaging release is newest that day.
 # Named MLX_PACKAGING_LIB_PACKAGE so it is not confused with MLX_PACKAGING_PACKAGES.
-MLX_PACKAGING_LIB_PACKAGE="${MLX_PACKAGING_LIB_PACKAGE:-packaging==26.3}"
+MLX_PACKAGING_LIB_PACKAGE="${MLX_PACKAGING_LIB_PACKAGE:-$(_pin_default packaging packaging==26.3)}"
 MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}" "${MLX_PACKAGING_LIB_PACKAGE}")
 # pip 26+ applies this to PEP 517 isolated build envs (venv setuptools/wheel are ignored).
 MLX_PIP_BUILD_CONSTRAINT_FILE="${MLX_PIP_BUILD_CONSTRAINT_FILE:-${MLX_WORKSPACE}/.mlx-pip-build-constraint.txt}"
@@ -653,7 +674,27 @@ for name in seen:
 PY
 }
 
-# config.json plus every shard named by model.safetensors.index.json in this directory.
+# Weight-bearing diffusers component names listed in model_index.json.
+_model_index_weight_components() {
+  local index="${1:-}"
+  [[ -f "${index}" ]] || return 1
+  python3 - "${index}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    data = json.load(fh)
+if not isinstance(data, dict):
+    sys.exit(0)
+for key in sorted(data.keys()):
+    if key.startswith("_"):
+        continue
+    if key in ("transformer", "unet", "vae") or key.startswith("text_encoder"):
+        print(key)
+PY
+}
+
+# config.json plus every non-empty shard named by model.safetensors.index.json.
 _indexed_component_ready() {
   local dir="${1%/}"
   local index="${dir}/model.safetensors.index.json"
@@ -664,9 +705,117 @@ _indexed_component_ready() {
     case "${shard}" in
       /*|*..*) return 1 ;;
     esac
-    [[ -f "${dir}/${shard}" ]] || return 1
+    [[ -s "${dir}/${shard}" ]] || return 1
     saw=1
   done < <(_index_shard_names "${index}")
+  (( saw == 1 ))
+}
+
+# Indexed shards or at least one non-empty *.safetensors in this component dir.
+_component_weights_ready() {
+  local dir="${1%/}"
+  local index="${dir}/model.safetensors.index.json"
+  local nullglob_state w saw=0
+  local -a weights
+  [[ -d "${dir}" ]] || return 1
+  if [[ -f "${index}" ]]; then
+    _indexed_component_ready "${dir}"
+    return
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${dir}/"*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  for w in "${weights[@]}"; do
+    [[ -s "${w}" ]] || continue
+    saw=1
+    break
+  done
+  (( saw == 1 ))
+}
+
+# Standard diffusers subdirs that exist under snap (when model_index lists none).
+_diffusers_component_dirs_present() {
+  local snap="${1%/}/"
+  local name="" nullglob_state
+  local -a encoders
+  for name in transformer unet vae text_encoder text_encoder_2 text_encoder_3; do
+    [[ -d "${snap}${name}" ]] && printf '%s\n' "${name}"
+  done
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  encoders=( "${snap}"text_encoder_*/ )
+  _restore_nullglob "${nullglob_state}"
+  for name in "${encoders[@]}"; do
+    [[ -d "${name}" ]] || continue
+    printf '%s\n' "${name##*/}"
+  done
+}
+
+# Every weight-bearing diffusers component has non-empty weights.
+diffusers_snapshot_weights_ready() {
+  local snap="${1%/}/"
+  local index="${snap}model_index.json"
+  local comp="" saw=0 has_main=0
+  [[ -f "${index}" ]] || return 1
+  while IFS= read -r comp; do
+    [[ -n "${comp}" ]] || continue
+    _component_weights_ready "${snap}${comp}" || return 1
+    saw=1
+    case "${comp}" in
+      transformer|unet) has_main=1 ;;
+    esac
+  done < <(_model_index_weight_components "${index}")
+  if (( saw == 1 )); then
+    # model_index is authoritative, but a tree with no transformer/UNet is not
+    # a complete image checkpoint (VAE-only indexes must not report cached).
+    (( has_main == 1 )) || return 1
+    return 0
+  fi
+  saw=0
+  has_main=0
+  while IFS= read -r comp; do
+    [[ -n "${comp}" ]] || continue
+    _component_weights_ready "${snap}${comp}" || return 1
+    saw=1
+    case "${comp}" in
+      transformer|unet) has_main=1 ;;
+      vae) ;;
+      text_encoder*) ;;
+      *) return 1 ;;
+    esac
+  done < <(_diffusers_component_dirs_present "${snap}")
+  if (( saw == 0 )); then
+    _snap_root_safetensors_ready "${snap}"
+    return
+  fi
+  (( has_main == 1 )) || return 1
+  _component_weights_ready "${snap}vae"
+}
+
+# Non-empty safetensors at the snapshot root (single-file hubs).
+_snap_root_safetensors_ready() {
+  local snap="${1%/}/"
+  local index="${snap}model.safetensors.index.json"
+  local nullglob_state w saw=0
+  local -a weights
+  if [[ -f "${index}" ]]; then
+    _indexed_component_ready "${snap%/}"
+    return
+  fi
+  if [[ -f "${snap}config.json" ]]; then
+    hub_snapshot_weights_complete "${snap}"
+    return
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${snap}"*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  for w in "${weights[@]}"; do
+    [[ -s "${w}" ]] || continue
+    saw=1
+    break
+  done
   (( saw == 1 ))
 }
 
@@ -689,7 +838,7 @@ hub_snapshot_weights_complete() {
   _restore_nullglob "${nullglob_state}"
   ((${#weights[@]} == 0)) && return 1
   for w in "${weights[@]}"; do
-    [[ -f "${w}" ]] || return 1
+    [[ -s "${w}" ]] || return 1
   done
   return 0
 }
@@ -730,14 +879,14 @@ hub_repo_download_incomplete() {
   ((${#incomplete[@]} > 0))
 }
 
-# True when dir holds at least one real safetensors file.
+# True when dir holds at least one non-empty safetensors file.
 _dir_has_safetensors() {
   local dir="${1%/}"
   local path=""
   [[ -d "${dir}" ]] || return 1
   while IFS= read -r path; do
     [[ -n "${path}" ]] || continue
-    [[ -f "${path}" ]] && return 0
+    [[ -s "${path}" ]] && return 0
   done < <(find "${dir}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
   return 1
 }
@@ -767,15 +916,13 @@ ltx_distilled_snapshot_ready() {
   (( saw == 1 ))
 }
 
-# True when a snapshot has model_index.json or config.json plus at least one
-# real safetensors file. Diffusers trees (mflux presets) keep weights in
-# subfolders, so this is broader than model_weights_cached. A snapshot that
-# has model.safetensors.index.json must include every indexed shard; one
-# leftover file is not enough. Incomplete blobs are rejected by
-# media_repo_cached before this runs. No network.
+# True when a snapshot is a complete MLX tree, a full diffusers tree, or a
+# single-file hub layout. Partial diffusers components and empty shards do
+# not count. Incomplete blobs are rejected by media_repo_cached first. No
+# network.
 hub_repo_has_weights() {
   local repo_id="${1:-}"
-  local cache folder snap nullglob_state path
+  local cache folder snap nullglob_state
   [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
   cache="$(huggingface_hub_cache_dir)"
   folder="${cache}/models--${repo_id//\//--}"
@@ -797,14 +944,18 @@ hub_repo_has_weights() {
       fi
       continue
     fi
-    if [[ -f "${snap}model_index.json" || -f "${snap}config.json" ]]; then
-      while IFS= read -r path; do
-        [[ -n "${path}" ]] || continue
-        if [[ -f "${path}" ]]; then
-          _restore_nullglob "${nullglob_state}"
-          return 0
-        fi
-      done < <(find "${snap}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
+    if [[ -f "${snap}model_index.json" ]]; then
+      if diffusers_snapshot_weights_ready "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
+      continue
+    fi
+    if [[ -f "${snap}config.json" ]]; then
+      if hub_snapshot_weights_complete "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
     fi
   done
   _restore_nullglob "${nullglob_state}"
@@ -855,7 +1006,7 @@ image_generate_disk_profile() {
 disk_probe_paths() {
   local profile="${1:-}"
   case "${profile}" in
-    media-pip|image-pip|video-pip|image-generate)
+    core-pip|media-pip|image-pip|video-pip|image-generate)
       printf '%s\n' "${MLX_WORKSPACE}"
       ;;
     image-weights|video-weights)
@@ -900,11 +1051,12 @@ tightest_disk_for_profile() {
 
 # Conservative free-space floors (whole GiB) before large downloads.
 # Override one floor with the matching MLX_DISK_MIN_* variable.
-# Profiles: media-pip, image-pip, video-pip, image-weights, image-generate,
-# video-weights, wan-generate, wan-prepare.
+# Profiles: core-pip, media-pip, image-pip, video-pip, image-weights,
+# image-generate, video-weights, wan-generate, wan-prepare.
 disk_floor_gib() {
   local profile="${1:-}"
   case "${profile}" in
+    core-pip) printf '%s\n' "${MLX_DISK_MIN_CORE_GIB:-12}" ;;
     media-pip) printf '%s\n' "${MLX_DISK_MIN_MEDIA_GIB:-4}" ;;
     image-pip) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GIB:-8}" ;;
     video-pip) printf '%s\n' "${MLX_DISK_MIN_VIDEO_GIB:-8}" ;;
@@ -1074,6 +1226,54 @@ for name in ("pip", "setuptools", "wheel", "packaging"):
   done <<< "${versions}"
 }
 
+# Live MLX_* specs that may replace a line in the pin manifest.
+_constraint_override_specs() {
+  printf '%s\n' \
+    "${MLX_PIP_PACKAGE}" \
+    "${MLX_SETUPTOOLS_PACKAGE}" \
+    "${MLX_WHEEL_PACKAGE}" \
+    "${MLX_PACKAGING_LIB_PACKAGE}" \
+    "${MLX_PACKAGE}" \
+    "${MLX_LM_PACKAGE}" \
+    "${MLX_AUDIO_PACKAGE}" \
+    "${MLX_IMAGE_PACKAGE}"
+}
+
+# Export PIP_CONSTRAINT for dependency installs (core, media, and packaging).
+# Unchanged specs use requirements/constraints.txt. A one-off override writes
+# a workspace copy that replaces or drops that package's pin so pip does not
+# force the manifest version (ResolutionImpossible, or a bare name stuck on
+# the old pin).
+export_pip_constraint() {
+  local spec name file_line rewritten=0
+  local effective="${MLX_WORKSPACE}/.mlx-pip-constraint.txt"
+  if [[ ! -f "${MLX_PIP_CONSTRAINT_FILE}" ]]; then
+    die "Missing pip constraints file: ${MLX_PIP_CONSTRAINT_FILE}"
+  fi
+  cp "${MLX_PIP_CONSTRAINT_FILE}" "${effective}"
+  while IFS= read -r spec; do
+    [[ -n "${spec}" ]] || continue
+    name="${spec%%[=<>!~]*}"
+    [[ -n "${name}" ]] || continue
+    file_line="$(grep -E "^${name}==[^[:space:]]+$" "${MLX_PIP_CONSTRAINT_FILE}" | head -n 1 || true)"
+    [[ -n "${file_line}" ]] || continue
+    [[ "${spec}" == "${file_line}" ]] && continue
+    rewritten=1
+    grep -Ev "^${name}==[^[:space:]]+$" "${effective}" >"${effective}.tmp"
+    mv "${effective}.tmp" "${effective}"
+    if [[ "${spec}" =~ ^[A-Za-z0-9_.-]+==[^[:space:]]+$ ]]; then
+      printf '%s\n' "${spec}" >>"${effective}"
+    fi
+  done < <(_constraint_override_specs)
+  if (( rewritten == 0 )); then
+    rm -f "${effective}" "${effective}.tmp"
+    export PIP_CONSTRAINT="${MLX_PIP_CONSTRAINT_FILE}"
+    return 0
+  fi
+  rm -f "${effective}.tmp"
+  export PIP_CONSTRAINT="${effective}"
+}
+
 # Write MLX_PACKAGING_PACKAGES to a constraints file and export PIP_BUILD_CONSTRAINT
 # so PEP 517 isolated builds (for example git mlx-video) use the same specs.
 export_pip_build_constraint() {
@@ -1084,6 +1284,22 @@ export_pip_build_constraint() {
     printf '%s\n' "${pkg}" >>"${constraint_file}"
   done
   export PIP_BUILD_CONSTRAINT="${constraint_file}"
+}
+
+# Run pip in the project venv with PIP_CONSTRAINT and PIP_BUILD_CONSTRAINT set.
+mlx_pip_install() {
+  local py
+  py="$(venv_python)"
+  if [[ ! -x "${py}" ]]; then
+    if [[ -d "${MLX_VENV}" ]]; then
+      die "Python venv at ${MLX_VENV} is not usable. Run: make rebuild"
+    fi
+    die "Python venv not found at ${py}. Run: make venv && make install"
+  fi
+  export_pip_constraint
+  export_pip_build_constraint
+  export PIP_DISABLE_PIP_VERSION_CHECK=1
+  "${py}" -m pip install --disable-pip-version-check "$@"
 }
 
 # Install the shared packaging-tool pins into the active venv.
@@ -1097,10 +1313,8 @@ install_packaging_tools() {
     die "Python venv not found at ${py}. Run: make venv && make install"
   fi
   log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
-  # Silence "you should upgrade pip" for this process, including later installs.
-  export PIP_DISABLE_PIP_VERSION_CHECK=1
-  "${py}" -m pip install --disable-pip-version-check --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
-  export_pip_build_constraint
+  mlx_pip_install --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
+  log_info "Dependency installs constrained via PIP_CONSTRAINT=${PIP_CONSTRAINT}"
   log_info "PEP 517 build isolation constrained via PIP_BUILD_CONSTRAINT=${MLX_PIP_BUILD_CONSTRAINT_FILE}"
   report_packaging_tools "${py}"
 }
@@ -2295,14 +2509,72 @@ unquote_posix_single() {
   printf '%s' "${out}"
 }
 
+# Pipe-delimited MLX_* names set in the shell before load_models_env reads the file.
+MODELS_ENV_PROCESS_ENV_KEYS=""
+
+# Snapshot process env once per load. Later duplicate lines in models.env still win;
+# only keys set before parsing are locked out of the file.
+models_env_snapshot_process_env() {
+  local name marker
+  MODELS_ENV_PROCESS_ENV_KEYS="|"
+  while IFS= read -r name; do
+    [[ "${name}" =~ ^MLX_[A-Z0-9_]+$ ]] || continue
+    eval "marker=\${${name}+x}"
+    if [[ -n "${marker}" ]]; then
+      MODELS_ENV_PROCESS_ENV_KEYS+="${name}|"
+    fi
+  done < <(compgen -A variable 2>/dev/null || true)
+}
+
+models_env_key_locked_from_process_env() {
+  case "${MODELS_ENV_PROCESS_ENV_KEYS}" in
+    *"|${1}|"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# User-set MLX_RECOMMENDED_CONTEXT (CLI/env/models.env) before compose overwrites
+# the exported composed default. Cleared by capture_user_recommended_context.
+capture_user_recommended_context() {
+  unset USER_MLX_RECOMMENDED_CONTEXT
+  if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    USER_MLX_RECOMMENDED_CONTEXT="${MLX_RECOMMENDED_CONTEXT}"
+  fi
+}
+
+# CLI --max-kv-size > user MLX_RECOMMENDED_CONTEXT > composed default.
+resolve_text_max_kv_size() {
+  local cli_max_kv="${1:-}"
+  if [[ -n "${cli_max_kv}" ]]; then
+    printf '%s' "${cli_max_kv}"
+    return 0
+  fi
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
+# Effective server context cap (no server --max-kv-size in mlx-lm 0.31.3).
+resolve_serve_context() {
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
 # Parse config/models.env as data. Only documented MLX_* config keys are
 # exported. Lines are never executed (no command substitution, PATH=, or
 # HF_TOKEN). Runtime identity keys (workspace/venv/paths) are skipped.
-# Missing file is OK.
+# Process environment beats file for each allowlisted key. Duplicate keys in the
+# file still last-win unless the process env set the key before load. Missing file is OK.
 load_models_env() {
   local file="${1:-${MLX_MODELS_ENV}}"
   local line key value decoded
   [[ -f "${file}" ]] || return 0
+  models_env_snapshot_process_env
   while IFS= read -r line || [[ -n "${line}" ]]; do
     line="${line%$'\r'}"
     line="${line#"${line%%[![:space:]]*}"}"
@@ -2325,6 +2597,9 @@ load_models_env() {
       fi
       if is_models_env_runtime_key "${key}"; then
         log_warn "Skipping runtime key ${key} in ${file}"
+        continue
+      fi
+      if models_env_key_locked_from_process_env "${key}"; then
         continue
       fi
       printf -v "${key}" '%s' "${decoded}"
@@ -2581,8 +2856,8 @@ Default context:  ${context}
 
 Weights are not total unified memory. KV cache, runtime, and macOS sit on top.
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
-cached is yes when that repo has config.json and every weight file on disk
-(including all shards listed in model.safetensors.index.json when present).
+cached is yes when that repo has config.json and every non-empty weight file on
+disk (including all shards listed in model.safetensors.index.json when present).
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'
@@ -3006,8 +3281,8 @@ Low RAM:          ${low_label}
 
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
 cached is yes when the Hugging Face cache holds that preset's upstream repo
-(model_index.json or config.json, plus a safetensors file, and no incomplete blob).
-Nothing is downloaded.
+(every diffusers weight component with non-empty shards, or a complete single-file
+layout, and no incomplete blob). Nothing is downloaded.
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'

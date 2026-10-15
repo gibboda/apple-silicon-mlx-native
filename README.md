@@ -77,7 +77,7 @@ Default pins live in `scripts/lib/common.sh`: `mlx==0.32.2`, `mlx-lm==0.31.3`, `
 MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 ```
 
-The same file pins the packaging toolchain used by `make install`, `make rebuild`, `make install-image`, and `make install-video`: `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PACKAGING_LIB_PACKAGE`; `wheel` depends on `packaging`). Those specs are also written to `PIP_BUILD_CONSTRAINT` so isolated builds use them. `make validate` prints the versions in `.venv` and warns when an exact pin does not match. Bump the pins in `scripts/lib/common.sh` for a security fix, a Python requirement change, or an install failure, and record the bump in `CHANGELOG.md`. Dependabot here only updates GitHub Actions. To notice a newer packaging tool, run `pip index versions pip` (and the same for `setuptools`, `wheel`, and `packaging`) or watch those PyPI release feeds. To try a newer toolchain once:
+The same file pins the packaging toolchain used by `make install`, `make rebuild`, `make install-image`, and `make install-video`: `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PACKAGING_LIB_PACKAGE`; `wheel` depends on `packaging`). `requirements/constraints.txt` lists those pins plus the MLX core packages and selected transitive deps (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every install path exports `PIP_CONSTRAINT` from that file so media extras cannot float `mlx` / `mlx-lm` off their pins. `common.sh` reads those lines as its defaults, so a Dependabot edit of `requirements/constraints.txt` is the install pin without a second copy in the shell file. A one-off `MLX_*` spec rewrites the effective constraint (exact `name==version` replaces the line; a bare name drops it) so the manifest pin does not force the override back. The packaging specs are also written to `PIP_BUILD_CONSTRAINT` so isolated builds use them. `make validate` prints the versions in `.venv` and warns when an exact pin does not match. Bump `requirements/constraints.txt` for a security fix, a Python requirement change, or an install failure, and record the bump in `CHANGELOG.md`. Dependabot opens weekly PRs for GitHub Actions and the Python pins under `requirements/`. To try a newer toolchain once:
 
 ```bash
 MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel MLX_PACKAGING_LIB_PACKAGE=packaging make rebuild
@@ -157,7 +157,7 @@ JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throu
 
 ## LLM inference
 
-On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap. Max tokens and KV size must be positive integers, and temperature must be a finite non-negative number when set. An empty value is invalid. Invalid values, including flags after `--`, fail before launch. The server port must be an integer from 1 to 65535. A malformed configured `MLX_RECOMMENDED_CONTEXT` fails even though the composed default still sets the KV cap unless `--max-kv-size` is passed.
+On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap. Max tokens and KV size must be positive integers, and temperature must be a finite non-negative number when set. An empty value is invalid. Invalid values, including flags after `--`, fail before launch. The server port must be an integer from 1 to 65535. Configuration precedence is CLI → process env → `config/models.env` → composed chip policy ([docs/models.md](docs/models.md#configuration-precedence)).
 
 ```bash
 make generate-text PROMPT="Hello from MLX"
@@ -216,7 +216,7 @@ On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) an
 | ≤64 GB workstation | 14B 4-bit | 14B 4-bit |
 | >64 GB large | 32B 4-bit | 32B 4-bit |
 
-Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and whether it is already in the Hugging Face cache (`cached` `yes` or `no`). `make list-image` and `make list-video` do the same for the image and video catalogs (image and LTX cache are Hugging Face repos; Wan cache is the converted directory under `models/video/`). None of them download weights.
+Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and whether it is already in the Hugging Face cache (`cached` `yes` or `no`). `make list-image` and `make list-video` do the same for the image and video catalogs (image and LTX cache are Hugging Face repos with complete non-empty weight files; Wan cache is the converted directory under `models/video/`). None of them download weights.
 
 ## 8 GB Apple Silicon limitations
 
@@ -269,6 +269,8 @@ apple-silicon-mlx-native/
 │   ├── media.md
 │   ├── models.md
 │   └── troubleshooting.md
+├── requirements/
+│   └── constraints.txt
 ├── scripts/
 │   ├── lib/
 │   │   ├── common.sh
@@ -293,6 +295,7 @@ apple-silicon-mlx-native/
 ├── tests/
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
+│   ├── config-precedence.test.sh
 │   ├── conventional-commits-audit.test.sh
 │   ├── delete-merged-pr-branch.test.sh
 │   ├── disk-headroom.test.sh
@@ -304,6 +307,7 @@ apple-silicon-mlx-native/
 │   ├── mlx-video.test.sh
 │   ├── model-list.test.sh
 │   ├── models-env.test.sh
+│   ├── pip-constraints.test.sh
 │   ├── readme-tree.test.sh
 │   └── release.test.sh
 ├── .gitignore
