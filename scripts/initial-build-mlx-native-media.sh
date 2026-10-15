@@ -129,13 +129,14 @@ install_packaging_tools
 
 log_header "MLX core packages"
 log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
-"${PIP}" install --upgrade "${MLX_CORE_PACKAGES[@]}"
+warn_or_die_disk_headroom core-pip
+mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
 
 if ! is_truthy "${MLX_SKIP_MEDIA}"; then
   log_header "Selected MLX-native media packages"
   log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
   warn_or_die_disk_headroom media-pip
-  "${PIP}" install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
+  mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
 else
   log_warn "Skipping media packages (MLX_SKIP_MEDIA=1)"
 fi
@@ -146,7 +147,7 @@ if is_truthy "${MLX_INSTALL_IMAGE}"; then
   fi
   log_info "Installing Pure MLX image tooling: ${MLX_IMAGE_PACKAGE} (opt-in)"
   warn_or_die_disk_headroom image-pip
-  "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
+  mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
 else
   log_info "Image tooling (${MLX_IMAGE_PACKAGE}) not installed by default. Run: make install-image"
 fi
@@ -157,7 +158,7 @@ if is_truthy "${MLX_INSTALL_VIDEO}"; then
   fi
   log_info "Installing Pure MLX video tooling: ${MLX_VIDEO_PACKAGE} (opt-in)"
   warn_or_die_disk_headroom video-pip
-  "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
+  mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
 else
   log_info "Video tooling (mlx-video) is not installed by default. Run: make install-video"
 fi
@@ -178,12 +179,13 @@ server_kv=""
 if mlx_lm_help_has_flag mlx_lm.server --max-kv-size; then
   server_kv=" -- --max-kv-size ${context}"
 fi
+venv_activate_hint="$(printf '  source %q/bin/activate' "${MLX_VENV}")"
 cat <<EOF
 
 ${COLOR_BOLD}Next commands${COLOR_RESET}
 
   # Activate the environment
-  source ${MLX_VENV}/bin/activate
+${venv_activate_hint}
 
   # One-shot generation (downloads model on first use; ≤8 GB applies the MLX cache cap)
   # generate-mlx-text.sh also passes --max-kv-size ${context} unless overridden
