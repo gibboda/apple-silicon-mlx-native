@@ -5,7 +5,7 @@ setuptools==84.0.0
 wheel==0.48.0
 packaging==26.3
 mlx==0.32.2
-mlx-lm==0.31.3
+mlx-lm==0.32.0
 mlx-audio==0.5.5
 mflux==0.19.1
 transformers==5.19.0
