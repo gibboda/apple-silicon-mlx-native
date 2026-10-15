@@ -2370,13 +2370,28 @@ unquote_posix_single() {
   printf '%s' "${out}"
 }
 
-# True when KEY is already set in the shell (including empty). Process env wins
-# over config/models.env assignments for the same key.
-models_env_key_already_set() {
-  local key="$1"
-  local marker=""
-  eval "marker=\${${key}+x}"
-  [[ -n "${marker}" ]]
+# Pipe-delimited MLX_* names set in the shell before load_models_env reads the file.
+MODELS_ENV_PROCESS_ENV_KEYS=""
+
+# Snapshot process env once per load. Later duplicate lines in models.env still win;
+# only keys set before parsing are locked out of the file.
+models_env_snapshot_process_env() {
+  local name marker
+  MODELS_ENV_PROCESS_ENV_KEYS="|"
+  while IFS= read -r name; do
+    [[ "${name}" =~ ^MLX_[A-Z0-9_]+$ ]] || continue
+    eval "marker=\${${name}+x}"
+    if [[ -n "${marker}" ]]; then
+      MODELS_ENV_PROCESS_ENV_KEYS+="${name}|"
+    fi
+  done < <(compgen -A variable 2>/dev/null || true)
+}
+
+models_env_key_locked_from_process_env() {
+  case "${MODELS_ENV_PROCESS_ENV_KEYS}" in
+    *"|${1}|"*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # User-set MLX_RECOMMENDED_CONTEXT (CLI/env/models.env) before compose overwrites
@@ -2414,11 +2429,13 @@ resolve_serve_context() {
 # Parse config/models.env as data. Only documented MLX_* config keys are
 # exported. Lines are never executed (no command substitution, PATH=, or
 # HF_TOKEN). Runtime identity keys (workspace/venv/paths) are skipped.
-# Process environment beats file for each allowlisted key. Missing file is OK.
+# Process environment beats file for each allowlisted key. Duplicate keys in the
+# file still last-win unless the process env set the key before load. Missing file is OK.
 load_models_env() {
   local file="${1:-${MLX_MODELS_ENV}}"
   local line key value decoded
   [[ -f "${file}" ]] || return 0
+  models_env_snapshot_process_env
   while IFS= read -r line || [[ -n "${line}" ]]; do
     line="${line%$'\r'}"
     line="${line#"${line%%[![:space:]]*}"}"
@@ -2443,7 +2460,7 @@ load_models_env() {
         log_warn "Skipping runtime key ${key} in ${file}"
         continue
       fi
-      if models_env_key_already_set "${key}"; then
+      if models_env_key_locked_from_process_env "${key}"; then
         continue
       fi
       printf -v "${key}" '%s' "${decoded}"

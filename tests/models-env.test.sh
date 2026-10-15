@@ -193,6 +193,29 @@ printf 'MLX_IMAGE_FAMILY=flux2 # note\n' >"${ENV_FILE}"
 load_models_env "${ENV_FILE}" >/dev/null 2>&1
 expect_eq "unquoted trailing comment is stripped" "${MLX_IMAGE_FAMILY}" "flux2"
 
+# --- load: duplicate keys in file last-win; process env beats file ---
+
+reset_mlx_keys
+cat >"${ENV_FILE}" <<'EOF'
+MLX_DEFAULT_MODEL=first-in-file
+MLX_DEFAULT_MODEL=last-in-file
+MLX_RECOMMENDED_CONTEXT=1024
+MLX_RECOMMENDED_CONTEXT=4096
+EOF
+load_models_env "${ENV_FILE}" >/dev/null 2>&1
+expect_eq "duplicate model last-win" "${MLX_DEFAULT_MODEL}" "last-in-file"
+expect_eq "duplicate context last-win" "${MLX_RECOMMENDED_CONTEXT}" "4096"
+
+reset_mlx_keys
+export MLX_DEFAULT_MODEL=from-shell
+cat >"${ENV_FILE}" <<'EOF'
+MLX_DEFAULT_MODEL=first-in-file
+MLX_DEFAULT_MODEL=last-in-file
+EOF
+load_models_env "${ENV_FILE}" >/dev/null 2>&1
+expect_eq "process env beats duplicate file model" "${MLX_DEFAULT_MODEL}" "from-shell"
+unset MLX_DEFAULT_MODEL
+
 if (( failures > 0 )); then
   printf 'FAIL: %s failure(s)\n' "${failures}" >&2
   exit 1
