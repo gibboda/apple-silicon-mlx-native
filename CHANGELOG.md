@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `requirements/constraints.txt` with MLX core pins and key transitive pins (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every pip install path exports `PIP_CONSTRAINT` via `mlx_pip_install` so media installs cannot float core MLX packages. Dependabot watches `requirements/` for pip updates. `core-pip` disk headroom (default 12 GiB, `MLX_DISK_MIN_CORE_GIB`) runs before core installs in `make install` / `make rebuild`
+
 ### Changed
 
 - CI runs the full portable test suite on macOS with `/bin/bash` 3.2, audits PR titles for Conventional Commits, pins ShellCheck v0.11.0, limits duplicate ShellCheck runs on same-repo PR pushes, and serializes release publishing
@@ -17,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `make list-image` reports `cached yes` only when every diffusers weight component (transformer or UNet, text encoders, VAE) has non-empty shards, not when a partial tree or zero-byte shard is present. `make list` applies the same non-empty rule to indexed text-model shards
+- Honor user `MLX_RECOMMENDED_CONTEXT` from the process environment or `config/models.env` after chip policy compose; process env now wins over `models.env` for allowlisted keys. Precedence table in `docs/models.md`
 - `make image`, `make video`, and `make generate-text` pass the prompt through unchanged. Backticks, `$VAR`, `$(...)`, quotes, backslashes, and newlines stay literal on macOS Make 3.81. Make strips leading whitespace from a `VAR=value` command-line assignment; set the variable in the environment instead (e.g. `IMAGE_PROMPT='  text' make image`) to keep it
 - Image and video generation reject a non-integer width, height, frames, steps, quantize, or seed from the command line, the environment, or `config/models.env` before arithmetic and before venv setup. Width, height, frames, and steps must be from 1 to 999999 so bash arithmetic cannot wrap them. Quantize must be 3, 4, 5, 6, or 8. Seed, when set, must be a non-negative integer and is printed by `--dump-plan`
 

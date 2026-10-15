@@ -91,6 +91,7 @@ Expected: `arm64`.
 
 | Profile | Default floor | Volume measured | When |
 | --- | --- | --- | --- |
+| `core-pip` | 12 GiB | workspace (`.venv`) | pinned `mlx` / `mlx-lm` (and their wheels) during `make install` / `make rebuild` |
 | `media-pip` | 4 GiB | workspace (`.venv`) | `mlx-audio` during `make install` / `make rebuild` |
 | `image-pip` | 8 GiB | workspace (`.venv`) | `make install-image` (mflux and its torch wheel) |
 | `video-pip` | 8 GiB | workspace (`.venv`) | `make install-video` |
@@ -102,7 +103,7 @@ Expected: `arm64`.
 
 The hub cache is `$HF_HUB_CACHE`, or `$HF_HOME/hub`, or `~/.cache/huggingface/hub`. Pip wheels stay on the workspace volume even when that cache is on another disk.
 
-Override a floor with `MLX_DISK_MIN_MEDIA_GIB`, `MLX_DISK_MIN_IMAGE_GIB`, `MLX_DISK_MIN_VIDEO_GIB`, `MLX_DISK_MIN_IMAGE_WEIGHTS_GIB`, `MLX_DISK_MIN_IMAGE_GENERATE_GIB`, `MLX_DISK_MIN_VIDEO_WEIGHTS_GIB`, `MLX_DISK_MIN_WAN_GENERATE_GIB`, or `MLX_DISK_MIN_WAN_GIB`. `MLX_DISK_ENFORCE=1` aborts instead of warning. `MLX_SKIP_DISK_CHECK=1` skips the check. Set `MLX_DISK_AVAIL_GIB` (whole GiB) in the environment before the command to override the measured free space for the check. Hardware detection still records the workspace `df` reading; it does not replace this override.
+Override a floor with `MLX_DISK_MIN_CORE_GIB`, `MLX_DISK_MIN_MEDIA_GIB`, `MLX_DISK_MIN_IMAGE_GIB`, `MLX_DISK_MIN_VIDEO_GIB`, `MLX_DISK_MIN_IMAGE_WEIGHTS_GIB`, `MLX_DISK_MIN_IMAGE_GENERATE_GIB`, `MLX_DISK_MIN_VIDEO_WEIGHTS_GIB`, `MLX_DISK_MIN_WAN_GENERATE_GIB`, or `MLX_DISK_MIN_WAN_GIB`. `MLX_DISK_ENFORCE=1` aborts instead of warning. `MLX_SKIP_DISK_CHECK=1` skips the check. Set `MLX_DISK_AVAIL_GIB` (whole GiB) in the environment before the command to override the measured free space for the check. Hardware detection still records the workspace `df` reading; it does not replace this override.
 
 ## ShellCheck not found locally
 

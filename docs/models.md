@@ -29,9 +29,22 @@ scripts/serve-mlx.sh
 # mlx-lm 0.31.3 server has no --max-kv-size. Cap clients to MLX_RECOMMENDED_CONTEXT.
 ```
 
-`generate-mlx-text.sh` passes `--max-kv-size` from `MLX_RECOMMENDED_CONTEXT` unless you override it. Direct `mlx_lm.generate` / `mlx_lm.server` remain available and do not apply the 8 GB cache cap. Wrappers parse `MLX_*` assignments (they do not execute `config/models.env`).
+`generate-mlx-text.sh` passes `--max-kv-size` from the resolved context cap unless you override it with `--max-kv-size`. Direct `mlx_lm.generate` / `mlx_lm.server` remain available and do not apply the 8 GB cache cap. Wrappers parse `MLX_*` assignments (they do not execute `config/models.env`).
 
-Max tokens and KV size must be positive integers. Temperature, when set, must be a finite non-negative number (`0`, `0.7`, `.5`, `5.`). The server port must be an integer from 1 to 65535. An empty assignment or flag is invalid. A bad `config/models.env` value or flag, including one passed after `--`, fails in the wrapper before mlx-lm starts. A malformed configured `MLX_RECOMMENDED_CONTEXT` fails before the composed default replaces it; that composed default still sets the KV cap unless `--max-kv-size` is passed.
+### Configuration precedence
+
+For allowlisted `MLX_*` keys in `config/models.env` (model, context, server host/port, generation defaults, image/video knobs):
+
+| Priority (highest first) | Source |
+| --- | --- |
+| 1 | Wrapper CLI flags (`--model`, `--max-kv-size`, `--port`, …) |
+| 2 | Process environment (`export MLX_*=…` before the script) |
+| 3 | `config/models.env` |
+| 4 | Composed chip policy (`make recommend`, `load_runtime_profile`) |
+
+`recommended_context` in `--dump-plan` is always the composed policy value. `max_kv_size` / serve `context` is what the wrapper applies: CLI → your `MLX_RECOMMENDED_CONTEXT` (env or file) → composed default.
+
+Max tokens and KV size must be positive integers. Temperature, when set, must be a finite non-negative number (`0`, `0.7`, `.5`, `5.`). The server port must be an integer from 1 to 65535. An empty assignment or flag is invalid. A bad `config/models.env` value or flag, including one passed after `--`, fails in the wrapper before mlx-lm starts. A malformed configured `MLX_RECOMMENDED_CONTEXT` fails before launch. When you do not set context, the composed default sets the KV cap unless `--max-kv-size` is passed.
 
 Example client call:
 
