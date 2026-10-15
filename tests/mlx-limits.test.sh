@@ -92,7 +92,9 @@ assert_fence_follows_physical() {
   if [[ -n "${policy}" && "${policy}" != "${physical}" ]]; then
     pol="$(inference_limit_plan "${policy}")"
     IFS='|' read -r pol_apply _ <<<"${pol}"
-    if [[ "${apply}" == "${pol_apply}" ]]; then
+    if [[ "${pol_apply}" == "${want_apply}" ]]; then
+      pass "${label} policy tier ${policy} matches physical fence outcome"
+    elif [[ "${apply}" == "${pol_apply}" ]]; then
       fail "${label} fence followed policy tier ${policy}"
     else
       pass "${label} fence ignores policy tier ${policy}"
