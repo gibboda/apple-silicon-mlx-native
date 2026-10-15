@@ -154,7 +154,7 @@ JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throu
 
 ## LLM inference
 
-On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap. Max tokens and KV size must be positive integers, and temperature must be a finite non-negative number when set. An empty value is invalid. Invalid values, including flags after `--`, fail before launch. The server port must be an integer from 1 to 65535. A malformed configured `MLX_RECOMMENDED_CONTEXT` fails even though the composed default still sets the KV cap unless `--max-kv-size` is passed.
+On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap. Max tokens and KV size must be positive integers, and temperature must be a finite non-negative number when set. An empty value is invalid. Invalid values, including flags after `--`, fail before launch. The server port must be an integer from 1 to 65535. Configuration precedence is CLI → process env → `config/models.env` → composed chip policy ([docs/models.md](docs/models.md#configuration-precedence)).
 
 ```bash
 make generate-text PROMPT="Hello from MLX"
@@ -292,6 +292,7 @@ apple-silicon-mlx-native/
 ├── tests/
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
+│   ├── config-precedence.test.sh
 │   ├── conventional-commits-audit.test.sh
 │   ├── delete-merged-pr-branch.test.sh
 │   ├── disk-headroom.test.sh

@@ -2370,14 +2370,72 @@ unquote_posix_single() {
   printf '%s' "${out}"
 }
 
+# Pipe-delimited MLX_* names set in the shell before load_models_env reads the file.
+MODELS_ENV_PROCESS_ENV_KEYS=""
+
+# Snapshot process env once per load. Later duplicate lines in models.env still win;
+# only keys set before parsing are locked out of the file.
+models_env_snapshot_process_env() {
+  local name marker
+  MODELS_ENV_PROCESS_ENV_KEYS="|"
+  while IFS= read -r name; do
+    [[ "${name}" =~ ^MLX_[A-Z0-9_]+$ ]] || continue
+    eval "marker=\${${name}+x}"
+    if [[ -n "${marker}" ]]; then
+      MODELS_ENV_PROCESS_ENV_KEYS+="${name}|"
+    fi
+  done < <(compgen -A variable 2>/dev/null || true)
+}
+
+models_env_key_locked_from_process_env() {
+  case "${MODELS_ENV_PROCESS_ENV_KEYS}" in
+    *"|${1}|"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# User-set MLX_RECOMMENDED_CONTEXT (CLI/env/models.env) before compose overwrites
+# the exported composed default. Cleared by capture_user_recommended_context.
+capture_user_recommended_context() {
+  unset USER_MLX_RECOMMENDED_CONTEXT
+  if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    USER_MLX_RECOMMENDED_CONTEXT="${MLX_RECOMMENDED_CONTEXT}"
+  fi
+}
+
+# CLI --max-kv-size > user MLX_RECOMMENDED_CONTEXT > composed default.
+resolve_text_max_kv_size() {
+  local cli_max_kv="${1:-}"
+  if [[ -n "${cli_max_kv}" ]]; then
+    printf '%s' "${cli_max_kv}"
+    return 0
+  fi
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
+# Effective server context cap (no server --max-kv-size in mlx-lm 0.31.3).
+resolve_serve_context() {
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
 # Parse config/models.env as data. Only documented MLX_* config keys are
 # exported. Lines are never executed (no command substitution, PATH=, or
 # HF_TOKEN). Runtime identity keys (workspace/venv/paths) are skipped.
-# Missing file is OK.
+# Process environment beats file for each allowlisted key. Duplicate keys in the
+# file still last-win unless the process env set the key before load. Missing file is OK.
 load_models_env() {
   local file="${1:-${MLX_MODELS_ENV}}"
   local line key value decoded
   [[ -f "${file}" ]] || return 0
+  models_env_snapshot_process_env
   while IFS= read -r line || [[ -n "${line}" ]]; do
     line="${line%$'\r'}"
     line="${line#"${line%%[![:space:]]*}"}"
@@ -2400,6 +2458,9 @@ load_models_env() {
       fi
       if is_models_env_runtime_key "${key}"; then
         log_warn "Skipping runtime key ${key} in ${file}"
+        continue
+      fi
+      if models_env_key_locked_from_process_env "${key}"; then
         continue
       fi
       printf -v "${key}" '%s' "${decoded}"
