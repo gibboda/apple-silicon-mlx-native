@@ -116,6 +116,48 @@ expect_contains "install_packaging_tools sets PIP_CONSTRAINT" "PIP_CONSTRAINT=${
 
 rm -rf "${INSTALL_WS}"
 
+alt_constraints="$(mktemp)"
+sed 's/^mlx==.*/mlx==9.9.9/' "${CONSTRAINTS}" >"${alt_constraints}"
+manifest_pin="$(
+  env -u MLX_PACKAGE MLX_PIP_CONSTRAINT_FILE="${alt_constraints}" \
+    bash -c 'source "$1"; printf %s "${MLX_PACKAGE}"' bash "${COMMON}"
+)"
+expect_eq "common.sh mlx default comes from constraints manifest" "mlx==9.9.9" "${manifest_pin}"
+rm -f "${alt_constraints}"
+
+override_ws="$(mktemp -d)"
+mkdir -p "${override_ws}/.venv/bin"
+cat >"${override_ws}/.venv/bin/python" <<EOF
+#!/bin/sh
+if [ "\$1" = "-m" ] && [ "\$2" = "pip" ]; then
+  printf 'PIP_CONSTRAINT=%s\n' "\${PIP_CONSTRAINT:-}" >> "${override_ws}/pip-env"
+  exit 0
+fi
+printf '%s\\n' 'pip 26.2.1' 'setuptools 84.0.0' 'wheel 0.48.0' 'packaging 26.3'
+EOF
+chmod +x "${override_ws}/.venv/bin/python"
+: >"${override_ws}/pip-env"
+MLX_WORKSPACE="${override_ws}" MLX_VENV="${override_ws}/.venv" MLX_IMAGE_PACKAGE='mflux==0.20.0' \
+  bash -c 'source "$1"; mlx_pip_install --upgrade mflux==0.20.0' bash "${COMMON}" >/dev/null
+override_constraint="$(sed -n 's/^PIP_CONSTRAINT=//p' "${override_ws}/pip-env" | head -n 1)"
+expect_contains "override constraint replaces mflux pin" "mflux==0.20.0" "$(cat "${override_constraint}")"
+if grep -q '^mflux==0.19.1$' "${override_constraint}"; then
+  fail "override constraint still pins mflux==0.19.1"
+else
+  pass "override constraint drops the manifest mflux pin"
+fi
+
+: >"${override_ws}/pip-env"
+MLX_WORKSPACE="${override_ws}" MLX_VENV="${override_ws}/.venv" MLX_PACKAGE='mlx' \
+  bash -c 'source "$1"; mlx_pip_install --upgrade mlx' bash "${COMMON}" >/dev/null
+bare_constraint="$(sed -n 's/^PIP_CONSTRAINT=//p' "${override_ws}/pip-env" | head -n 1)"
+if grep -q '^mlx==' "${bare_constraint}"; then
+  fail "bare mlx override still constrains mlx"
+else
+  pass "bare mlx override omits the mlx pin"
+fi
+rm -rf "${override_ws}"
+
 if (( failures > 0 )); then
   printf 'FAIL: %s pip-constraint check(s) failed\n' "${failures}" >&2
   exit 1
