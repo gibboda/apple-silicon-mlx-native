@@ -144,6 +144,7 @@ FAKE_DELETE_STATUS="0"
 FAKE_DELETE_BODY=""
 FAKE_BRANCH_PROTECTED="0"
 FAKE_BRANCH_LOOKUP_STATUS="0"
+FAKE_BRANCH_LOOKUP_BODY=""
 
 invoke() {
   : >"${GH_LOG}"
@@ -164,6 +165,7 @@ invoke() {
     FAKE_DELETE_BODY="${FAKE_DELETE_BODY}" \
     FAKE_BRANCH_PROTECTED="${FAKE_BRANCH_PROTECTED}" \
     FAKE_BRANCH_LOOKUP_STATUS="${FAKE_BRANCH_LOOKUP_STATUS}" \
+    FAKE_BRANCH_LOOKUP_BODY="${FAKE_BRANCH_LOOKUP_BODY}" \
     "${DELETE}"
 }
 
@@ -183,6 +185,7 @@ reset_case() {
   FAKE_DELETE_BODY=""
   FAKE_BRANCH_PROTECTED="0"
   FAKE_BRANCH_LOOKUP_STATUS="0"
+  FAKE_BRANCH_LOOKUP_BODY=""
 }
 
 reset_case
@@ -248,6 +251,16 @@ else
 fi
 expect_contains "lookup failure names the refusal" "Could not read branch protection" "${lookup_out}"
 expect_not_contains "lookup failure does not DELETE" "METHOD=DELETE" "$(cat "${GH_LOG}")"
+
+reset_case
+HEAD_REF="feature/already-gone"
+BASE_REF="main"
+HEAD_SHA="${SHA_A}"
+FAKE_BRANCH_LOOKUP_STATUS="1"
+FAKE_BRANCH_LOOKUP_BODY='{"message":"Branch not found","documentation_url":"https://docs.github.com/rest/branches/branches#get-a-branch","status":"404"}'
+out="$(invoke)"
+expect_contains "missing branch on protection lookup is already deleted" "already deleted" "${out}"
+expect_not_contains "missing branch does not DELETE" "METHOD=DELETE" "$(cat "${GH_LOG}")"
 
 reset_case
 HEAD_REF="develop"

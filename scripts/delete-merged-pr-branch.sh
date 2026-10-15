@@ -68,6 +68,14 @@ is_get_missing_ref() {
   grep -Fq 'get-a-reference' <<<"$1" && grep -Eq '"status":[[:space:]]*"404"' <<<"$1"
 }
 
+# Branches API 404 when the head branch was removed before this job runs.
+is_branches_api_missing_ref() {
+  local body="$1"
+  local status="$2"
+  (( status != 0 )) || return 1
+  grep -Fq 'Branch not found' <<<"${body}" && grep -Eq '"status":[[:space:]]*"404"' <<<"${body}"
+}
+
 # Long-lived branches merged via PR into main should not be deleted automatically.
 branch_delete_ref_name_protected() {
   case "${1:-}" in
@@ -85,6 +93,10 @@ branch_delete_ref_protected_on_github() {
   body="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/branches/${encoded}" 2>&1)"
   status=$?
   set -e
+  if is_branches_api_missing_ref "${body}" "${status}"; then
+    log_ok "Head branch '${ref}' already deleted."
+    exit 0
+  fi
   if (( status != 0 )) || ! grep -Eq '"protected"[[:space:]]*:' <<<"${body}"; then
     log_error "Could not read branch protection for '${ref}'. Refusing to delete."
     exit 1

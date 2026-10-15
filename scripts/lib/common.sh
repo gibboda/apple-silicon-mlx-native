@@ -2492,36 +2492,55 @@ _file_mode_octal() {
   printf '%s' "${mode}"
 }
 
+# Final write target for models.env when the path is a symlink chain.
+env_file_write_target() {
+  local file="$1"
+  local target link_dir next seen=""
+  [[ -n "${file}" ]] || return 1
+  target="${file}"
+  while [[ -L "${target}" ]]; do
+    link_dir="$(dirname "${target}")"
+    next="$(readlink "${target}")"
+    [[ -n "${next}" ]] || die "Refusing to follow empty symlink: ${target}"
+    if [[ "${next}" != /* ]]; then
+      next="${link_dir}/${next}"
+    fi
+    case " ${seen} " in
+      *" ${next} "*) die "Refusing to follow symlink loop in ${file}" ;;
+    esac
+    seen="${seen} ${next}"
+    target="${next}"
+  done
+  printf '%s' "${target}"
+}
+
 upsert_env_assignment() {
   local file="$1"
   local key="$2"
   local value="$3"
-  local quoted tmp target mode upsert_tmp_trap
+  local quoted tmp target mode
   is_models_env_key "${key}" || die "Refusing to write non-MLX key to models.env: ${key}"
   quoted="$(quote_env_value "${value}")"
-  target="${file}"
-  if [[ -L "${file}" ]]; then
-    target="$(readlink "${file}")"
-    if [[ "${target}" != /* ]]; then
-      target="$(dirname "${file}")/${target}"
-    fi
-  fi
+  target="$(env_file_write_target "${file}")"
   tmp="$(mktemp "${target}.XXXXXX")"
-  # shellcheck disable=SC2064
-  trap "rm -f -- '${tmp}'" RETURN
   mode=""
   if [[ -f "${target}" ]]; then
     mode="$(_file_mode_octal "${target}" || true)"
   fi
   # Pass via ENVIRON so awk -v does not interpret backslashes in POSIX '\'' quoting.
-  MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
+  if ! MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
     BEGIN { k=ENVIRON["MLX_UPSERT_KEY"]; v=ENVIRON["MLX_UPSERT_VALUE"]; done=0 }
     index($0, k "=") == 1 && !done { print k "=" v; done=1; next }
     { print }
     END { if (!done) print k "=" v }
-  ' "${file}" >"${tmp}"
-  mv "${tmp}" "${target}"
-  trap - RETURN
+  ' "${file}" >"${tmp}"; then
+    rm -f -- "${tmp}"
+    return 1
+  fi
+  if ! mv "${tmp}" "${target}"; then
+    rm -f -- "${tmp}"
+    return 1
+  fi
   if [[ -n "${mode}" ]]; then
     chmod "${mode}" "${target}"
   fi

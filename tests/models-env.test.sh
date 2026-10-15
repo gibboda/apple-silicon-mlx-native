@@ -6,8 +6,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMMON="${ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/lib/common.sh
-source "${ROOT}/scripts/lib/common.sh"
+source "${COMMON}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
@@ -83,13 +84,28 @@ else
 fi
 expect_eq "upsert writes through symlink" "$(cat "${REAL_ENV}")" "MLX_DEFAULT_MODEL=mode-check"
 
+MID_ENV="${TMP}/mid-models.env"
+OUTER_LINK="${TMP}/outer-models.env.link"
+printf 'MLX_DEFAULT_MODEL=chain-old\n' >"${MID_ENV}"
+ln -sf "${MID_ENV}" "${OUTER_LINK}"
+ln -sf "${OUTER_LINK}" "${LINK_ENV}"
+upsert_env_assignment "${LINK_ENV}" MLX_DEFAULT_MODEL "chain-new"
+if [[ -L "${LINK_ENV}" && -L "${OUTER_LINK}" ]]; then
+  pass "upsert preserves multi-hop symlink chain"
+else
+  fail "upsert should preserve multi-hop symlink chain"
+fi
+expect_eq "upsert writes through symlink chain" "$(cat "${MID_ENV}")" "MLX_DEFAULT_MODEL=chain-new"
+
 BROKEN_UPSERT="${TMP}/broken-upsert"
 mkdir "${BROKEN_UPSERT}"
 leftover_count=0
-set +e
-upsert_env_assignment "${BROKEN_UPSERT}" MLX_DEFAULT_MODEL "x" >/dev/null 2>&1
-set -e
-for f in "${TMP}"/broken-upsert.* "${TMP}"/real-models.env.*; do
+if bash -c "set -euo pipefail; source \"${COMMON}\"; upsert_env_assignment \"${BROKEN_UPSERT}\" MLX_DEFAULT_MODEL x" >/dev/null 2>&1; then
+  fail "upsert failure should exit non-zero under errexit"
+else
+  pass "upsert failure exits non-zero under errexit"
+fi
+for f in "${TMP}"/broken-upsert.* "${TMP}"/real-models.env.* "${TMP}"/mid-models.env.*; do
   [[ -e "${f}" ]] || continue
   leftover_count=$((leftover_count + 1))
 done
