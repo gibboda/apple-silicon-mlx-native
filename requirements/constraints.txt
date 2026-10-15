@@ -7,7 +7,7 @@ packaging==26.3
 mlx==0.32.2
 mlx-lm==0.31.3
 mlx-audio==0.5.5
-mflux==0.19.1
+mflux==0.22.0
 transformers==5.19.0
 numpy==2.2.6
 huggingface-hub==1.33.0
