@@ -6,8 +6,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMMON="${ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/lib/common.sh
-source "${ROOT}/scripts/lib/common.sh"
+source "${COMMON}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
@@ -65,6 +66,57 @@ printf 'MLX_DEFAULT_MODEL=old\n' >"${ENV_FILE}"
 upsert_env_assignment "${ENV_FILE}" MLX_DEFAULT_MODEL "Bob's-model"
 expect_eq "upsert apostrophe keeps POSIX concatenation" "$(cat "${ENV_FILE}")" \
   "MLX_DEFAULT_MODEL='Bob'\\''s-model'"
+
+# --- upsert preserves mode, symlinks, and temp cleanup on failure ---
+
+REAL_ENV="${TMP}/real-models.env"
+LINK_ENV="${TMP}/models.env.link"
+printf 'MLX_DEFAULT_MODEL=old\n' >"${REAL_ENV}"
+chmod 644 "${REAL_ENV}"
+ln -sf "${REAL_ENV}" "${LINK_ENV}"
+upsert_env_assignment "${LINK_ENV}" MLX_DEFAULT_MODEL "mode-check"
+link_mode="$(stat -c '%a' "${REAL_ENV}" 2>/dev/null || stat -f '%Lp' "${REAL_ENV}")"
+expect_eq "upsert preserves file mode" "${link_mode}" "644"
+if [[ -L "${LINK_ENV}" ]]; then
+  pass "upsert preserves symlink"
+else
+  fail "upsert should not replace symlink with a regular file"
+fi
+expect_eq "upsert writes through symlink" "$(cat "${REAL_ENV}")" "MLX_DEFAULT_MODEL=mode-check"
+
+MID_ENV="${TMP}/mid-models.env"
+OUTER_LINK="${TMP}/outer-models.env.link"
+printf 'MLX_DEFAULT_MODEL=chain-old\n' >"${MID_ENV}"
+ln -sf "${MID_ENV}" "${OUTER_LINK}"
+ln -sf "${OUTER_LINK}" "${LINK_ENV}"
+upsert_env_assignment "${LINK_ENV}" MLX_DEFAULT_MODEL "chain-new"
+if [[ -L "${LINK_ENV}" && -L "${OUTER_LINK}" ]]; then
+  pass "upsert preserves multi-hop symlink chain"
+else
+  fail "upsert should preserve multi-hop symlink chain"
+fi
+expect_eq "upsert writes through symlink chain" "$(cat "${MID_ENV}")" "MLX_DEFAULT_MODEL=chain-new"
+
+UNREAD_ENV="${TMP}/unreadable.env"
+printf 'MLX_DEFAULT_MODEL=old\n' >"${UNREAD_ENV}"
+chmod 000 "${UNREAD_ENV}"
+leftover_count=0
+if bash -c "set -euo pipefail; source \"${COMMON}\"; upsert_env_assignment \"${UNREAD_ENV}\" MLX_DEFAULT_MODEL x" >/dev/null 2>&1; then
+  chmod 644 "${UNREAD_ENV}" 2>/dev/null || true
+  fail "upsert failure should exit non-zero under errexit"
+else
+  pass "upsert failure exits non-zero under errexit"
+fi
+chmod 644 "${UNREAD_ENV}" 2>/dev/null || true
+for f in "${TMP}"/unreadable.env.* "${TMP}"/real-models.env.* "${TMP}"/mid-models.env.*; do
+  [[ -e "${f}" ]] || continue
+  leftover_count=$((leftover_count + 1))
+done
+if (( leftover_count == 0 )); then
+  pass "upsert failure leaves no temp file"
+else
+  fail "upsert failure leaves no temp file"
+fi
 load_models_env "${ENV_FILE}" >/dev/null 2>&1
 expect_eq "load apostrophe round-trips" "${MLX_DEFAULT_MODEL}" "Bob's-model"
 sourced_apostrophe="$(MLX_DEFAULT_MODEL="" bash -c 'set -euo pipefail; source "$1"; printf %s "${MLX_DEFAULT_MODEL}"' bash "${ENV_FILE}")"

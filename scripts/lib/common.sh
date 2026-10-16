@@ -573,10 +573,12 @@ PY
 mlx_lm_help_has_flag() {
   local module="$1"
   local flag="$2"
-  local py
+  local py help
   py="$(venv_python)"
   [[ -x "${py}" ]] || return 1
-  "${py}" -m "${module}" --help 2>&1 | grep -q -- "${flag}"
+  # Capture help first: grep -q under pipefail can SIGPIPE the writer on large --help.
+  help="$("${py}" -m "${module}" --help 2>&1)" || return 1
+  [[ "${help}" == *"${flag}"* ]]
 }
 
 dummy_mem_gib_for_tier() {
@@ -661,8 +663,10 @@ _restore_nullglob() {
 # Uses a line loop so macOS /bin/bash 3.2 (no mapfile) can read the index.
 _index_shard_names() {
   local index="${1:-}"
+  local py
   [[ -f "${index}" ]] || return 1
-  python3 - "${index}" <<'PY'
+  py="$(resolve_auxiliary_python)" || return 1
+  "${py}" - "${index}" <<'PY'
 import json
 import sys
 
@@ -1134,10 +1138,11 @@ warn_or_die_disk_headroom() {
 }
 
 detect_python_version() {
+  local py
   if [[ -x "${MLX_VENV}/bin/python" ]]; then
     "${MLX_VENV}/bin/python" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'
+  elif py="$(resolve_auxiliary_python 2>/dev/null)" && [[ -n "${py}" ]]; then
+    "${py}" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'
   else
     echo "none"
   fi
@@ -1165,6 +1170,34 @@ ensure_homebrew_in_path() {
 
 check_xcode_clt() {
   if xcode-select -p >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+# Python for short helper scripts (JSON emit, safetensors index). Prefer the project
+# venv or Homebrew python so macOS /usr/bin/python3 does not trigger the CLT stub.
+resolve_auxiliary_python() {
+  local py prefix
+  if [[ -x "${MLX_VENV}/bin/python" ]]; then
+    printf '%s\n' "${MLX_VENV}/bin/python"
+    return 0
+  fi
+  ensure_homebrew_in_path
+  prefix="$(homebrew_prefix)"
+  if [[ -n "${prefix}" ]]; then
+    py="${prefix}/opt/python@${MLX_PYTHON_VERSION}/bin/python${MLX_PYTHON_VERSION}"
+    if [[ -x "${py}" ]]; then
+      printf '%s\n' "${py}"
+      return 0
+    fi
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    py="$(command -v python3)"
+    if [[ "$(uname -s)" == "Darwin" && "${py}" == "/usr/bin/python3" ]] && ! check_xcode_clt; then
+      return 1
+    fi
+    printf '%s\n' "${py}"
     return 0
   fi
   return 1
@@ -1636,7 +1669,7 @@ venv_home_under_homebrew() {
   [[ -n "${prefix}" ]] || return 1
   cfg_home="$(pyvenv_cfg_value "${dir}" home)" || return 1
   [[ -n "${cfg_home}" ]] || return 1
-  [[ "${cfg_home}" == "${prefix}"* ]]
+  [[ "${cfg_home}" == "${prefix}" || "${cfg_home}" == "${prefix}/"* ]]
 }
 
 # make venv reuse: Homebrew python@MLX_PYTHON_VERSION with a working pip.
@@ -1744,6 +1777,16 @@ for dirpath, _dirnames, _filenames in os.walk(root, topdown=False, followlinks=F
 PY
 }
 
+# True when pid is running. kill -0 EPERM (another user's process) is treated as alive.
+pid_is_alive() {
+  local pid="$1"
+  [[ -n "${pid}" ]] || return 1
+  if kill -0 "${pid}" 2>/dev/null; then
+    return 0
+  fi
+  ps -p "${pid}" >/dev/null 2>&1
+}
+
 # Exclusive lock for one destination: ${dest}.create-lock/pid.
 # mkdir is atomic. A live pid owns the lock; a dead pid is abandoned and replaced.
 # Before removing a stale lock, re-read pid so two waiters cannot both delete a
@@ -1751,12 +1794,17 @@ PY
 # must remove it on the success path; the EXIT trap removes it when create fails.
 acquire_venv_create_lock() {
   local dest="$1"
-  local lock pid stale_owner current_owner empty_seen waited logged_wait
+  local lock pid stale_owner current_owner empty_seen waited logged_wait lock_timeout deadline
   lock="${dest}.create-lock"
   empty_seen=0
   waited=0
   logged_wait=0
-  while (( waited < 180 )); do
+  lock_timeout="${MLX_VENV_LOCK_TIMEOUT:-300}"
+  case "${lock_timeout}" in
+    ''|*[!0-9]*) lock_timeout=300 ;;
+  esac
+  deadline=$((SECONDS + lock_timeout))
+  while (( SECONDS < deadline )); do
     if mkdir -- "${lock}" 2>/dev/null; then
       if printf '%s\n' "$$" >"${lock}/pid"; then
         printf '%s\n' "${lock}"
@@ -1782,7 +1830,7 @@ acquire_venv_create_lock() {
         waited=$((waited + 1))
         continue
       fi
-    elif kill -0 "${pid}" 2>/dev/null; then
+    elif pid_is_alive "${pid}"; then
       if (( logged_wait == 0 )); then
         printf 'INFO: Waiting for venv create lock held by pid %s\n' "${pid}" >&2
         logged_wait=1
@@ -1807,7 +1855,7 @@ acquire_venv_create_lock() {
         waited=$((waited + 1))
         continue
       fi
-      if kill -0 "${stale_owner}" 2>/dev/null; then
+      if pid_is_alive "${stale_owner}"; then
         empty_seen=0
         sleep 0.2
         waited=$((waited + 1))
@@ -1924,7 +1972,7 @@ create_atomic_project_venv() {
   while IFS= read -r stale; do
     [[ -n "${stale}" ]] || continue
     stale_pid="${stale##*.}"
-    if [[ "${stale_pid}" != "$$" ]] && kill -0 "${stale_pid}" 2>/dev/null; then
+    if [[ "${stale_pid}" != "$$" ]] && pid_is_alive "${stale_pid}"; then
       die "Refusing to remove in-use temporary venv ${stale} (pid ${stale_pid} is running). If no other make venv/rebuild is active, remove it or run: make clean"
     fi
     rm -rf -- "${stale}"
@@ -1935,6 +1983,11 @@ create_atomic_project_venv() {
   [[ -x "${py}" ]] || die "Venv creation failed: ${py} is not executable"
   "${py}" -m pip --version >/dev/null || die "Venv creation failed: pip is not available in ${partial}"
   rewrite_relocated_venv_paths "${brew_py}" "${partial}" "${dest}"
+  if [[ -e "${dest}" || -L "${dest}" ]]; then
+    die "Refusing to overwrite ${dest}: it appeared while building ${partial}"
+  fi
+  # Re-check under the create lock immediately before rename. A foreign dest can
+  # still appear in the tiny window after this check (accepted: lock + nested detection).
   if [[ -e "${dest}" || -L "${dest}" ]]; then
     die "Refusing to overwrite ${dest}: it appeared while building ${partial}"
   fi
@@ -1977,6 +2030,28 @@ resolve_homebrew_python() {
 
 # Detect Homebrew, optionally install it, and reject an Intel prefix.
 # rerun_cmd is printed when Homebrew is missing.
+install_homebrew_install_script() {
+  local url="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+  local tmp sha saved_exit_trap quoted_tmp
+  tmp="$(mktemp)"
+  quoted_tmp="$(printf '%q' "${tmp}")"
+  saved_exit_trap="$(_exit_trap_spec)"
+  # Chain onto the caller EXIT trap so a failed download still cleans the temp
+  # file without dropping the caller's cleanup.
+  _install_owned_exit_trap "rm -f -- ${quoted_tmp}" "${saved_exit_trap}"
+  curl -fsSL "${url}" -o "${tmp}"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha="$(sha256sum "${tmp}" | awk '{print $1}')"
+  else
+    sha="$(shasum -a 256 "${tmp}" | awk '{print $1}')"
+  fi
+  log_info "Homebrew install script SHA-256: ${sha}"
+  log_info "Homebrew install script URL: ${url}"
+  NONINTERACTIVE=1 /bin/bash "${tmp}"
+  rm -f -- "${tmp}"
+  _restore_exit_trap "${saved_exit_trap}"
+}
+
 ensure_homebrew_ready() {
   local rerun_cmd="$1"
   local brew_arch
@@ -1984,7 +2059,7 @@ ensure_homebrew_ready() {
   if [[ -z "$(homebrew_prefix)" ]]; then
     if is_truthy "${MLX_INSTALL_HOMEBREW:-0}"; then
       log_info "Installing Homebrew (NONINTERACTIVE=1)..."
-      NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      install_homebrew_install_script
       ensure_homebrew_in_path
     else
       cat <<EOF
@@ -2405,22 +2480,70 @@ print_detect_env() {
   printf 'MLX_WORKSPACE=%q\n' "${MLX_WORKSPACE:-}"
 }
 
+_file_mode_octal() {
+  local path="$1"
+  local mode=""
+  if mode="$(stat -f '%Lp' "${path}" 2>/dev/null)"; then
+    :
+  elif mode="$(stat -c '%a' "${path}" 2>/dev/null)"; then
+    :
+  fi
+  [[ -n "${mode}" ]] || return 1
+  printf '%s' "${mode}"
+}
+
+# Final write target for models.env when the path is a symlink chain.
+env_file_write_target() {
+  local file="$1"
+  local target link_dir next seen=""
+  [[ -n "${file}" ]] || return 1
+  target="${file}"
+  while [[ -L "${target}" ]]; do
+    link_dir="$(dirname "${target}")"
+    next="$(readlink "${target}")"
+    [[ -n "${next}" ]] || die "Refusing to follow empty symlink: ${target}"
+    if [[ "${next}" != /* ]]; then
+      next="${link_dir}/${next}"
+    fi
+    case " ${seen} " in
+      *" ${next} "*) die "Refusing to follow symlink loop in ${file}" ;;
+    esac
+    seen="${seen} ${next}"
+    target="${next}"
+  done
+  printf '%s' "${target}"
+}
+
 upsert_env_assignment() {
   local file="$1"
   local key="$2"
   local value="$3"
-  local quoted tmp
+  local quoted tmp target mode
   is_models_env_key "${key}" || die "Refusing to write non-MLX key to models.env: ${key}"
   quoted="$(quote_env_value "${value}")"
-  tmp="$(mktemp)"
+  target="$(env_file_write_target "${file}")"
+  tmp="$(mktemp "${target}.XXXXXX")"
+  mode=""
+  if [[ -f "${target}" ]]; then
+    mode="$(_file_mode_octal "${target}" || true)"
+  fi
   # Pass via ENVIRON so awk -v does not interpret backslashes in POSIX '\'' quoting.
-  MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
+  if ! MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
     BEGIN { k=ENVIRON["MLX_UPSERT_KEY"]; v=ENVIRON["MLX_UPSERT_VALUE"]; done=0 }
     index($0, k "=") == 1 && !done { print k "=" v; done=1; next }
     { print }
     END { if (!done) print k "=" v }
-  ' "${file}" >"${tmp}"
-  mv "${tmp}" "${file}"
+  ' "${file}" >"${tmp}"; then
+    rm -f -- "${tmp}"
+    return 1
+  fi
+  if ! mv "${tmp}" "${target}"; then
+    rm -f -- "${tmp}"
+    return 1
+  fi
+  if [[ -n "${mode}" ]]; then
+    chmod "${mode}" "${target}"
+  fi
 }
 
 is_models_env_key() {

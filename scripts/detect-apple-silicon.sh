@@ -92,7 +92,7 @@ check_xcode_clt && xcode_ok="true"
 # JSON comes from scripts/lib/detect_json.py. log_warn writes to stderr so a
 # chip-policy warning cannot land on stdout ahead of the JSON object.
 print_detect_json() {
-  local brew_ok="$1" brew_prefix="$2" xcode_ok="$3" detect_py
+  local brew_ok="$1" brew_prefix="$2" xcode_ok="$3" detect_py json_py
   export DETECT_ARCH="${MLX_ARCH}"
   export DETECT_CHIP="${MLX_CHIP}"
   export DETECT_CHIP_FAMILY="${MLX_CHIP_FAMILY:-}"
@@ -127,7 +127,8 @@ print_detect_json() {
   export DETECT_VIDEO_PROFILE="${MLX_RECOMMENDED_VIDEO_PROFILE:-}"
   export DETECT_VIDEO_FORCE="${MLX_VIDEO_FORCE_REQUIRED:-0}"
   export DETECT_WORKSPACE="${MLX_WORKSPACE}"
-  python3 "${SCRIPT_DIR}/lib/detect_json.py" || die "detect JSON emission failed"
+  json_py="$(resolve_auxiliary_python)" || die "Python 3 is required for --json (install Xcode CLT or Homebrew python@${MLX_PYTHON_VERSION})"
+  "${json_py}" "${SCRIPT_DIR}/lib/detect_json.py" || die "detect JSON emission failed"
 }
 
 # Emit JSON before the other modes. The failure mode on CI was a warning on
