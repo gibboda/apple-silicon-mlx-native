@@ -6,7 +6,7 @@ wheel==0.48.0
 packaging==26.3
 mlx==0.32.2
 mlx-lm==0.31.3
-mlx-audio==0.5.5
+mlx-audio==0.5.8
 mflux==0.19.1
 transformers==5.19.0
 numpy==2.2.6
