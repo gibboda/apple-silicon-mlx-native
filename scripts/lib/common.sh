@@ -24,30 +24,51 @@ MLX_WORKSPACE_SENTINEL_NAME=".mlx-workspace"
 
 # Deliberately selected Python packages (Pure MLX core + selected media).
 # Image/video packages are NOT installed by default — see docs/media.md.
-# Core and mlx-audio are pinned so two installs on different days match.
+# requirements/constraints.txt is the pin manifest. Defaults below read that
+# file so a Dependabot edit is the install default. An explicit MLX_* spec
+# still wins, and export_pip_constraint rewrites PIP_CONSTRAINT so the old
+# pin does not force the override back. Not a full lockfile yet.
 # Override a spec to track upstream, for example:
 #   MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 # Do not add PyTorch/MPS as a generation backend.
-MLX_PACKAGE="${MLX_PACKAGE:-mlx==0.32.2}"
-MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-mlx-lm==0.31.3}"
-MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-mlx-audio==0.5.5}"
+MLX_PIP_CONSTRAINT_FILE="${MLX_PIP_CONSTRAINT_FILE:-${REPO_ROOT}/requirements/constraints.txt}"
+
+# Exact name==version line from the manifest, or the fallback when that line is absent.
+_pin_default() {
+  local name="$1"
+  local fallback="$2"
+  local line=""
+  if [[ -f "${MLX_PIP_CONSTRAINT_FILE}" ]]; then
+    line="$(grep -E "^${name}==[^[:space:]]+$" "${MLX_PIP_CONSTRAINT_FILE}" | head -n 1 || true)"
+  fi
+  if [[ -n "${line}" ]]; then
+    printf '%s' "${line}"
+  else
+    printf '%s' "${fallback}"
+  fi
+}
+
+MLX_PACKAGE="${MLX_PACKAGE:-$(_pin_default mlx mlx==0.32.2)}"
+MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-$(_pin_default mlx-lm mlx-lm==0.31.3)}"
+MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-$(_pin_default mlx-audio mlx-audio==0.5.5)}"
 MLX_CORE_PACKAGES=("${MLX_PACKAGE}" "${MLX_LM_PACKAGE}")
 MLX_MEDIA_PACKAGES=("${MLX_AUDIO_PACKAGE}")
-MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-mflux==0.19.1}"
+MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-$(_pin_default mflux mflux==0.19.1)}"
 # Pin mlx-video to a git SHA (not published on PyPI). Override with MLX_VIDEO_PACKAGE.
 MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837}"
 # Packaging tools are pinned so bootstrap, rebuild, and media installs match
-# across days. Bump these in this file for a security fix, a Python
+# across days. Bump requirements/constraints.txt for a security fix, a Python
 # requirement change, or an install failure, and record the bump in
 # CHANGELOG.md. Override a spec to try newer tooling once, for example
-# MLX_PIP_PACKAGE=pip.
-MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-pip==26.2.1}"
-MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-setuptools==84.0.0}"
-MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-wheel==0.48.0}"
+# MLX_PIP_PACKAGE=pip. Bump requirements/constraints.txt; these fallbacks apply
+# only when that manifest has no matching line.
+MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-$(_pin_default pip pip==26.2.1)}"
+MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-$(_pin_default setuptools setuptools==84.0.0)}"
+MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-$(_pin_default wheel wheel==0.48.0)}"
 # wheel 0.48.0 depends on packaging>=24.0. Pin the library itself so a fresh
 # venv does not float to whatever packaging release is newest that day.
 # Named MLX_PACKAGING_LIB_PACKAGE so it is not confused with MLX_PACKAGING_PACKAGES.
-MLX_PACKAGING_LIB_PACKAGE="${MLX_PACKAGING_LIB_PACKAGE:-packaging==26.3}"
+MLX_PACKAGING_LIB_PACKAGE="${MLX_PACKAGING_LIB_PACKAGE:-$(_pin_default packaging packaging==26.3)}"
 MLX_PACKAGING_PACKAGES=("${MLX_PIP_PACKAGE}" "${MLX_SETUPTOOLS_PACKAGE}" "${MLX_WHEEL_PACKAGE}" "${MLX_PACKAGING_LIB_PACKAGE}")
 # pip 26+ applies this to PEP 517 isolated build envs (venv setuptools/wheel are ignored).
 MLX_PIP_BUILD_CONSTRAINT_FILE="${MLX_PIP_BUILD_CONSTRAINT_FILE:-${MLX_WORKSPACE}/.mlx-pip-build-constraint.txt}"
@@ -552,10 +573,12 @@ PY
 mlx_lm_help_has_flag() {
   local module="$1"
   local flag="$2"
-  local py
+  local py help
   py="$(venv_python)"
   [[ -x "${py}" ]] || return 1
-  "${py}" -m "${module}" --help 2>&1 | grep -q -- "${flag}"
+  # Capture help first: grep -q under pipefail can SIGPIPE the writer on large --help.
+  help="$("${py}" -m "${module}" --help 2>&1)" || return 1
+  [[ "${help}" == *"${flag}"* ]]
 }
 
 dummy_mem_gib_for_tier() {
@@ -583,8 +606,13 @@ detect_macos_version() {
 
 detect_disk_available_gib() {
   # Available space (whole GiB) on the volume containing the path.
+  # Returns empty when df fails (do not treat as 0 GiB free).
   local target="${1:-/}"
-  df -g "${target}" 2>/dev/null | awk 'NR==2 {print $4}'
+  local avail=""
+  avail="$(df -g "${target}" 2>/dev/null | awk 'NR==2 {print $4}')" || true
+  if [[ "${avail}" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "${avail}"
+  fi
 }
 
 # Remember a caller-supplied MLX_DISK_AVAIL_GIB before detection overwrites it.
@@ -594,7 +622,7 @@ note_disk_avail_override() {
     return 0
   fi
   MLX_DISK_OVERRIDE_NOTED=1
-  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" ]]; then
+  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" && "${MLX_DISK_AVAIL_GIB}" =~ ^[0-9]+$ ]]; then
     MLX_DISK_AVAIL_GIB_OVERRIDE="${MLX_DISK_AVAIL_GIB}"
   else
     MLX_DISK_AVAIL_GIB_OVERRIDE=""
@@ -635,8 +663,10 @@ _restore_nullglob() {
 # Uses a line loop so macOS /bin/bash 3.2 (no mapfile) can read the index.
 _index_shard_names() {
   local index="${1:-}"
+  local py
   [[ -f "${index}" ]] || return 1
-  python3 - "${index}" <<'PY'
+  py="$(resolve_auxiliary_python)" || return 1
+  "${py}" - "${index}" <<'PY'
 import json
 import sys
 
@@ -648,7 +678,27 @@ for name in seen:
 PY
 }
 
-# config.json plus every shard named by model.safetensors.index.json in this directory.
+# Weight-bearing diffusers component names listed in model_index.json.
+_model_index_weight_components() {
+  local index="${1:-}"
+  [[ -f "${index}" ]] || return 1
+  python3 - "${index}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    data = json.load(fh)
+if not isinstance(data, dict):
+    sys.exit(0)
+for key in sorted(data.keys()):
+    if key.startswith("_"):
+        continue
+    if key in ("transformer", "unet", "vae") or key.startswith("text_encoder"):
+        print(key)
+PY
+}
+
+# config.json plus every non-empty shard named by model.safetensors.index.json.
 _indexed_component_ready() {
   local dir="${1%/}"
   local index="${dir}/model.safetensors.index.json"
@@ -659,9 +709,117 @@ _indexed_component_ready() {
     case "${shard}" in
       /*|*..*) return 1 ;;
     esac
-    [[ -f "${dir}/${shard}" ]] || return 1
+    [[ -s "${dir}/${shard}" ]] || return 1
     saw=1
   done < <(_index_shard_names "${index}")
+  (( saw == 1 ))
+}
+
+# Indexed shards or at least one non-empty *.safetensors in this component dir.
+_component_weights_ready() {
+  local dir="${1%/}"
+  local index="${dir}/model.safetensors.index.json"
+  local nullglob_state w saw=0
+  local -a weights
+  [[ -d "${dir}" ]] || return 1
+  if [[ -f "${index}" ]]; then
+    _indexed_component_ready "${dir}"
+    return
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${dir}/"*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  for w in "${weights[@]}"; do
+    [[ -s "${w}" ]] || continue
+    saw=1
+    break
+  done
+  (( saw == 1 ))
+}
+
+# Standard diffusers subdirs that exist under snap (when model_index lists none).
+_diffusers_component_dirs_present() {
+  local snap="${1%/}/"
+  local name="" nullglob_state
+  local -a encoders
+  for name in transformer unet vae text_encoder text_encoder_2 text_encoder_3; do
+    [[ -d "${snap}${name}" ]] && printf '%s\n' "${name}"
+  done
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  encoders=( "${snap}"text_encoder_*/ )
+  _restore_nullglob "${nullglob_state}"
+  for name in "${encoders[@]}"; do
+    [[ -d "${name}" ]] || continue
+    printf '%s\n' "${name##*/}"
+  done
+}
+
+# Every weight-bearing diffusers component has non-empty weights.
+diffusers_snapshot_weights_ready() {
+  local snap="${1%/}/"
+  local index="${snap}model_index.json"
+  local comp="" saw=0 has_main=0
+  [[ -f "${index}" ]] || return 1
+  while IFS= read -r comp; do
+    [[ -n "${comp}" ]] || continue
+    _component_weights_ready "${snap}${comp}" || return 1
+    saw=1
+    case "${comp}" in
+      transformer|unet) has_main=1 ;;
+    esac
+  done < <(_model_index_weight_components "${index}")
+  if (( saw == 1 )); then
+    # model_index is authoritative, but a tree with no transformer/UNet is not
+    # a complete image checkpoint (VAE-only indexes must not report cached).
+    (( has_main == 1 )) || return 1
+    return 0
+  fi
+  saw=0
+  has_main=0
+  while IFS= read -r comp; do
+    [[ -n "${comp}" ]] || continue
+    _component_weights_ready "${snap}${comp}" || return 1
+    saw=1
+    case "${comp}" in
+      transformer|unet) has_main=1 ;;
+      vae) ;;
+      text_encoder*) ;;
+      *) return 1 ;;
+    esac
+  done < <(_diffusers_component_dirs_present "${snap}")
+  if (( saw == 0 )); then
+    _snap_root_safetensors_ready "${snap}"
+    return
+  fi
+  (( has_main == 1 )) || return 1
+  _component_weights_ready "${snap}vae"
+}
+
+# Non-empty safetensors at the snapshot root (single-file hubs).
+_snap_root_safetensors_ready() {
+  local snap="${1%/}/"
+  local index="${snap}model.safetensors.index.json"
+  local nullglob_state w saw=0
+  local -a weights
+  if [[ -f "${index}" ]]; then
+    _indexed_component_ready "${snap%/}"
+    return
+  fi
+  if [[ -f "${snap}config.json" ]]; then
+    hub_snapshot_weights_complete "${snap}"
+    return
+  fi
+  nullglob_state="$(shopt -p nullglob 2>/dev/null || true)"
+  shopt -s nullglob
+  weights=( "${snap}"*.safetensors )
+  _restore_nullglob "${nullglob_state}"
+  for w in "${weights[@]}"; do
+    [[ -s "${w}" ]] || continue
+    saw=1
+    break
+  done
   (( saw == 1 ))
 }
 
@@ -684,7 +842,7 @@ hub_snapshot_weights_complete() {
   _restore_nullglob "${nullglob_state}"
   ((${#weights[@]} == 0)) && return 1
   for w in "${weights[@]}"; do
-    [[ -f "${w}" ]] || return 1
+    [[ -s "${w}" ]] || return 1
   done
   return 0
 }
@@ -725,14 +883,14 @@ hub_repo_download_incomplete() {
   ((${#incomplete[@]} > 0))
 }
 
-# True when dir holds at least one real safetensors file.
+# True when dir holds at least one non-empty safetensors file.
 _dir_has_safetensors() {
   local dir="${1%/}"
   local path=""
   [[ -d "${dir}" ]] || return 1
   while IFS= read -r path; do
     [[ -n "${path}" ]] || continue
-    [[ -f "${path}" ]] && return 0
+    [[ -s "${path}" ]] && return 0
   done < <(find "${dir}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
   return 1
 }
@@ -762,15 +920,13 @@ ltx_distilled_snapshot_ready() {
   (( saw == 1 ))
 }
 
-# True when a snapshot has model_index.json or config.json plus at least one
-# real safetensors file. Diffusers trees (mflux presets) keep weights in
-# subfolders, so this is broader than model_weights_cached. A snapshot that
-# has model.safetensors.index.json must include every indexed shard; one
-# leftover file is not enough. Incomplete blobs are rejected by
-# media_repo_cached before this runs. No network.
+# True when a snapshot is a complete MLX tree, a full diffusers tree, or a
+# single-file hub layout. Partial diffusers components and empty shards do
+# not count. Incomplete blobs are rejected by media_repo_cached first. No
+# network.
 hub_repo_has_weights() {
   local repo_id="${1:-}"
-  local cache folder snap nullglob_state path
+  local cache folder snap nullglob_state
   [[ -n "${repo_id}" && "${repo_id}" == */* ]] || return 1
   cache="$(huggingface_hub_cache_dir)"
   folder="${cache}/models--${repo_id//\//--}"
@@ -792,14 +948,18 @@ hub_repo_has_weights() {
       fi
       continue
     fi
-    if [[ -f "${snap}model_index.json" || -f "${snap}config.json" ]]; then
-      while IFS= read -r path; do
-        [[ -n "${path}" ]] || continue
-        if [[ -f "${path}" ]]; then
-          _restore_nullglob "${nullglob_state}"
-          return 0
-        fi
-      done < <(find "${snap}" -name '*.safetensors' \( -type f -o -type l \) -print 2>/dev/null)
+    if [[ -f "${snap}model_index.json" ]]; then
+      if diffusers_snapshot_weights_ready "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
+      continue
+    fi
+    if [[ -f "${snap}config.json" ]]; then
+      if hub_snapshot_weights_complete "${snap}"; then
+        _restore_nullglob "${nullglob_state}"
+        return 0
+      fi
     fi
   done
   _restore_nullglob "${nullglob_state}"
@@ -850,7 +1010,7 @@ image_generate_disk_profile() {
 disk_probe_paths() {
   local profile="${1:-}"
   case "${profile}" in
-    media-pip|image-pip|video-pip|image-generate)
+    core-pip|media-pip|image-pip|video-pip|image-generate)
       printf '%s\n' "${MLX_WORKSPACE}"
       ;;
     image-weights|video-weights)
@@ -895,11 +1055,12 @@ tightest_disk_for_profile() {
 
 # Conservative free-space floors (whole GiB) before large downloads.
 # Override one floor with the matching MLX_DISK_MIN_* variable.
-# Profiles: media-pip, image-pip, video-pip, image-weights, image-generate,
-# video-weights, wan-generate, wan-prepare.
+# Profiles: core-pip, media-pip, image-pip, video-pip, image-weights,
+# image-generate, video-weights, wan-generate, wan-prepare.
 disk_floor_gib() {
   local profile="${1:-}"
   case "${profile}" in
+    core-pip) printf '%s\n' "${MLX_DISK_MIN_CORE_GIB:-12}" ;;
     media-pip) printf '%s\n' "${MLX_DISK_MIN_MEDIA_GIB:-4}" ;;
     image-pip) printf '%s\n' "${MLX_DISK_MIN_IMAGE_GIB:-8}" ;;
     video-pip) printf '%s\n' "${MLX_DISK_MIN_VIDEO_GIB:-8}" ;;
@@ -977,10 +1138,11 @@ warn_or_die_disk_headroom() {
 }
 
 detect_python_version() {
+  local py
   if [[ -x "${MLX_VENV}/bin/python" ]]; then
     "${MLX_VENV}/bin/python" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'
+  elif py="$(resolve_auxiliary_python 2>/dev/null)" && [[ -n "${py}" ]]; then
+    "${py}" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'
   else
     echo "none"
   fi
@@ -1008,6 +1170,34 @@ ensure_homebrew_in_path() {
 
 check_xcode_clt() {
   if xcode-select -p >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+# Python for short helper scripts (JSON emit, safetensors index). Prefer the project
+# venv or Homebrew python so macOS /usr/bin/python3 does not trigger the CLT stub.
+resolve_auxiliary_python() {
+  local py prefix
+  if [[ -x "${MLX_VENV}/bin/python" ]]; then
+    printf '%s\n' "${MLX_VENV}/bin/python"
+    return 0
+  fi
+  ensure_homebrew_in_path
+  prefix="$(homebrew_prefix)"
+  if [[ -n "${prefix}" ]]; then
+    py="${prefix}/opt/python@${MLX_PYTHON_VERSION}/bin/python${MLX_PYTHON_VERSION}"
+    if [[ -x "${py}" ]]; then
+      printf '%s\n' "${py}"
+      return 0
+    fi
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    py="$(command -v python3)"
+    if [[ "$(uname -s)" == "Darwin" && "${py}" == "/usr/bin/python3" ]] && ! check_xcode_clt; then
+      return 1
+    fi
+    printf '%s\n' "${py}"
     return 0
   fi
   return 1
@@ -1069,6 +1259,54 @@ for name in ("pip", "setuptools", "wheel", "packaging"):
   done <<< "${versions}"
 }
 
+# Live MLX_* specs that may replace a line in the pin manifest.
+_constraint_override_specs() {
+  printf '%s\n' \
+    "${MLX_PIP_PACKAGE}" \
+    "${MLX_SETUPTOOLS_PACKAGE}" \
+    "${MLX_WHEEL_PACKAGE}" \
+    "${MLX_PACKAGING_LIB_PACKAGE}" \
+    "${MLX_PACKAGE}" \
+    "${MLX_LM_PACKAGE}" \
+    "${MLX_AUDIO_PACKAGE}" \
+    "${MLX_IMAGE_PACKAGE}"
+}
+
+# Export PIP_CONSTRAINT for dependency installs (core, media, and packaging).
+# Unchanged specs use requirements/constraints.txt. A one-off override writes
+# a workspace copy that replaces or drops that package's pin so pip does not
+# force the manifest version (ResolutionImpossible, or a bare name stuck on
+# the old pin).
+export_pip_constraint() {
+  local spec name file_line rewritten=0
+  local effective="${MLX_WORKSPACE}/.mlx-pip-constraint.txt"
+  if [[ ! -f "${MLX_PIP_CONSTRAINT_FILE}" ]]; then
+    die "Missing pip constraints file: ${MLX_PIP_CONSTRAINT_FILE}"
+  fi
+  cp "${MLX_PIP_CONSTRAINT_FILE}" "${effective}"
+  while IFS= read -r spec; do
+    [[ -n "${spec}" ]] || continue
+    name="${spec%%[=<>!~]*}"
+    [[ -n "${name}" ]] || continue
+    file_line="$(grep -E "^${name}==[^[:space:]]+$" "${MLX_PIP_CONSTRAINT_FILE}" | head -n 1 || true)"
+    [[ -n "${file_line}" ]] || continue
+    [[ "${spec}" == "${file_line}" ]] && continue
+    rewritten=1
+    grep -Ev "^${name}==[^[:space:]]+$" "${effective}" >"${effective}.tmp"
+    mv "${effective}.tmp" "${effective}"
+    if [[ "${spec}" =~ ^[A-Za-z0-9_.-]+==[^[:space:]]+$ ]]; then
+      printf '%s\n' "${spec}" >>"${effective}"
+    fi
+  done < <(_constraint_override_specs)
+  if (( rewritten == 0 )); then
+    rm -f "${effective}" "${effective}.tmp"
+    export PIP_CONSTRAINT="${MLX_PIP_CONSTRAINT_FILE}"
+    return 0
+  fi
+  rm -f "${effective}.tmp"
+  export PIP_CONSTRAINT="${effective}"
+}
+
 # Write MLX_PACKAGING_PACKAGES to a constraints file and export PIP_BUILD_CONSTRAINT
 # so PEP 517 isolated builds (for example git mlx-video) use the same specs.
 export_pip_build_constraint() {
@@ -1079,6 +1317,22 @@ export_pip_build_constraint() {
     printf '%s\n' "${pkg}" >>"${constraint_file}"
   done
   export PIP_BUILD_CONSTRAINT="${constraint_file}"
+}
+
+# Run pip in the project venv with PIP_CONSTRAINT and PIP_BUILD_CONSTRAINT set.
+mlx_pip_install() {
+  local py
+  py="$(venv_python)"
+  if [[ ! -x "${py}" ]]; then
+    if [[ -d "${MLX_VENV}" ]]; then
+      die "Python venv at ${MLX_VENV} is not usable. Run: make rebuild"
+    fi
+    die "Python venv not found at ${py}. Run: make venv && make install"
+  fi
+  export_pip_constraint
+  export_pip_build_constraint
+  export PIP_DISABLE_PIP_VERSION_CHECK=1
+  "${py}" -m pip install --disable-pip-version-check "$@"
 }
 
 # Install the shared packaging-tool pins into the active venv.
@@ -1092,10 +1346,8 @@ install_packaging_tools() {
     die "Python venv not found at ${py}. Run: make venv && make install"
   fi
   log_info "Installing pinned packaging tools: ${MLX_PACKAGING_PACKAGES[*]}"
-  # Silence "you should upgrade pip" for this process, including later installs.
-  export PIP_DISABLE_PIP_VERSION_CHECK=1
-  "${py}" -m pip install --disable-pip-version-check --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
-  export_pip_build_constraint
+  mlx_pip_install --upgrade "${MLX_PACKAGING_PACKAGES[@]}"
+  log_info "Dependency installs constrained via PIP_CONSTRAINT=${PIP_CONSTRAINT}"
   log_info "PEP 517 build isolation constrained via PIP_BUILD_CONSTRAINT=${MLX_PIP_BUILD_CONSTRAINT_FILE}"
   report_packaging_tools "${py}"
 }
@@ -1417,7 +1669,7 @@ venv_home_under_homebrew() {
   [[ -n "${prefix}" ]] || return 1
   cfg_home="$(pyvenv_cfg_value "${dir}" home)" || return 1
   [[ -n "${cfg_home}" ]] || return 1
-  [[ "${cfg_home}" == "${prefix}"* ]]
+  [[ "${cfg_home}" == "${prefix}" || "${cfg_home}" == "${prefix}/"* ]]
 }
 
 # make venv reuse: Homebrew python@MLX_PYTHON_VERSION with a working pip.
@@ -1525,6 +1777,16 @@ for dirpath, _dirnames, _filenames in os.walk(root, topdown=False, followlinks=F
 PY
 }
 
+# True when pid is running. kill -0 EPERM (another user's process) is treated as alive.
+pid_is_alive() {
+  local pid="$1"
+  [[ -n "${pid}" ]] || return 1
+  if kill -0 "${pid}" 2>/dev/null; then
+    return 0
+  fi
+  ps -p "${pid}" >/dev/null 2>&1
+}
+
 # Exclusive lock for one destination: ${dest}.create-lock/pid.
 # mkdir is atomic. A live pid owns the lock; a dead pid is abandoned and replaced.
 # Before removing a stale lock, re-read pid so two waiters cannot both delete a
@@ -1532,12 +1794,17 @@ PY
 # must remove it on the success path; the EXIT trap removes it when create fails.
 acquire_venv_create_lock() {
   local dest="$1"
-  local lock pid stale_owner current_owner empty_seen waited logged_wait
+  local lock pid stale_owner current_owner empty_seen waited logged_wait lock_timeout deadline
   lock="${dest}.create-lock"
   empty_seen=0
   waited=0
   logged_wait=0
-  while (( waited < 180 )); do
+  lock_timeout="${MLX_VENV_LOCK_TIMEOUT:-300}"
+  case "${lock_timeout}" in
+    ''|*[!0-9]*) lock_timeout=300 ;;
+  esac
+  deadline=$((SECONDS + lock_timeout))
+  while (( SECONDS < deadline )); do
     if mkdir -- "${lock}" 2>/dev/null; then
       if printf '%s\n' "$$" >"${lock}/pid"; then
         printf '%s\n' "${lock}"
@@ -1563,7 +1830,7 @@ acquire_venv_create_lock() {
         waited=$((waited + 1))
         continue
       fi
-    elif kill -0 "${pid}" 2>/dev/null; then
+    elif pid_is_alive "${pid}"; then
       if (( logged_wait == 0 )); then
         printf 'INFO: Waiting for venv create lock held by pid %s\n' "${pid}" >&2
         logged_wait=1
@@ -1588,7 +1855,7 @@ acquire_venv_create_lock() {
         waited=$((waited + 1))
         continue
       fi
-      if kill -0 "${stale_owner}" 2>/dev/null; then
+      if pid_is_alive "${stale_owner}"; then
         empty_seen=0
         sleep 0.2
         waited=$((waited + 1))
@@ -1705,7 +1972,7 @@ create_atomic_project_venv() {
   while IFS= read -r stale; do
     [[ -n "${stale}" ]] || continue
     stale_pid="${stale##*.}"
-    if [[ "${stale_pid}" != "$$" ]] && kill -0 "${stale_pid}" 2>/dev/null; then
+    if [[ "${stale_pid}" != "$$" ]] && pid_is_alive "${stale_pid}"; then
       die "Refusing to remove in-use temporary venv ${stale} (pid ${stale_pid} is running). If no other make venv/rebuild is active, remove it or run: make clean"
     fi
     rm -rf -- "${stale}"
@@ -1716,6 +1983,11 @@ create_atomic_project_venv() {
   [[ -x "${py}" ]] || die "Venv creation failed: ${py} is not executable"
   "${py}" -m pip --version >/dev/null || die "Venv creation failed: pip is not available in ${partial}"
   rewrite_relocated_venv_paths "${brew_py}" "${partial}" "${dest}"
+  if [[ -e "${dest}" || -L "${dest}" ]]; then
+    die "Refusing to overwrite ${dest}: it appeared while building ${partial}"
+  fi
+  # Re-check under the create lock immediately before rename. A foreign dest can
+  # still appear in the tiny window after this check (accepted: lock + nested detection).
   if [[ -e "${dest}" || -L "${dest}" ]]; then
     die "Refusing to overwrite ${dest}: it appeared while building ${partial}"
   fi
@@ -1758,6 +2030,28 @@ resolve_homebrew_python() {
 
 # Detect Homebrew, optionally install it, and reject an Intel prefix.
 # rerun_cmd is printed when Homebrew is missing.
+install_homebrew_install_script() {
+  local url="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+  local tmp sha saved_exit_trap quoted_tmp
+  tmp="$(mktemp)"
+  quoted_tmp="$(printf '%q' "${tmp}")"
+  saved_exit_trap="$(_exit_trap_spec)"
+  # Chain onto the caller EXIT trap so a failed download still cleans the temp
+  # file without dropping the caller's cleanup.
+  _install_owned_exit_trap "rm -f -- ${quoted_tmp}" "${saved_exit_trap}"
+  curl -fsSL "${url}" -o "${tmp}"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha="$(sha256sum "${tmp}" | awk '{print $1}')"
+  else
+    sha="$(shasum -a 256 "${tmp}" | awk '{print $1}')"
+  fi
+  log_info "Homebrew install script SHA-256: ${sha}"
+  log_info "Homebrew install script URL: ${url}"
+  NONINTERACTIVE=1 /bin/bash "${tmp}"
+  rm -f -- "${tmp}"
+  _restore_exit_trap "${saved_exit_trap}"
+}
+
 ensure_homebrew_ready() {
   local rerun_cmd="$1"
   local brew_arch
@@ -1765,7 +2059,7 @@ ensure_homebrew_ready() {
   if [[ -z "$(homebrew_prefix)" ]]; then
     if is_truthy "${MLX_INSTALL_HOMEBREW:-0}"; then
       log_info "Installing Homebrew (NONINTERACTIVE=1)..."
-      NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      install_homebrew_install_script
       ensure_homebrew_in_path
     else
       cat <<EOF
@@ -2102,7 +2396,7 @@ Working set:      ${ws_disp}
 GPU arch:         ${MLX_GPU_ARCH:-unavailable}
 CPU cores:        ${MLX_CPU_CORES}
 macOS version:    ${MLX_MACOS_VERSION}
-Disk available:   ${MLX_DISK_AVAIL_GIB} GiB (workspace volume)
+Disk available:   ${MLX_DISK_AVAIL_GIB:-unknown} GiB (workspace volume)
 Python version:   $(detect_python_version)
 Workspace:        ${MLX_WORKSPACE}
 Recommended:      ${MLX_TIER_HINT}
@@ -2166,7 +2460,12 @@ print_detect_env() {
   printf 'MLX_TIER_HINT=%q\n' "${MLX_TIER_HINT:-}"
   printf 'MLX_CPU_CORES=%q\n' "${MLX_CPU_CORES:-}"
   printf 'MLX_MACOS_VERSION=%q\n' "${MLX_MACOS_VERSION:-}"
-  printf 'MLX_DISK_AVAIL_GIB=%q\n' "${MLX_DISK_AVAIL_GIB:-0}"
+  if [[ -n "${MLX_DISK_AVAIL_GIB:-}" && "${MLX_DISK_AVAIL_GIB}" =~ ^[0-9]+$ ]]; then
+    printf 'MLX_DISK_AVAIL_GIB=%q\n' "${MLX_DISK_AVAIL_GIB}"
+  else
+    # Empty when df failed: do not emit "unknown" (sourcing would disable later df checks).
+    printf 'MLX_DISK_AVAIL_GIB=%q\n' ""
+  fi
   printf 'MLX_PYTHON_VERSION_DETECTED=%q\n' "$(detect_python_version)"
   printf 'MLX_HOMEBREW=%q\n' "${brew_ok}"
   printf 'MLX_HOMEBREW_PREFIX=%q\n' "${brew_prefix}"
@@ -2181,22 +2480,70 @@ print_detect_env() {
   printf 'MLX_WORKSPACE=%q\n' "${MLX_WORKSPACE:-}"
 }
 
+_file_mode_octal() {
+  local path="$1"
+  local mode=""
+  if mode="$(stat -f '%Lp' "${path}" 2>/dev/null)"; then
+    :
+  elif mode="$(stat -c '%a' "${path}" 2>/dev/null)"; then
+    :
+  fi
+  [[ -n "${mode}" ]] || return 1
+  printf '%s' "${mode}"
+}
+
+# Final write target for models.env when the path is a symlink chain.
+env_file_write_target() {
+  local file="$1"
+  local target link_dir next seen=""
+  [[ -n "${file}" ]] || return 1
+  target="${file}"
+  while [[ -L "${target}" ]]; do
+    link_dir="$(dirname "${target}")"
+    next="$(readlink "${target}")"
+    [[ -n "${next}" ]] || die "Refusing to follow empty symlink: ${target}"
+    if [[ "${next}" != /* ]]; then
+      next="${link_dir}/${next}"
+    fi
+    case " ${seen} " in
+      *" ${next} "*) die "Refusing to follow symlink loop in ${file}" ;;
+    esac
+    seen="${seen} ${next}"
+    target="${next}"
+  done
+  printf '%s' "${target}"
+}
+
 upsert_env_assignment() {
   local file="$1"
   local key="$2"
   local value="$3"
-  local quoted tmp
+  local quoted tmp target mode
   is_models_env_key "${key}" || die "Refusing to write non-MLX key to models.env: ${key}"
   quoted="$(quote_env_value "${value}")"
-  tmp="$(mktemp)"
+  target="$(env_file_write_target "${file}")"
+  tmp="$(mktemp "${target}.XXXXXX")"
+  mode=""
+  if [[ -f "${target}" ]]; then
+    mode="$(_file_mode_octal "${target}" || true)"
+  fi
   # Pass via ENVIRON so awk -v does not interpret backslashes in POSIX '\'' quoting.
-  MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
+  if ! MLX_UPSERT_KEY="${key}" MLX_UPSERT_VALUE="${quoted}" awk '
     BEGIN { k=ENVIRON["MLX_UPSERT_KEY"]; v=ENVIRON["MLX_UPSERT_VALUE"]; done=0 }
     index($0, k "=") == 1 && !done { print k "=" v; done=1; next }
     { print }
     END { if (!done) print k "=" v }
-  ' "${file}" >"${tmp}"
-  mv "${tmp}" "${file}"
+  ' "${file}" >"${tmp}"; then
+    rm -f -- "${tmp}"
+    return 1
+  fi
+  if ! mv "${tmp}" "${target}"; then
+    rm -f -- "${tmp}"
+    return 1
+  fi
+  if [[ -n "${mode}" ]]; then
+    chmod "${mode}" "${target}"
+  fi
 }
 
 is_models_env_key() {
@@ -2286,14 +2633,72 @@ unquote_posix_single() {
   printf '%s' "${out}"
 }
 
+# Pipe-delimited MLX_* names set in the shell before load_models_env reads the file.
+MODELS_ENV_PROCESS_ENV_KEYS=""
+
+# Snapshot process env once per load. Later duplicate lines in models.env still win;
+# only keys set before parsing are locked out of the file.
+models_env_snapshot_process_env() {
+  local name marker
+  MODELS_ENV_PROCESS_ENV_KEYS="|"
+  while IFS= read -r name; do
+    [[ "${name}" =~ ^MLX_[A-Z0-9_]+$ ]] || continue
+    eval "marker=\${${name}+x}"
+    if [[ -n "${marker}" ]]; then
+      MODELS_ENV_PROCESS_ENV_KEYS+="${name}|"
+    fi
+  done < <(compgen -A variable 2>/dev/null || true)
+}
+
+models_env_key_locked_from_process_env() {
+  case "${MODELS_ENV_PROCESS_ENV_KEYS}" in
+    *"|${1}|"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# User-set MLX_RECOMMENDED_CONTEXT (CLI/env/models.env) before compose overwrites
+# the exported composed default. Cleared by capture_user_recommended_context.
+capture_user_recommended_context() {
+  unset USER_MLX_RECOMMENDED_CONTEXT
+  if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    USER_MLX_RECOMMENDED_CONTEXT="${MLX_RECOMMENDED_CONTEXT}"
+  fi
+}
+
+# CLI --max-kv-size > user MLX_RECOMMENDED_CONTEXT > composed default.
+resolve_text_max_kv_size() {
+  local cli_max_kv="${1:-}"
+  if [[ -n "${cli_max_kv}" ]]; then
+    printf '%s' "${cli_max_kv}"
+    return 0
+  fi
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
+# Effective server context cap (no server --max-kv-size in mlx-lm 0.31.3).
+resolve_serve_context() {
+  if [[ -n "${USER_MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+    printf '%s' "${USER_MLX_RECOMMENDED_CONTEXT}"
+    return 0
+  fi
+  printf '%s' "${MLX_RECOMMENDED_CONTEXT:-2048}"
+}
+
 # Parse config/models.env as data. Only documented MLX_* config keys are
 # exported. Lines are never executed (no command substitution, PATH=, or
 # HF_TOKEN). Runtime identity keys (workspace/venv/paths) are skipped.
-# Missing file is OK.
+# Process environment beats file for each allowlisted key. Duplicate keys in the
+# file still last-win unless the process env set the key before load. Missing file is OK.
 load_models_env() {
   local file="${1:-${MLX_MODELS_ENV}}"
   local line key value decoded
   [[ -f "${file}" ]] || return 0
+  models_env_snapshot_process_env
   while IFS= read -r line || [[ -n "${line}" ]]; do
     line="${line%$'\r'}"
     line="${line#"${line%%[![:space:]]*}"}"
@@ -2316,6 +2721,9 @@ load_models_env() {
       fi
       if is_models_env_runtime_key "${key}"; then
         log_warn "Skipping runtime key ${key} in ${file}"
+        continue
+      fi
+      if models_env_key_locked_from_process_env "${key}"; then
         continue
       fi
       printf -v "${key}" '%s' "${decoded}"
@@ -2572,8 +2980,8 @@ Default context:  ${context}
 
 Weights are not total unified memory. KV cache, runtime, and macOS sit on top.
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
-cached is yes when that repo has config.json and every weight file on disk
-(including all shards listed in model.safetensors.index.json when present).
+cached is yes when that repo has config.json and every non-empty weight file on
+disk (including all shards listed in model.safetensors.index.json when present).
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'
@@ -2997,8 +3405,8 @@ Low RAM:          ${low_label}
 
 fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
 cached is yes when the Hugging Face cache holds that preset's upstream repo
-(model_index.json or config.json, plus a safetensors file, and no incomplete blob).
-Nothing is downloaded.
+(every diffusers weight component with non-empty shards, or a complete single-file
+layout, and no incomplete blob). Nothing is downloaded.
 
 EOF
   printf 'fit\tcached\tmodel\tweights\tuse\n'

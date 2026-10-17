@@ -284,6 +284,18 @@ EOF
 printf 'shard1\n' >"${partial_sharded}/model-00001-of-00002.safetensors"
 ln -sf /nonexistent "${partial_sharded}/model-00002-of-00002.safetensors"
 
+zero_byte="${cache_dir}/models--mlx-community--Phi-3.5-mini-instruct-4bit/snapshots/zero"
+mkdir -p "${zero_byte}"
+printf '{}\n' >"${zero_byte}/config.json"
+cat >"${zero_byte}/model.safetensors.index.json" <<'EOF'
+{"weight_map":{"layer.a":"model-00001-of-00002.safetensors","layer.b":"model-00002-of-00002.safetensors"}}
+EOF
+printf 'shard1\n' >"${zero_byte}/model-00001-of-00002.safetensors"
+: >"${zero_byte}/model-00002-of-00002.safetensors"
+expect_eq "zero-byte index shard is not cached" \
+  "$(HF_HUB_CACHE="${cache_dir}" model_weights_cached mlx-community/Phi-3.5-mini-instruct-4bit && echo yes || echo no)" \
+  "no"
+
 expect_eq "dangling weight symlink is not cached" \
   "$(HF_HUB_CACHE="${cache_dir}" model_weights_cached mlx-community/Meta-Llama-3.1-8B-Instruct-4bit && echo yes || echo no)" \
   "no"

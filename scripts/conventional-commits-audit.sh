@@ -19,8 +19,8 @@
 #
 # Usage:
 #   scripts/conventional-commits-audit.sh
-#   scripts/conventional-commits-audit.sh --range ORIGIN_REF...HEAD
-#   COMMIT_RANGE='origin/main...HEAD' scripts/conventional-commits-audit.sh
+#   scripts/conventional-commits-audit.sh --range ORIGIN_REF..HEAD
+#   COMMIT_RANGE='origin/main..HEAD' scripts/conventional-commits-audit.sh
 #
 # Environment:
 #   COMMIT_RANGE          Override commit range (default: see below)
@@ -46,7 +46,7 @@ RANGE=""
 
 usage() {
   cat <<'EOF'
-Usage: conventional-commits-audit.sh [--range FROM...TO] [-h|--help]
+Usage: conventional-commits-audit.sh [--range FROM..TO] [-h|--help]
 
 Audit commit subjects for Conventional Commits compliance.
 
@@ -87,7 +87,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --range)
-      [[ $# -ge 2 ]] || die "--range requires FROM...TO"
+      [[ $# -ge 2 ]] || die "--range requires FROM..TO"
       RANGE="$2"
       shift 2
       ;;

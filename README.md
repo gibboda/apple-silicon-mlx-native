@@ -46,7 +46,10 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 
 ## Quick start
 
+On a fresh Mac, install the Xcode Command Line Tools first (`git` and `make` need them):
+
 ```bash
+xcode-select --install
 git clone https://github.com/gibboda/apple-silicon-mlx-native.git
 cd apple-silicon-mlx-native
 make detect
@@ -74,7 +77,7 @@ Default pins live in `scripts/lib/common.sh`: `mlx==0.32.2`, `mlx-lm==0.31.3`, `
 MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 ```
 
-The same file pins the packaging toolchain used by `make install`, `make rebuild`, `make install-image`, and `make install-video`: `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PACKAGING_LIB_PACKAGE`; `wheel` depends on `packaging`). Those specs are also written to `PIP_BUILD_CONSTRAINT` so isolated builds use them. `make validate` prints the versions in `.venv` and warns when an exact pin does not match. Bump the pins in `scripts/lib/common.sh` for a security fix, a Python requirement change, or an install failure, and record the bump in `CHANGELOG.md`. Dependabot here only updates GitHub Actions. To notice a newer packaging tool, run `pip index versions pip` (and the same for `setuptools`, `wheel`, and `packaging`) or watch those PyPI release feeds. To try a newer toolchain once:
+The same file pins the packaging toolchain used by `make install`, `make rebuild`, `make install-image`, and `make install-video`: `pip==26.2.1`, `setuptools==84.0.0`, `wheel==0.48.0`, and `packaging==26.3` (`MLX_PACKAGING_LIB_PACKAGE`; `wheel` depends on `packaging`). `requirements/constraints.txt` lists those pins plus the MLX core packages and selected transitive deps (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every install path exports `PIP_CONSTRAINT` from that file so media extras cannot float `mlx` / `mlx-lm` off their pins. `common.sh` reads those lines as its defaults, so a Dependabot edit of `requirements/constraints.txt` is the install pin without a second copy in the shell file. A one-off `MLX_*` spec rewrites the effective constraint (exact `name==version` replaces the line; a bare name drops it) so the manifest pin does not force the override back. The packaging specs are also written to `PIP_BUILD_CONSTRAINT` so isolated builds use them. `make validate` prints the versions in `.venv` and warns when an exact pin does not match. Bump `requirements/constraints.txt` for a security fix, a Python requirement change, or an install failure, and record the bump in `CHANGELOG.md`. Dependabot opens weekly PRs for GitHub Actions and the Python pins under `requirements/`. To try a newer toolchain once:
 
 ```bash
 MLX_PIP_PACKAGE=pip MLX_SETUPTOOLS_PACKAGE=setuptools MLX_WHEEL_PACKAGE=wheel MLX_PACKAGING_LIB_PACKAGE=packaging make rebuild
@@ -154,7 +157,7 @@ JSON/env include `chip_family`, `chip_sku`, `gpu_cores`, `bandwidth_gbs`, `throu
 
 ## LLM inference
 
-On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap. Max tokens and KV size must be positive integers, and temperature must be a finite non-negative number when set. An empty value is invalid. Invalid values, including flags after `--`, fail before launch. The server port must be an integer from 1 to 65535. A malformed configured `MLX_RECOMMENDED_CONTEXT` fails even though the composed default still sets the KV cap unless `--max-kv-size` is passed.
+On ≤8 GB the text wrapper pins MLX to the GPU and sets the memory and wired limits to the Metal recommended working set, with a 256 MiB cache cap, before weights load. Larger memory tiers keep MLX defaults. Calling `mlx_lm.generate` directly still works and does not apply that cap. Max tokens and KV size must be positive integers, and temperature must be a finite non-negative number when set. An empty value is invalid. Invalid values, including flags after `--`, fail before launch. The server port must be an integer from 1 to 65535. Configuration precedence is CLI → process env → `config/models.env` → composed chip policy ([docs/models.md](docs/models.md#configuration-precedence)).
 
 ```bash
 make generate-text PROMPT="Hello from MLX"
@@ -213,7 +216,7 @@ On-disk size ≠ RAM use. Defaults are composed from **RAM tier** (what fits) an
 | ≤64 GB workstation | 14B 4-bit | 14B 4-bit |
 | >64 GB large | 32B 4-bit | 32B 4-bit |
 
-Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and whether it is already in the Hugging Face cache (`cached` `yes` or `no`). `make list-image` and `make list-video` do the same for the image and video catalogs (image and LTX cache are Hugging Face repos; Wan cache is the converted directory under `models/video/`). None of them download weights.
+Unknown chips fall back to the RAM-only column. `make recommend` prints the composed profile without rewriting `config/models.env`. `make list` labels each catalog text model for this Mac (`default`, `fits`, `tight`, or `poor`) and whether it is already in the Hugging Face cache (`cached` `yes` or `no`). `make list-image` and `make list-video` do the same for the image and video catalogs (image and LTX cache are Hugging Face repos with complete non-empty weight files; Wan cache is the converted directory under `models/video/`). None of them download weights.
 
 ## 8 GB Apple Silicon limitations
 
@@ -243,7 +246,7 @@ make prepare-video   # Wan2.1 1.3B 4-bit; needs torch to load original .pth file
 make video VIDEO_PROMPT="a red fox running through snow"
 ```
 
-On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–33 frames. The UMT5 text encoder is still ~11 GB, so 8 GB, 16 GB slow/moderate base chips, and fanless Airs refuse generate unless `--force`. Stop `mlx_lm.server` first. Do not advertise LTX on machines that are RAM-too-small. On ≥36 GB cooled workstations the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the composed profile (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). `make video` passes `VIDEO_PROMPT` through unchanged (no shell expansion). Make strips leading whitespace from a `VAR=value` command-line assignment; to keep it, set the variable in the environment instead, e.g. `VIDEO_PROMPT='  text' make video`. Width, height, frames, and steps must be positive integers from 1 to 999999. Seed, when set, must be a non-negative integer. The same rules apply to `MLX_VIDEO_*` in the environment and `config/models.env`. Invalid values fail before launch. See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
+On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–49 frames (see [docs/media.md](docs/media.md)). The UMT5 text encoder is still ~11 GB, so 8 GB, 16 GB slow/moderate base chips, and fanless Airs refuse generate unless `--force`. Stop `mlx_lm.server` first. Do not advertise LTX on machines that are RAM-too-small. On ≥36 GB cooled workstations the default is LTX-2 distilled (Hugging Face download, no Wan convert). `make install-video` does not convert Wan weights. `--family` only switches CLI/checkpoint — size and frames still follow the composed profile (then aligned to the family: Wan 4n+1, LTX 8n+1 and 64px). `make video` passes `VIDEO_PROMPT` through unchanged (no shell expansion). Make strips leading whitespace from a `VAR=value` command-line assignment; to keep it, set the variable in the environment instead, e.g. `VIDEO_PROMPT='  text' make video`. Width, height, frames, and steps must be positive integers from 1 to 999999. Seed, when set, must be a non-negative integer. The same rules apply to `MLX_VIDEO_*` in the environment and `config/models.env`. Invalid values fail before launch. See [docs/media.md](docs/media.md). Do not install `mlx-gen` into this venv (it collides with pinned `mflux`).
 
 ## Repository structure
 
@@ -266,6 +269,8 @@ apple-silicon-mlx-native/
 │   ├── media.md
 │   ├── models.md
 │   └── troubleshooting.md
+├── requirements/
+│   └── constraints.txt
 ├── scripts/
 │   ├── lib/
 │   │   ├── common.sh
@@ -295,6 +300,7 @@ apple-silicon-mlx-native/
 │   │   └── fake_venv_python.py
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
+│   ├── config-precedence.test.sh
 │   ├── conventional-commits-audit.test.sh
 │   ├── delete-merged-pr-branch.test.sh
 │   ├── disk-headroom.test.sh
@@ -306,8 +312,10 @@ apple-silicon-mlx-native/
 │   ├── mlx-video.test.sh
 │   ├── model-list.test.sh
 │   ├── models-env.test.sh
+│   ├── pip-constraints.test.sh
 │   ├── readme-tree.test.sh
 │   ├── release.test.sh
+│   ├── robustness-fixes.test.sh
 │   └── wrapper-argv.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
@@ -339,7 +347,10 @@ The tree lists every tracked file. `tests/readme-tree.test.sh` fails when a trac
 | `make install-video` | Install `mlx-video` into `.venv` |
 | `make prepare-video` | Download and convert Wan2.1 T2V 1.3B for mlx-video |
 | `make video` | Generate an MP4 (`VIDEO_PROMPT=...`) |
+| `make generate-text` | One-shot text generation (`PROMPT=...`; caps MLX cache on ≤8 GB) |
+| `make serve` | Start `mlx_lm.server` (≤8 GB pins GPU and caps MLX memory) |
 | `make clean` / `make uninstall` | Remove `.venv`; report leftover system tools |
+| `make release` | Cut next SemVer from `CHANGELOG` `[Unreleased]` and open a PR |
 | `make audit` | Conventional Commits audit |
 | `make lint` | ShellCheck (CI pins v0.11.0; see [troubleshooting](docs/troubleshooting.md#shellcheck-not-found-locally)) |
 | `make test` | Portable shell self-tests |
@@ -367,7 +378,7 @@ ci(commits): enforce conventional commits
 
 ```bash
 make audit
-scripts/conventional-commits-audit.sh --range origin/main...HEAD
+scripts/conventional-commits-audit.sh --range origin/main..HEAD
 ```
 
 GitHub Actions runs the same script on pull requests. GitHub-generated merge commits are exempt by default. Full syntax: `scripts/conventional-commits-audit.sh --help`.

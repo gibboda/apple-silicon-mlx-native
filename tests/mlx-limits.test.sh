@@ -69,7 +69,9 @@ assert_fence_follows_physical() {
   if [[ -n "${policy}" && "${policy}" != "${physical}" ]]; then
     pol="$(inference_limit_plan "${policy}")"
     IFS='|' read -r pol_apply _ <<<"${pol}"
-    if [[ "${apply}" == "${pol_apply}" ]]; then
+    if [[ "${pol_apply}" == "${want_apply}" ]]; then
+      pass "${label} policy tier ${policy} matches physical fence outcome"
+    elif [[ "${apply}" == "${pol_apply}" ]]; then
       fail "${label} fence followed policy tier ${policy}"
     else
       pass "${label} fence ignores policy tier ${policy}"
@@ -439,6 +441,7 @@ env_boundary="$(
     "${TEXT}" --dump-plan
 )"
 expect_eq "env boundary max tokens" "$(plan_field max_tokens "${env_boundary}")" "1"
+expect_eq "env boundary max kv" "$(plan_field max_kv_size "${env_boundary}")" "1"
 expect_eq "env boundary temp" "$(plan_field temp "${env_boundary}")" "0.0"
 
 port_low="$(

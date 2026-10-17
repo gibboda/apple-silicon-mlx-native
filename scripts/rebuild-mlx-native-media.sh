@@ -28,7 +28,7 @@ Usage: rebuild-mlx-native-media.sh [-h|--help] [--force]
 
 Rebuild the Python .venv for the MLX workspace.
 
-  --force   Skip interactive confirmation when removing .venv
+  --force   Skip confirmation when removing .venv (required for non-interactive runs)
   -h        Show this help
 
 Uses the same detect/compose path as install (OVERRIDE_MEMORY_TIER and
@@ -85,13 +85,17 @@ if [[ -e "${MLX_VENV}" ]]; then
   if ! looks_like_venv "${MLX_VENV}"; then
     die "Refusing to remove path that does not look like a venv: ${MLX_VENV}"
   fi
-  if (( FORCE == 0 )) && [[ -t 0 ]]; then
-    printf 'Remove and recreate %s? [y/N] ' "${MLX_VENV}"
-    read -r answer
-    case "${answer}" in
-      y|Y|yes|YES) ;;
-      *) die "Aborted by user." ;;
-    esac
+  if (( FORCE == 0 )) && ! is_truthy "${MLX_ASSUME_YES:-0}"; then
+    if [[ -t 0 ]]; then
+      printf 'Remove and recreate %s? [y/N] ' "${MLX_VENV}"
+      read -r answer
+      case "${answer}" in
+        y|Y|yes|YES) ;;
+        *) die "Aborted by user." ;;
+      esac
+    else
+      die "Refusing to remove ${MLX_VENV} without a TTY. Re-run with --force or MLX_ASSUME_YES=1."
+    fi
   fi
   log_info "Removing ${MLX_VENV}"
   rm -rf "${MLX_VENV}"
@@ -104,22 +108,23 @@ PY="$(venv_python)"
 PIP="$(venv_pip)"
 install_packaging_tools
 log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
-"${PIP}" install --upgrade "${MLX_CORE_PACKAGES[@]}"
+warn_or_die_disk_headroom core-pip
+mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
 
 if ! is_truthy "${MLX_SKIP_MEDIA}"; then
   log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
   warn_or_die_disk_headroom media-pip
-  "${PIP}" install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
+  mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
 fi
 
 if is_truthy "${MLX_INSTALL_IMAGE}"; then
   warn_or_die_disk_headroom image-pip
-  "${PIP}" install --upgrade "${MLX_IMAGE_PACKAGE}"
+  mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
 fi
 
 if is_truthy "${MLX_INSTALL_VIDEO}"; then
   warn_or_die_disk_headroom video-pip
-  "${PIP}" install --upgrade "${MLX_VIDEO_PACKAGE}"
+  mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
 fi
 
 log_header "Validation"
