@@ -11,52 +11,9 @@ DELETE="${ROOT}/scripts/delete-merged-pr-branch.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    pass "${label}"
-  else
-    fail "${label} (expected success)"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
-expect_not_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    fail "${label} (unexpected ${needle})"
-  else
-    pass "${label}"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 FAKE_BIN="${TMP}/bin"
 GH_LOG="${TMP}/gh.log"
 mkdir -p "${FAKE_BIN}"
@@ -344,8 +301,4 @@ FAKE_DELETE_STATUS="1"
 FAKE_DELETE_BODY='{"message":"Server Error","status":"500"}'
 expect_fail "other delete errors fail" invoke
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s branch-delete check(s) failed\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: delete-merged-pr-branch\n'
+assert_finish "delete-merged-pr-branch"

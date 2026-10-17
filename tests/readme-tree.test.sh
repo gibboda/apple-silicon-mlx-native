@@ -8,10 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 README="${ROOT}/README.md"
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 # Print one relative path per file entry in the Repository structure fence.
 readme_tree_files() {
   local source="${1:-${README}}"
@@ -162,9 +161,4 @@ else
   fail "README tree parser accepts CRLF fences (${crlf_parsed})"
 fi
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s README tree check(s) failed\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: readme-tree self-test passed\n'
-exit 0
+assert_finish "readme-tree self-test passed"

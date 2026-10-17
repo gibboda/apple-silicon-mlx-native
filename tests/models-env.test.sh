@@ -13,31 +13,9 @@ source "${COMMON}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_eq() {
-  local label="$1"
-  local got="$2"
-  local want="$3"
-  if [[ "${got}" == "${want}" ]]; then
-    pass "${label}"
-  else
-    fail "${label} (got '${got}', want '${want}')"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if ( "$@" ) >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 ENV_FILE="${TMP}/models.env"
 PWNED="${TMP}/pwned"
 
@@ -268,9 +246,4 @@ load_models_env "${ENV_FILE}" >/dev/null 2>&1
 expect_eq "process env beats duplicate file model" "${MLX_DEFAULT_MODEL}" "from-shell"
 unset MLX_DEFAULT_MODEL
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s failure(s)\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: models-env self-test passed\n'
-exit 0
+assert_finish "models-env self-test passed"
