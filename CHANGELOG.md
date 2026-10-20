@@ -17,9 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - CI runs the full portable test suite on macOS with `/bin/bash` 3.2, audits PR titles for Conventional Commits, pins ShellCheck v0.11.0, limits duplicate ShellCheck runs on same-repo PR pushes, and serializes release publishing
 - Document Python version policy in `docs/troubleshooting.md`: default Homebrew `python@3.12`, pinned `mlx` macOS arm64 wheels through CPython 3.14 (3.15 blocked until upstream ships `cp315` wheels), optional `MLX_PYTHON_VERSION=3.13` trial (`export`, rollback, macOS 14+ / torch wheel notes), README link, and a non-stale pointer comment at `MLX_PYTHON_VERSION`
+- Shell self-tests share `tests/lib/assert.sh` (`expect_line`, `skip`, subshell-safe `expect_fail`). Wrapper argv is recorded via fake CLIs in `tests/wrapper-argv.test.sh`. Plan `key=value` checks use exact-line matching so mutations like `steps=40` no longer pass when asserting `steps=4`
 
 ### Fixed
 
+- `make list-image` reports `cached yes` only when every diffusers weight component (transformer or UNet, text encoders, VAE) has non-empty shards, not when a partial tree or zero-byte shard is present. `make list` applies the same non-empty rule to indexed text-model shards
+- Honor user `MLX_RECOMMENDED_CONTEXT` from the process environment or `config/models.env` after chip policy compose; process env now wins over `models.env` for allowlisted keys. Precedence table in `docs/models.md`
 - `make image`, `make video`, and `make generate-text` pass the prompt through unchanged. Backticks, `$VAR`, `$(...)`, quotes, backslashes, and newlines stay literal on macOS Make 3.81. Make strips leading whitespace from a `VAR=value` command-line assignment; set the variable in the environment instead (e.g. `IMAGE_PROMPT='  text' make image`) to keep it
 - Image and video generation reject a non-integer width, height, frames, steps, quantize, or seed from the command line, the environment, or `config/models.env` before arithmetic and before venv setup. Width, height, frames, and steps must be from 1 to 999999 so bash arithmetic cannot wrap them. Quantize must be 3, 4, 5, 6, or 8. Seed, when set, must be a non-negative integer and is printed by `--dump-plan`
 

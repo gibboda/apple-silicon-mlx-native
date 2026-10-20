@@ -97,12 +97,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_models_env "${MLX_MODELS_ENV}"
-# Profile load replaces MLX_RECOMMENDED_CONTEXT with the composed default.
-# An empty or malformed config value is invalid and fails here, before that
-# replacement. Unset still means "use the composed default".
+# An empty or malformed MLX_RECOMMENDED_CONTEXT is invalid and fails here.
+# Unset means "use the composed default after profile load".
 if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
   require_positive_integer "MLX_RECOMMENDED_CONTEXT" "${MLX_RECOMMENDED_CONTEXT}"
 fi
+capture_user_recommended_context
 # Empty CLI values are rejected in the parser. An empty models.env assignment
 # is invalid too; only an unset key falls back to the default or is omitted.
 if [[ -z "${MAX_TOKENS}" ]]; then
@@ -138,7 +138,7 @@ fi
 load_runtime_profile
 
 MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}}}"
-MAX_KV="${MAX_KV:-${MLX_RECOMMENDED_CONTEXT:-2048}}"
+MAX_KV="$(resolve_text_max_kv_size "${MAX_KV}")"
 require_positive_integer "MLX_RECOMMENDED_CONTEXT/--max-kv-size" "${MAX_KV}"
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"

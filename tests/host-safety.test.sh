@@ -11,41 +11,9 @@ COMMON="${ROOT}/scripts/lib/common.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    pass "${label}"
-  else
-    fail "${label} (expected success)"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 BIN="${TMP}/bin"
 mkdir -p "${BIN}"
 REAL_UNAME="$(command -v uname)"
@@ -637,7 +605,7 @@ EOF
     fail "EXIT trap restore removed the created venv"
   fi
 else
-  pass "skip venv identity tests (python3 -m venv unavailable)"
+  skip "venv identity tests (python3 -m venv unavailable)"
 fi
 
 # Failure after the create trap is installed must still run the caller's EXIT trap.
@@ -770,6 +738,52 @@ brew_prefix_json="$(
     DETECT_XCODE=false DETECT_MODEL=model DETECT_WORKSPACE=/tmp \
     python3 "${ROOT}/scripts/lib/detect_json.py" 2>/dev/null
 )" || true
+
+SCRIPT_STUB_FAIL_DF="${TMP}/script-stub-fail-df"
+mkdir -p "${SCRIPT_STUB_FAIL_DF}"
+for stub in uname sysctl sw_vers xcode-select ioreg; do
+  cp "${SCRIPT_STUB}/${stub}" "${SCRIPT_STUB_FAIL_DF}/"
+done
+cat >"${SCRIPT_STUB_FAIL_DF}/df" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "${SCRIPT_STUB_FAIL_DF}/df" "${SCRIPT_STUB_FAIL_DF}/uname" \
+  "${SCRIPT_STUB_FAIL_DF}/sysctl" "${SCRIPT_STUB_FAIL_DF}/sw_vers" \
+  "${SCRIPT_STUB_FAIL_DF}/xcode-select" "${SCRIPT_STUB_FAIL_DF}/ioreg"
+
+DETECT_ENV_WS="${TMP}/detect-env-ws"
+mkdir -p "${DETECT_ENV_WS}"
+detect_env_out="$(
+  env -u MLX_INSTALL_HOMEBREW \
+    MLX_WORKSPACE="${DETECT_ENV_WS}" MLX_VENV="${DETECT_ENV_WS}/.venv" MLX_SKIP_DEVICE_PROBE=1 \
+    PATH="${SCRIPT_STUB_FAIL_DF}:${BIN}:${PATH}" \
+    "${DETECT}" --env 2>/dev/null
+)" || true
+expect_exact_line() {
+  local label="$1"
+  local line="$2"
+  local text="$3"
+  if grep -qx -F -- "${line}" <<<"${text}"; then
+    pass "${label}"
+  else
+    fail "${label} (missing exact line ${line})"
+  fi
+}
+expect_exact_line "detect --env disk empty when df fails" \
+  "MLX_DISK_AVAIL_GIB=''" "${detect_env_out}"
+detect_json_fail_df="$(
+  env -u MLX_INSTALL_HOMEBREW \
+    MLX_WORKSPACE="${DETECT_ENV_WS}" MLX_VENV="${DETECT_ENV_WS}/.venv" MLX_SKIP_DEVICE_PROBE=1 \
+    PATH="${SCRIPT_STUB_FAIL_DF}:${BIN}:${PATH}" \
+    "${DETECT}" --json 2>/dev/null
+)" || true
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get("disk_available_gib") is None else 1)' \
+  "${detect_json_fail_df}" 2>/dev/null; then
+  pass "detect --json disk_available_gib null when df fails"
+else
+  fail "detect --json disk_available_gib null when df fails"
+fi
 if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get("homebrew_prefix")=="" and d.get("homebrew") is False else 1)' \
   "${brew_prefix_json}" 2>/dev/null; then
   pass "detect JSON allows a missing Homebrew prefix"
@@ -851,9 +865,4 @@ else
   fail "script modified cfg-only venv"
 fi
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s failure(s)\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: host-safety self-test passed\n'
-exit 0
+assert_finish "host-safety self-test passed"
