@@ -71,10 +71,23 @@ core_enforce_out="$(run_check 5 core-pip MLX_DISK_ENFORCE=1 2>&1 || true)"
 expect_contains "core pip enforce names the floor" "at least 12 GiB" "${core_enforce_out}"
 expect_fail "core pip enforce aborts when low" run_check 5 core-pip MLX_DISK_ENFORCE=1
 
+# Expected pins come from the manifest so a Dependabot bump does not
+# require a matching edit here. common.sh reads the same lines.
+constraint_pin() {
+  local name="$1"
+  local line=""
+  line="$(grep -E "^${name}==[^[:space:]]+\$" "${ROOT}/requirements/constraints.txt" | head -n 1 || true)"
+  if [[ -z "${line}" ]]; then
+    printf '%s==MISSING' "${name}"
+    return 0
+  fi
+  printf '%s' "${line}"
+}
+
 pins="$(env bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_CORE_PACKAGES[@]}\" \"\${MLX_MEDIA_PACKAGES[@]}\"")"
-expect_contains "mlx pin" "mlx==0.32.2" "${pins}"
-expect_contains "mlx-lm pin" "mlx-lm==0.31.3" "${pins}"
-expect_contains "mlx-audio pin" "mlx-audio==0.5.5" "${pins}"
+expect_contains "mlx pin" "$(constraint_pin mlx)" "${pins}"
+expect_contains "mlx-lm pin" "$(constraint_pin mlx-lm)" "${pins}"
+expect_contains "mlx-audio pin" "$(constraint_pin mlx-audio)" "${pins}"
 
 overridden="$(MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio bash -c "source \"${COMMON}\"; printf '%s\n' \"\${MLX_CORE_PACKAGES[@]}\" \"\${MLX_MEDIA_PACKAGES[@]}\"")"
 expect_eq "unpinned override" "$(printf '%s\n' mlx mlx-lm mlx-audio)" "${overridden}"
