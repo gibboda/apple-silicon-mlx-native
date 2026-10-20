@@ -12,41 +12,9 @@ GENERATE="${ROOT}/scripts/generate-mlx-video.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    pass "${label}"
-  else
-    fail "${label} (expected success)"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 unset MLX_VIDEO_FAMILY MLX_VIDEO_MODEL MLX_VIDEO_MODEL_DIR MLX_VIDEO_MODEL_REPO
 unset MLX_VIDEO_WIDTH MLX_VIDEO_HEIGHT MLX_VIDEO_FRAMES MLX_VIDEO_STEPS MLX_VIDEO_TILING MLX_VIDEO_LTX_PIPELINE
 unset MLX_VIDEO_SEED MLX_VIDEO_IMAGE MLX_VIDEO_FORCE
@@ -83,26 +51,26 @@ out="$("${GENERATE}" 2>&1 || true)"
 expect_contains "missing prompt mentions --prompt" "--prompt" "${out}"
 
 plan_default="$("${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "constrained default family is wan21" "family=wan21" "${plan_default}"
-expect_contains "constrained default model is wan21-t2v-1.3b-q4" "model=wan21-t2v-1.3b-q4" "${plan_default}"
-expect_contains "constrained default cli is wan generate" "cli=mlx_video.models.wan_2.generate" "${plan_default}"
-expect_contains "constrained default tier" "tier=constrained" "${plan_default}"
-expect_contains "constrained default width" "width=832" "${plan_default}"
-expect_contains "constrained default height" "height=480" "${plan_default}"
-expect_contains "constrained default frames" "frames=17" "${plan_default}"
-expect_contains "constrained default steps" "steps=10" "${plan_default}"
-expect_contains "constrained default tiling" "tiling=auto" "${plan_default}"
+expect_line "constrained default family is wan21" "family=wan21" "${plan_default}"
+expect_line "constrained default model is wan21-t2v-1.3b-q4" "model=wan21-t2v-1.3b-q4" "${plan_default}"
+expect_line "constrained default cli is wan generate" "cli=mlx_video.models.wan_2.generate" "${plan_default}"
+expect_line "constrained default tier" "tier=constrained" "${plan_default}"
+expect_line "constrained default width" "width=832" "${plan_default}"
+expect_line "constrained default height" "height=480" "${plan_default}"
+expect_line "constrained default frames" "frames=17" "${plan_default}"
+expect_line "constrained default steps" "steps=10" "${plan_default}"
+expect_line "constrained default tiling" "tiling=auto" "${plan_default}"
 expect_contains "constrained wan model_dir uses workspace" "models/video/wan21-t2v-1.3b-q4" "${plan_default}"
 
 plan_ltx="$("${GENERATE}" --dump-plan --prompt "plan" --family ltx2)"
-expect_contains "ltx2 family selected" "family=ltx2" "${plan_ltx}"
-expect_contains "ltx2 default model is distilled repo" "model=prince-canuma/LTX-2-distilled" "${plan_ltx}"
-expect_contains "ltx2 cli is ltx generate" "cli=mlx_video.models.ltx_2.generate" "${plan_ltx}"
-expect_contains "ltx2 on constrained keeps 832 width (already 64-aligned)" "width=832" "${plan_ltx}"
-expect_contains "ltx2 on constrained aligns height to 64" "height=448" "${plan_ltx}"
-expect_contains "ltx2 on constrained keeps 17 frames (already 8n+1)" "frames=17" "${plan_ltx}"
-expect_contains "ltx2 model_repo set" "model_repo=prince-canuma/LTX-2-distilled" "${plan_ltx}"
-expect_contains "ltx2 default pipeline is distilled" "pipeline=distilled" "${plan_ltx}"
+expect_line "ltx2 family selected" "family=ltx2" "${plan_ltx}"
+expect_line "ltx2 default model is distilled repo" "model=prince-canuma/LTX-2-distilled" "${plan_ltx}"
+expect_line "ltx2 cli is ltx generate" "cli=mlx_video.models.ltx_2.generate" "${plan_ltx}"
+expect_line "ltx2 on constrained keeps 832 width (already 64-aligned)" "width=832" "${plan_ltx}"
+expect_line "ltx2 on constrained aligns height to 64" "height=448" "${plan_ltx}"
+expect_line "ltx2 on constrained keeps 17 frames (already 8n+1)" "frames=17" "${plan_ltx}"
+expect_line "ltx2 model_repo set" "model_repo=prince-canuma/LTX-2-distilled" "${plan_ltx}"
+expect_line "ltx2 default pipeline is distilled" "pipeline=distilled" "${plan_ltx}"
 if [[ "${plan_ltx}" == *"wan21-t2v-1.3b-q4"* ]]; then
   fail "ltx2 plan leaked wan21-t2v-1.3b-q4"
 else
@@ -110,20 +78,20 @@ else
 fi
 
 plan_high="$(OVERRIDE_MEMORY_TIER=high OVERRIDE_THERMAL_CLASS=cooled "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "high tier default family is wan21" "family=wan21" "${plan_high}"
-expect_contains "high tier frames is 33" "frames=33" "${plan_high}"
-expect_contains "high tier width is 832" "width=832" "${plan_high}"
+expect_line "high tier default family is wan21" "family=wan21" "${plan_high}"
+expect_line "high tier frames is 33" "frames=33" "${plan_high}"
+expect_line "high tier width is 832" "width=832" "${plan_high}"
 
 plan_ws="$(OVERRIDE_MEMORY_TIER=workstation OVERRIDE_THERMAL_CLASS=cooled "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "workstation default family is ltx2" "family=ltx2" "${plan_ws}"
-expect_contains "workstation default model is distilled" "model=prince-canuma/LTX-2-distilled" "${plan_ws}"
-expect_contains "workstation width is 512" "width=512" "${plan_ws}"
-expect_contains "workstation frames is 33" "frames=33" "${plan_ws}"
-expect_contains "workstation steps is default" "steps=default" "${plan_ws}"
-expect_contains "workstation default pipeline is distilled" "pipeline=distilled" "${plan_ws}"
+expect_line "workstation default family is ltx2" "family=ltx2" "${plan_ws}"
+expect_line "workstation default model is distilled" "model=prince-canuma/LTX-2-distilled" "${plan_ws}"
+expect_line "workstation width is 512" "width=512" "${plan_ws}"
+expect_line "workstation frames is 33" "frames=33" "${plan_ws}"
+expect_line "workstation steps is default" "steps=default" "${plan_ws}"
+expect_line "workstation default pipeline is distilled" "pipeline=distilled" "${plan_ws}"
 
 plan_pipeline="$("${GENERATE}" --dump-plan --prompt "plan" --family ltx2 --pipeline full)"
-expect_contains "custom ltx pipeline honored" "pipeline=full" "${plan_pipeline}"
+expect_line "custom ltx pipeline honored" "pipeline=full" "${plan_pipeline}"
 
 expect_ok "dump-plan with --force accepted" \
   "${GENERATE}" --dump-plan --prompt "plan" --force
@@ -164,10 +132,10 @@ expect_fail "missing image file rejected" \
 
 plan_m1="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=1 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=8 \
   "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "M1 16 GB dump-plan chip family" "chip_family=1" "${plan_m1}"
-expect_contains "M1 16 GB dump-plan slow" "throughput_class=slow" "${plan_m1}"
-expect_contains "M1 16 GB stays wan21" "family=wan21" "${plan_m1}"
-expect_contains "M1 16 GB force_required" "force_required=1" "${plan_m1}"
+expect_line "M1 16 GB dump-plan chip family" "chip_family=1" "${plan_m1}"
+expect_line "M1 16 GB dump-plan slow" "throughput_class=slow" "${plan_m1}"
+expect_line "M1 16 GB stays wan21" "family=wan21" "${plan_m1}"
+expect_line "M1 16 GB force_required" "force_required=1" "${plan_m1}"
 if [[ "${plan_m1}" == *"ltx2"* || "${plan_m1}" == *"LTX"* ]]; then
   fail "M1 16 GB plan advertised LTX"
 else
@@ -176,32 +144,32 @@ fi
 
 plan_m5="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
   "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "M5 16 GB dump-plan fast" "throughput_class=fast" "${plan_m5}"
-expect_contains "M5 16 GB stays wan21 (RAM too small for LTX)" "family=wan21" "${plan_m5}"
-expect_contains "M5 16 GB does not require force" "force_required=0" "${plan_m5}"
+expect_line "M5 16 GB dump-plan fast" "throughput_class=fast" "${plan_m5}"
+expect_line "M5 16 GB stays wan21 (RAM too small for LTX)" "family=wan21" "${plan_m5}"
+expect_line "M5 16 GB does not require force" "force_required=0" "${plan_m5}"
 
 plan_m3="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=10 \
   "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "M3 16 GB dump-plan chip family" "chip_family=3" "${plan_m3}"
-expect_contains "M3 16 GB dump-plan moderate" "throughput_class=moderate" "${plan_m3}"
-expect_contains "M3 16 GB stays wan21" "family=wan21" "${plan_m3}"
-expect_contains "M3 16 GB force_required" "force_required=1" "${plan_m3}"
+expect_line "M3 16 GB dump-plan chip family" "chip_family=3" "${plan_m3}"
+expect_line "M3 16 GB dump-plan moderate" "throughput_class=moderate" "${plan_m3}"
+expect_line "M3 16 GB stays wan21" "family=wan21" "${plan_m3}"
+expect_line "M3 16 GB force_required" "force_required=1" "${plan_m3}"
 
 plan_air="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=5 OVERRIDE_CHIP_SKU=base OVERRIDE_THERMAL_CLASS=fanless OVERRIDE_GPU_CORES=10 \
   "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "fanless M5 still force_required" "force_required=1" "${plan_air}"
+expect_line "fanless M5 still force_required" "force_required=1" "${plan_air}"
 
 plan_m3pro18="$(OVERRIDE_MEMORY_TIER=standard OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
   OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
   "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "18 GB M3 Pro dump-plan chip family" "chip_family=3" "${plan_m3pro18}"
-expect_contains "18 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro18}"
-expect_contains "18 GB M3 Pro dump-plan gpu cores" "gpu_cores=18" "${plan_m3pro18}"
-expect_contains "18 GB M3 Pro dump-plan fast" "throughput_class=fast" "${plan_m3pro18}"
-expect_contains "18 GB M3 Pro dump-plan standard tier" "tier=standard" "${plan_m3pro18}"
-expect_contains "18 GB M3 Pro stays wan21" "family=wan21" "${plan_m3pro18}"
-expect_contains "18 GB M3 Pro stays 17 frames" "frames=17" "${plan_m3pro18}"
-expect_contains "18 GB M3 Pro does not require force" "force_required=0" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro dump-plan chip family" "chip_family=3" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro dump-plan gpu cores" "gpu_cores=18" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro dump-plan fast" "throughput_class=fast" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro dump-plan standard tier" "tier=standard" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro stays wan21" "family=wan21" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro stays 17 frames" "frames=17" "${plan_m3pro18}"
+expect_line "18 GB M3 Pro does not require force" "force_required=0" "${plan_m3pro18}"
 if [[ "${plan_m3pro18}" == *"frames=33"* || "${plan_m3pro18}" == *"ltx2"* || "${plan_m3pro18}" == *"LTX"* ]]; then
   fail "18 GB M3 Pro plan used the 24 GB video profile"
 else
@@ -211,12 +179,12 @@ fi
 plan_m3pro24="$(OVERRIDE_MEMORY_TIER=high OVERRIDE_CHIP_FAMILY=3 OVERRIDE_CHIP_SKU=pro \
   OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_GPU_CORES=18 \
   "${GENERATE}" --dump-plan --prompt "plan")"
-expect_contains "24 GB M3 Pro dump-plan high tier" "tier=high" "${plan_m3pro24}"
-expect_contains "24 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro24}"
-expect_contains "24 GB M3 Pro stays wan21" "family=wan21" "${plan_m3pro24}"
-expect_contains "24 GB M3 Pro frames 33" "frames=33" "${plan_m3pro24}"
-expect_contains "24 GB M3 Pro width 832" "width=832" "${plan_m3pro24}"
-expect_contains "24 GB M3 Pro does not require force" "force_required=0" "${plan_m3pro24}"
+expect_line "24 GB M3 Pro dump-plan high tier" "tier=high" "${plan_m3pro24}"
+expect_line "24 GB M3 Pro dump-plan sku pro" "chip_sku=pro" "${plan_m3pro24}"
+expect_line "24 GB M3 Pro stays wan21" "family=wan21" "${plan_m3pro24}"
+expect_line "24 GB M3 Pro frames 33" "frames=33" "${plan_m3pro24}"
+expect_line "24 GB M3 Pro width 832" "width=832" "${plan_m3pro24}"
+expect_line "24 GB M3 Pro does not require force" "force_required=0" "${plan_m3pro24}"
 if [[ "${plan_m3pro24}" == *"frames=49"* ]]; then
   fail "24 GB M3 Pro 18-core plan used the 24-GPU NAX frame bump"
 else
@@ -318,11 +286,11 @@ plan_width="$(
   env MLX_MODELS_ENV="${empty_video_env}" \
     "${GENERATE}" --dump-plan --prompt plan --width 100 --height 96 --frames 21 --steps 4 --seed 0
 )"
-expect_contains "wan width 100 accepted" "width=100" "${plan_width}"
-expect_contains "wan height 96 accepted" "height=96" "${plan_width}"
-expect_contains "wan frames 21 accepted" "frames=21" "${plan_width}"
-expect_contains "wan steps 4 accepted" "steps=4" "${plan_width}"
-expect_contains "wan seed 0 accepted" "seed=0" "${plan_width}"
+expect_line "wan width 100 accepted" "width=100" "${plan_width}"
+expect_line "wan height 96 accepted" "height=96" "${plan_width}"
+expect_line "wan frames 21 accepted" "frames=21" "${plan_width}"
+expect_line "wan steps 4 accepted" "steps=4" "${plan_width}"
+expect_line "wan seed 0 accepted" "seed=0" "${plan_width}"
 
 expect_fail "ltx width not divisible by 64 still rejected" \
   env MLX_MODELS_ENV="${empty_video_env}" \
@@ -333,8 +301,4 @@ ltx_width_out="$(
 )"
 expect_contains "ltx width error names the rule" "divisible by 64" "${ltx_width_out}"
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s failure(s)\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: mlx-video self-test passed\n'
+assert_finish "mlx-video self-test passed"

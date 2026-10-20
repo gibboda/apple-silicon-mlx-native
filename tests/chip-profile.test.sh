@@ -9,63 +9,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${ROOT}/scripts/lib/common.sh"
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_eq() {
-  local label="$1"
-  local got="$2"
-  local want="$3"
-  if [[ "${got}" == "${want}" ]]; then
-    pass "${label}"
-  else
-    fail "${label} (got '${got}', want '${want}')"
-  fi
-}
-
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    pass "${label}"
-  else
-    fail "${label} (expected success)"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
-expect_exact_line() {
-  local label="$1"
-  local line="$2"
-  local text="$3"
-  if grep -qx -F -- "${line}" <<<"${text}"; then
-    pass "${label}"
-  else
-    fail "${label} (missing exact line ${line})"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 # 16 GB composed profile for one hw.model, using that model's chip family.
 air_profile_text() {
   local model="$1"
@@ -429,8 +375,4 @@ rebuild_log="$(seed_models_env_if_missing 2>&1)"
 expect_eq "seed rebuild path still preserves file" "$(cat "${SEED_ENV}")" "${SEED_FIRST}"
 expect_contains "seed rebuild path logs preserve" "Preserving existing ${SEED_ENV}" "${rebuild_log}"
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s failure(s)\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: chip-profile self-test passed\n'
+assert_finish "chip-profile self-test passed"

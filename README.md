@@ -293,6 +293,11 @@ apple-silicon-mlx-native/
 │   ├── serve-mlx.sh
 │   └── validate-mlx.sh
 ├── tests/
+│   ├── lib/
+│   │   ├── argv.sh
+│   │   ├── assert.sh
+│   │   ├── fake-darwin.sh
+│   │   └── fake_venv_python.py
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
 │   ├── config-precedence.test.sh
@@ -310,7 +315,8 @@ apple-silicon-mlx-native/
 │   ├── pip-constraints.test.sh
 │   ├── readme-tree.test.sh
 │   ├── release.test.sh
-│   └── robustness-fixes.test.sh
+│   ├── robustness-fixes.test.sh
+│   └── wrapper-argv.test.sh
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE

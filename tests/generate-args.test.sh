@@ -9,21 +9,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 help_out="$(make -C "${ROOT}" help)"
 expect_contains "help still lists image" "make image" "${help_out}"
 expect_contains "help still lists video" "make video" "${help_out}"
@@ -175,8 +163,4 @@ else
   pass "image without IMAGE_PROMPT does not run the generator"
 fi
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s generate-args check(s) failed\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: generate args are not a shell\n'
+assert_finish "generate args are not a shell"
