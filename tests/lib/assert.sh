@@ -60,7 +60,7 @@ expect_line() {
   local label="$1"
   local line="$2"
   local haystack="$3"
-  if printf '%s\n' "${haystack}" | grep -qxF "${line}"; then
+  if printf '%s\n' "${haystack}" | grep -qxF -- "${line}"; then
     pass "${label}"
   else
     fail "${label} (missing exact line ${line})"
