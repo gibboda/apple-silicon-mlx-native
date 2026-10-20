@@ -66,7 +66,7 @@ def main() -> int:
         "memory_tier_hint": os.environ["DETECT_TIER_HINT"],
         "cpu_cores": int(os.environ["DETECT_CORES"]),
         "macos_version": os.environ["DETECT_MACOS"],
-        "disk_available_gib": int(float(os.environ.get("DETECT_DISK") or 0)),
+        "disk_available_gib": maybe_int("DETECT_DISK"),
         "python_version": os.environ["DETECT_PY"],
         "homebrew": os.environ["DETECT_BREW_OK"] == "true",
         "homebrew_prefix": os.environ.get("DETECT_BREW_PREFIX", ""),
