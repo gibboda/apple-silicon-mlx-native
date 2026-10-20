@@ -8,42 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMMON="${ROOT}/scripts/lib/common.sh"
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_eq() {
-  local label="$1"
-  local want="$2"
-  local got="$3"
-  if [[ "${got}" == "${want}" ]]; then
-    pass "${label}"
-  else
-    fail "${label} (want ${want}, got ${got})"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 floor_of() {
   local profile="$1"
   shift
@@ -90,6 +57,12 @@ expect_contains "low disk does not claim caches were deleted" "not deleted autom
 
 skip_out="$(run_check 1 wan-prepare MLX_SKIP_DISK_CHECK=1)"
 expect_contains "skip disk check" "Disk headroom check skipped" "${skip_out}"
+
+non_override="$(
+  bash -c "source \"${COMMON}\"; unset MLX_DISK_OVERRIDE_NOTED MLX_DISK_AVAIL_GIB_OVERRIDE; \
+    MLX_DISK_AVAIL_GIB=unknown; note_disk_avail_override; printf '%s' \"\${MLX_DISK_AVAIL_GIB_OVERRIDE:-}\""
+)"
+expect_eq "non-numeric disk env is not treated as override" "" "${non_override}"
 
 expect_fail "enforce aborts when low" run_check 1 wan-prepare MLX_DISK_ENFORCE=1
 enforce_out="$(run_check 1 media-pip MLX_DISK_ENFORCE=1 MLX_DISK_MIN_MEDIA_GIB=9 2>&1 || true)"
@@ -372,8 +345,4 @@ wan_model_out="$(
 expect_contains "Wan generate uses the tighter model volume" "Only 3 GiB free" "${wan_model_out}"
 expect_contains "Wan generate names the model directory" "${LOW}" "${wan_model_out}"
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s disk/pin check(s) failed\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: disk headroom and package pins\n'
+assert_finish "disk headroom and package pins"

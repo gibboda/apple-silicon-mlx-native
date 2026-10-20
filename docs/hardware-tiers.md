@@ -68,7 +68,7 @@ Fanless MacBook Air derates: throughput_class must **not** raise the default mod
 
 Fanless keeps the RAM-only default model and context at 2048.
 
-`MLX_RECOMMENDED_CONTEXT` is a real exported default (`scripts/detect-apple-silicon.sh --json` / `--env`, `config/models.env`). Pass it to `mlx_lm.generate --max-kv-size`. Pass `--max-kv-size` to `mlx_lm.server` when that flag exists (mlx-lm 0.31.3 server does not; generate does).
+`MLX_RECOMMENDED_CONTEXT` is tunable in `config/models.env` and the process environment; composed policy fills it only when unset. Precedence: CLI → env → `models.env` → composed default ([models.md](models.md#configuration-precedence)). `generate-mlx-text.sh` maps it to `mlx_lm.generate --max-kv-size`. Pass `--max-kv-size` to `mlx_lm.server` when that flag exists (mlx-lm 0.31.3 server does not; generate does). Detect `--json` / `--env` still report the composed `recommended_context`.
 
 ## MLX runtime limits
 

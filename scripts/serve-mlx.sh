@@ -77,6 +77,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_models_env "${MLX_MODELS_ENV}"
+if [[ -n "${MLX_RECOMMENDED_CONTEXT+x}" ]]; then
+  require_positive_integer "MLX_RECOMMENDED_CONTEXT" "${MLX_RECOMMENDED_CONTEXT}"
+fi
+capture_user_recommended_context
 # Empty CLI values are rejected in the parser. An empty models.env assignment
 # is invalid; only an unset MLX_SERVER_PORT falls back to 8080.
 if [[ -z "${PORT}" ]]; then
@@ -99,6 +103,7 @@ load_runtime_profile
 
 MODEL="${MODEL:-${MLX_DEFAULT_MODEL:-${MLX_RECOMMENDED_MODEL:-mlx-community/Llama-3.2-3B-Instruct-4bit}}}"
 HOST="${HOST:-${MLX_SERVER_HOST:-127.0.0.1}}"
+RESOLVED_CONTEXT="$(resolve_serve_context)"
 
 plan="$(inference_limit_plan "${MLX_PHYSICAL_TIER_ID:-}")"
 IFS='|' read -r apply_limits cache_limit <<<"${plan}"
@@ -114,7 +119,7 @@ if (( DUMP_PLAN == 1 )); then
     "${MLX_RECOMMENDED_MODEL:-}" \
     "${HOST}" \
     "${PORT}" \
-    "${MLX_RECOMMENDED_CONTEXT:-2048}"
+    "${RESOLVED_CONTEXT}"
   exit 0
 fi
 
