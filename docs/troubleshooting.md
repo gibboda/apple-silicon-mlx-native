@@ -255,8 +255,8 @@ Wan2.1 1.3B (default on ≤32 GB) also needs a converted MLX directory:
 ```bash
 huggingface-cli login   # accept Wan-AI/Wan2.1-T2V-1.3B license on Hugging Face first
 # Conversion loads original .pth T5/VAE with torch (not a generation backend).
-# Reuse torch from make install-image when present; otherwise:
-.venv/bin/pip install 'torch==2.14.0'
+# Reuse torch from make install-image when present; otherwise, from the repo root:
+.venv/bin/pip install -c requirements/constraints.txt torch
 make prepare-video
 ```
 
