@@ -8,10 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 README="${ROOT}/README.md"
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 # Print one relative path per file entry in the Repository structure fence.
 readme_tree_files() {
   local source="${1:-${README}}"
@@ -103,13 +102,10 @@ listed="${TMP}/listed"
 git -C "${ROOT}" ls-files | LC_ALL=C sort >"${tracked}"
 if ! readme_tree_files | LC_ALL=C sort >"${listed}"; then
   fail "README repository tree could not be parsed"
-else
-  pass "README repository tree parsed"
-fi
-
-if [[ ! -s "${listed}" ]]; then
+elif [[ ! -s "${listed}" ]]; then
   fail "README '## Repository structure' text fence not found or empty"
 else
+  pass "README repository tree parsed"
   missing="$(comm -23 "${tracked}" "${listed}" || true)"
   extra="$(comm -13 "${tracked}" "${listed}" || true)"
   if [[ -z "${missing}" && -z "${extra}" ]]; then
@@ -127,6 +123,29 @@ else
   fi
 fi
 
+MAKEFILE="${ROOT}/Makefile"
+make_section="$(
+  awk '
+    /^## Make targets$/ { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section { print }
+  ' "${README}"
+)"
+while IFS= read -r make_target; do
+  [[ -n "${make_target}" ]] || continue
+  if [[ "${make_section}" != *"\`make ${make_target}\`"* ]]; then
+    fail "README Make targets table missing documented target: ${make_target}"
+  else
+    pass "README documents make target: ${make_target}"
+  fi
+done < <(
+  awk -F: '/^[a-zA-Z0-9_-]+( +[a-zA-Z0-9_-]+)*: ##/ {
+    line = $1
+    n = split(line, parts, " ")
+    for (i = 1; i <= n; i++) print parts[i]
+  }' "${MAKEFILE}" | LC_ALL=C sort -u
+)
+
 crlf_src="${TMP}/readme-crlf.md"
 printf '%s\r\n' \
   '## Repository structure' \
@@ -142,9 +161,4 @@ else
   fail "README tree parser accepts CRLF fences (${crlf_parsed})"
 fi
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s README tree check(s) failed\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: readme-tree self-test passed\n'
-exit 0
+assert_finish "readme-tree self-test passed"

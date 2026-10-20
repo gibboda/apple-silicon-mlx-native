@@ -10,10 +10,9 @@ CLEANUP="${ROOT}/scripts/cleanup-mlx-native.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 make_venv() {
   local dest="$1"
   mkdir -p "${dest}/bin"
@@ -448,4 +447,3 @@ if (( failures > 0 )); then
   exit 1
 fi
 printf 'CLEANUP_SELFTEST_RESULT=success\n'
-exit 0

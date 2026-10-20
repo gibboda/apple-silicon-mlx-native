@@ -10,42 +10,9 @@ DETECT="${ROOT}/scripts/detect-apple-silicon.sh"
 # shellcheck source=scripts/lib/common.sh
 source "${ROOT}/scripts/lib/common.sh"
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_eq() {
-  local label="$1"
-  local got="$2"
-  local want="$3"
-  if [[ "${got}" == "${want}" ]]; then
-    pass "${label}"
-  else
-    fail "${label} (got '${got}', want '${want}')"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 list_column() {
   local model="$1"
   local column="$2"
@@ -317,6 +284,18 @@ EOF
 printf 'shard1\n' >"${partial_sharded}/model-00001-of-00002.safetensors"
 ln -sf /nonexistent "${partial_sharded}/model-00002-of-00002.safetensors"
 
+zero_byte="${cache_dir}/models--mlx-community--Phi-3.5-mini-instruct-4bit/snapshots/zero"
+mkdir -p "${zero_byte}"
+printf '{}\n' >"${zero_byte}/config.json"
+cat >"${zero_byte}/model.safetensors.index.json" <<'EOF'
+{"weight_map":{"layer.a":"model-00001-of-00002.safetensors","layer.b":"model-00002-of-00002.safetensors"}}
+EOF
+printf 'shard1\n' >"${zero_byte}/model-00001-of-00002.safetensors"
+: >"${zero_byte}/model-00002-of-00002.safetensors"
+expect_eq "zero-byte index shard is not cached" \
+  "$(HF_HUB_CACHE="${cache_dir}" model_weights_cached mlx-community/Phi-3.5-mini-instruct-4bit && echo yes || echo no)" \
+  "no"
+
 expect_eq "dangling weight symlink is not cached" \
   "$(HF_HUB_CACHE="${cache_dir}" model_weights_cached mlx-community/Meta-Llama-3.1-8B-Instruct-4bit && echo yes || echo no)" \
   "no"
@@ -407,8 +386,4 @@ else
 fi
 rm -rf "${cli_tmp}"
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s failure(s)\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: model-list tests passed\n'
+assert_finish "model-list tests passed"
