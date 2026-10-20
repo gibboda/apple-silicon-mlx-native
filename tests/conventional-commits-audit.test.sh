@@ -10,41 +10,9 @@ AUDIT="${ROOT}/scripts/conventional-commits-audit.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-failures=0
-pass() { printf 'OK: %s\n' "$1"; }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
-
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    pass "${label}"
-  else
-    fail "${label} (expected success)"
-  fi
-}
-
-expect_fail() {
-  local label="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    fail "${label} (expected non-zero exit)"
-  else
-    pass "${label}"
-  fi
-}
-
-expect_contains() {
-  local label="$1"
-  local needle="$2"
-  local haystack="$3"
-  if [[ "${haystack}" == *"${needle}"* ]]; then
-    pass "${label}"
-  else
-    fail "${label} (missing ${needle})"
-  fi
-}
-
+TEST_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+# shellcheck source=tests/lib/assert.sh
+source "${TEST_LIB}/assert.sh"
 REPO="${TMP}/repo"
 mkdir -p "${REPO}"
 git -C "${REPO}" init -q --template= -b main
@@ -166,8 +134,4 @@ PR_TITLE="Merge branch 'topic'"
 expect_fail "merge-style PR title is not exempt" audit_in --range HEAD
 unset PR_TITLE EXEMPT_MERGE_COMMITS
 
-if (( failures > 0 )); then
-  printf 'FAIL: %s conventional-commits check(s) failed\n' "${failures}" >&2
-  exit 1
-fi
-printf 'OK: conventional-commits audit\n'
+assert_finish "conventional-commits audit"
