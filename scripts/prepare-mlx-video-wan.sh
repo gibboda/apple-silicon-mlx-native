@@ -65,7 +65,7 @@ if ! "${PY}" -c "import mlx_video" >/dev/null 2>&1; then
 fi
 
 if ! "${PY}" -c "import torch" >/dev/null 2>&1; then
-  die "torch is required to load Wan .pth T5/VAE weights (conversion only, not a generation backend). Reuse torch from make install-image if already present, otherwise install into the venv: ${MLX_VENV}/bin/pip install 'torch==2.14.0'"
+  die "torch is required to load Wan .pth T5/VAE weights (conversion only, not a generation backend). Reuse torch from make install-image if already present, otherwise install into the venv: ${MLX_VENV}/bin/pip install -c '${REPO_ROOT}/requirements/constraints.txt' torch"
 fi
 
 src_dir="${MLX_WORKSPACE}/models/video/src/Wan2.1-T2V-1.3B"
