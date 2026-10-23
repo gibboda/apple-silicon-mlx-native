@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump mlx-audio to 0.5.8
 - Bump mflux to 0.22.0. Same-seed images change for `schnell` (FLUX.1 norm bias restored) and `z-image-turbo` (bf16 transformer; pass `-- --float32` to `make image` / `generate-mlx-image.sh` to reproduce older images). New transitive floors: urllib3>=2.8.0, fsspec>=2026.6.0 (security)
 - Pin `numpy==2.5.4`. `make install` now requires CPython 3.12–3.14: numpy 2.5.4 dropped 3.10 and 3.11, and `mlx==0.32.2` plus torch 2.14.x still have no cp315 wheels
 - CI runs the full portable test suite on macOS with `/bin/bash` 3.2, audits PR titles for Conventional Commits, pins ShellCheck v0.11.0, limits duplicate ShellCheck runs on same-repo PR pushes, and serializes release publishing
