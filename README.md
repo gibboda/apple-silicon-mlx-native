@@ -71,7 +71,7 @@ make install
 
 `make install` refuses to run unless that complete `.venv` already exists. It does not create the venv and does not require `source .venv/bin/activate`. It then ensures Homebrew packages (`python@3.12`, `git`, `ffmpeg`), seeds `config/models.env` from the composed profile once, installs pinned `mlx`, `mlx-lm`, and selected `mlx-audio` with `.venv/bin/pip`, and validates. To keep the environment outside the clone, set `MLX_WORKSPACE` to a dedicated directory — not `$HOME`, a parent of `$HOME`, or a system root such as `/Users` or `/opt`. `make venv` writes `.mlx-workspace` there so `make clean --purge` can see that the directory belongs to this toolkit. `MLX_VENV` must remain under it. Rebuild preserves an existing `config/models.env`.
 
-Default pins live in `scripts/lib/common.sh`: `mlx==0.32.2`, `mlx-lm==0.31.3`, `mlx-audio==0.5.5` (same pattern as `MLX_IMAGE_PACKAGE` / `MLX_VIDEO_PACKAGE`). Override a spec, or drop the `==` pin to track upstream:
+Default MLX core pins live in `requirements/constraints.txt` (`mlx`, `mlx-lm`, `mlx-audio`; `scripts/lib/common.sh` reads those lines as `MLX_PACKAGE`, `MLX_LM_PACKAGE`, and `MLX_AUDIO_PACKAGE`, same pattern as `MLX_IMAGE_PACKAGE` / `MLX_VIDEO_PACKAGE`). Override a spec, or drop the `==` pin to track upstream:
 
 ```bash
 MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild

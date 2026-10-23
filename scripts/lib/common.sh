@@ -49,8 +49,8 @@ _pin_default() {
 }
 
 MLX_PACKAGE="${MLX_PACKAGE:-$(_pin_default mlx mlx==0.32.2)}"
-MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-$(_pin_default mlx-lm mlx-lm==0.31.3)}"
-MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-$(_pin_default mlx-audio mlx-audio==0.5.5)}"
+MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-$(_pin_default mlx-lm mlx-lm==0.32.0)}"
+MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-$(_pin_default mlx-audio mlx-audio==0.5.8)}"
 MLX_CORE_PACKAGES=("${MLX_PACKAGE}" "${MLX_LM_PACKAGE}")
 MLX_MEDIA_PACKAGES=("${MLX_AUDIO_PACKAGE}")
 MLX_IMAGE_PACKAGE="${MLX_IMAGE_PACKAGE:-$(_pin_default mflux mflux==0.19.1)}"
