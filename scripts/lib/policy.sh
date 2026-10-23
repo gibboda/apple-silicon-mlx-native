@@ -4,8 +4,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # shellcheck disable=SC2034
 
-# shellcheck source=policy_fit_rules.sh
-# shellcheck disable=SC1091
+# shellcheck source=scripts/lib/policy_fit_rules.sh
 source "${SCRIPT_LIB_DIR}/policy_fit_rules.sh"
 
 # stdout: apply|cache_bytes. apply=1 only for physical constrained RAM.

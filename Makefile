@@ -147,11 +147,7 @@ lint: ## ShellCheck all scripts
 	@status=0; \
 	while IFS= read -r -d '' script; do \
 	  shellcheck -x "$$script" || status=1; \
-	done < <(find scripts tests -type f -name '*.sh' ! -path 'scripts/lib/*' -print0); \
-	for lib in common.sh ui.sh detect.sh policy.sh policy_fit_rules.sh catalog.sh \
-	  envfile.sh venv.sh; do \
-	  ( cd scripts/lib && shellcheck -x "$$lib" ) || status=1; \
-	done; \
+	done < <(find scripts tests -type f -name '*.sh' -print0); \
 	exit $$status
 
 test: ## Run portable shell self-tests
