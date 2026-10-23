@@ -78,7 +78,7 @@ for installer in \
   "${ROOT}/scripts/install-mlx-image.sh" \
   "${ROOT}/scripts/install-mlx-video.sh"
 do
-  if grep -q 'mlx_pip_install' "${installer}"; then
+  if grep -qE 'mlx_pip_install|install_core_packages' "${installer}"; then
     pass "mlx_pip_install in $(basename "${installer}")"
   else
     fail "mlx_pip_install missing in $(basename "${installer}")"

@@ -1352,9 +1352,27 @@ install_packaging_tools() {
   report_packaging_tools "${py}"
 }
 
-activate_venv() {
-  # shellcheck source=/dev/null
-  source "${MLX_VENV}/bin/activate"
+# Shared core/media/image/video pip installs for initial-build and rebuild.
+install_core_packages() {
+  log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
+  warn_or_die_disk_headroom core-pip
+  mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
+
+  if ! is_truthy "${MLX_SKIP_MEDIA:-0}"; then
+    log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
+    warn_or_die_disk_headroom media-pip
+    mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
+  fi
+
+  if is_truthy "${MLX_INSTALL_IMAGE:-0}"; then
+    warn_or_die_disk_headroom image-pip
+    mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
+  fi
+
+  if is_truthy "${MLX_INSTALL_VIDEO:-0}"; then
+    warn_or_die_disk_headroom video-pip
+    mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
+  fi
 }
 
 # Absolute physical path: resolve . / .. and follow existing directory symlinks.
@@ -3195,6 +3213,33 @@ video_cli_module_for_family() {
     ltx2) echo "mlx_video.models.ltx_2.generate" ;;
     *) return 1 ;;
   esac
+}
+
+# True when model is a known alias of a different family (do not pass it through).
+image_model_conflicts_with_family() {
+  local family="$1"
+  local model="${2:-}"
+  local lower
+  [[ -n "${model}" ]] || return 1
+  lower="$(printf '%s' "${model}" | tr '[:upper:]' '[:lower:]')"
+  case "${family}" in
+    z-image-turbo)
+      case "${lower}" in
+        flux2-*|schnell|dev|krea-dev) return 0 ;;
+      esac
+      ;;
+    flux2)
+      case "${lower}" in
+        z-image-turbo|zimage-turbo|z-image|schnell) return 0 ;;
+      esac
+      ;;
+    schnell)
+      case "${lower}" in
+        flux2-*|z-image*|zimage-*) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
 }
 
 # True when model is a known alias of a different family (do not pass it through).

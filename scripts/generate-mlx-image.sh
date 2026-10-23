@@ -76,33 +76,6 @@ image_cli_for_family() {
   esac
 }
 
-# True when model is a known alias of a different family (do not pass it through).
-image_model_conflicts_with_family() {
-  local family="$1"
-  local model="${2:-}"
-  local lower
-  [[ -n "${model}" ]] || return 1
-  lower="$(printf '%s' "${model}" | tr '[:upper:]' '[:lower:]')"
-  case "${family}" in
-    z-image-turbo)
-      case "${lower}" in
-        flux2-*|schnell|dev|krea-dev) return 0 ;;
-      esac
-      ;;
-    flux2)
-      case "${lower}" in
-        z-image-turbo|zimage-turbo|z-image|schnell) return 0 ;;
-      esac
-      ;;
-    schnell)
-      case "${lower}" in
-        flux2-*|z-image*|zimage-*) return 0 ;;
-      esac
-      ;;
-  esac
-  return 1
-}
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -250,18 +223,8 @@ fi
 cli_name="$(image_cli_for_family "${FAMILY}")" \
   || die "Unknown --family ${FAMILY}. Use flux2, z-image-turbo, or schnell."
 
-passthru_has_flag() {
-  local flag="$1"
-  local arg
-  ((${#PASSTHRU[@]} > 0)) || return 1
-  for arg in "${PASSTHRU[@]}"; do
-    [[ "${arg}" == "${flag}" ]] && return 0
-  done
-  return 1
-}
-
 VAE_TILING=0
-if passthru_has_flag "--vae-tiling"; then
+if argv_has_flag "--vae-tiling" "${PASSTHRU[@]}"; then
   VAE_TILING=1
 elif [[ "${MLX_TIER_ID}" == "constrained" || "${MLX_TIER_ID}" == "standard" || "${MLX_POLICY_THERMAL_CLASS:-}" == "fanless" ]]; then
   VAE_TILING=1
@@ -314,20 +277,14 @@ fi
 if is_truthy "${LOW_RAM}"; then
   cmd+=(--low-ram)
 fi
-if (( VAE_TILING == 1 )) && ! passthru_has_flag "--vae-tiling"; then
+if (( VAE_TILING == 1 )) && ! argv_has_flag "--vae-tiling" "${PASSTHRU[@]}"; then
   cmd+=(--vae-tiling)
 fi
 if ((${#PASSTHRU[@]} > 0)); then
   cmd+=("${PASSTHRU[@]}")
 fi
 
-if image_model_is_local "${MODEL}"; then
-  # Local checkpoint plus the PNG. Do not probe the hub cache: a full
-  # cache volume must not abort a generate that never downloads weights.
-  warn_or_die_disk_headroom image-generate
-else
-  warn_or_die_disk_headroom image-weights
-fi
+warn_or_die_disk_headroom "$(image_generate_disk_profile "${MODEL}")"
 
 log_header "MLX text-to-image"
 log_info "family=${FAMILY} model=${MODEL:-default} ${WIDTH}x${HEIGHT} steps=${STEPS} quantize=${QUANTIZE} low_ram=${LOW_RAM}"
