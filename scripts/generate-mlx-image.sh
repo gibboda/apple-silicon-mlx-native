@@ -279,7 +279,7 @@ fi
 if is_truthy "${LOW_RAM}"; then
   cmd+=(--low-ram)
 fi
-if (( VAE_TILING == 1 )) && (( PASSTHRU_HAS_VAE_TILING == 0 )); then
+if (( VAE_TILING == 1 )) && [[ "${PASSTHRU_HAS_VAE_TILING}" == "0" ]]; then
   cmd+=(--vae-tiling)
 fi
 if ((${#PASSTHRU[@]} > 0)); then
