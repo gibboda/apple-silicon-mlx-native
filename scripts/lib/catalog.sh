@@ -611,8 +611,6 @@ mlx-community/Qwen2.5-32B-Instruct-4bit|~18-20 GB|Large single-model server at 3
 EOF
 }
 
-# 7B and 8B: poor on <=8 GB, tight on a 16 GB Air or slow/moderate chip, fits when cooled and fast.
-
 # Human list for this Mac. Args override the composed profile so tests can
 # pass a fixture without sysctl. Empty args use the loaded MLX_* policy.
 print_recommended_model_list() {
@@ -760,8 +758,6 @@ schnell|schnell|black-forest-labs/FLUX.1-schnell|FLUX.1 schnell|Optional FLUX.1 
 EOF
 }
 
-# Checkpoint id from the composed image profile (empty model → family default).
-
 # Human image list. Args override the composed profile so tests skip sysctl.
 print_recommended_image_list() {
   local tier="${1:-${MLX_TIER_ID:-}}"
@@ -826,9 +822,6 @@ EOF
 
 # Catalog rows for make list-video. id|family|locator|weights|use
 # locator is "local" (converted Wan dir) or "hub" (Hugging Face repo id).
-
-# Catalog rows for make list-video. id|family|locator|weights|use
-# locator is "local" (converted Wan dir) or "hub" (Hugging Face repo id).
 video_catalog_rows() {
   printf '%s\n' \
     "${MLX_VIDEO_WAN_MODEL_NAME}|wan21|local|UMT5 encoder ~11 GB|Wan2.1 T2V 1.3B 4-bit; convert once with make prepare-video" \
@@ -851,8 +844,6 @@ video_catalog_cached() {
       ;;
   esac
 }
-
-# Human video list. Args override the composed profile so tests skip sysctl.
 
 # Human video list. Args override the composed profile so tests skip sysctl.
 print_recommended_video_list() {

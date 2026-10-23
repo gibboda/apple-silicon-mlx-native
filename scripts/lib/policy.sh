@@ -297,9 +297,6 @@ recommended_model_for_profile() {
   text_default_model_for_profile "${tier}" "${throughput}" "${thermal}"
 }
 
-# Catalog rows from docs/models.md. id|approx weights|use
-# Fit labels are computed for the composed profile, not stored here.
-
 # default | fits | tight | poor for one catalog id on a composed profile.
 # default always matches recommended_model_for_profile.
 model_list_fit() {
@@ -593,12 +590,6 @@ image_list_default_id() {
 # 16-18 GB and on a 24-32 GB Air, and poor on <=8 GB. schnell is never default.
 # On a fanless 24-32 GB Air, schnell is tight as well (12B is not a better fit
 # than 6B z-image). Cooled high and workstation/large keep schnell as fits.
-
-# default | fits | tight | poor. default matches image_list_default_id.
-# z-image-turbo is the >=24 GB cooled default. Below that it is tight on
-# 16-18 GB and on a 24-32 GB Air, and poor on <=8 GB. schnell is never default.
-# On a fanless 24-32 GB Air, schnell is tight as well (12B is not a better fit
-# than 6B z-image). Cooled high and workstation/large keep schnell as fits.
 image_list_fit() {
   local id="${1:-}"
   local tier="${2:-}"
@@ -630,11 +621,6 @@ video_list_default_id() {
   fi
   printf '%s\n' "${model}"
 }
-
-# default | fits | tight | poor. default matches video_list_default_id.
-# LTX is the cooled workstation/large default. It is poor below 36 GB.
-# On a fanless workstation the composed clip stays Wan, so LTX is tight.
-# Wan is fits when LTX is the composed default.
 
 # default | fits | tight | poor. default matches video_list_default_id.
 # LTX is the cooled workstation/large default. It is poor below 36 GB.

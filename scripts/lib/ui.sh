@@ -468,6 +468,3 @@ model_list_chip_family_label() {
     printf '%s\n' "Chip family/SKU:"
   fi
 }
-
-# Catalog rows for make list-image. id|family|upstream repo|weights|use
-# Upstream repos are what mflux downloads for that preset. Fit is computed.
