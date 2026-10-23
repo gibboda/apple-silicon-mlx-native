@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Shared fit/default rule table for text, image, and video catalogs.
+# Shared fit rules and text default selection for catalog list labels.
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# One place for tier/throughput/thermal thresholds used by list fit labels
-# and composed default selection (issue #61 / #82).
+# Text list fit labels and composed text defaults share profile_* predicates
+# and rule keys (issue #61 / #82). Image/video list fit labels live here;
+# image_list_default_id / video_list_default_id stay in policy.sh.
 
 # 7B and 8B: poor on <=8 GB, tight on a 16 GB Air or slow/moderate chip, fits when cooled and fast.
 _model_list_fit_7b_8b() {
@@ -22,7 +23,7 @@ _model_list_fit_7b_8b() {
     fi
     return
   fi
-  if [[ "${tier}" == "standard" ]] && ! throughput_at_least "${throughput}" fast; then
+  if [[ "${tier}" == "standard" ]] && ! profile_standard_fast_cooled "${throughput}" "${thermal}"; then
     printf '%s\n' tight
     return
   fi
@@ -67,6 +68,51 @@ text_model_rule_key() {
       printf '%s\n' text_14b
       ;;
     mlx-community/Qwen2.5-32B-Instruct-4bit)
+      printf '%s\n' text_32b
+      ;;
+    *)
+      printf '%s\n' text_unknown
+      ;;
+  esac
+}
+
+# Canonical catalog model for each text rule key (tier defaults derive from these).
+_text_canonical_model_for_rule_key() {
+  case "${1:-}" in
+    text_small) printf '%s\n' "mlx-community/Llama-3.2-3B-Instruct-4bit" ;;
+    text_7b_8b) printf '%s\n' "mlx-community/Mistral-7B-Instruct-v0.3-4bit" ;;
+    text_14b) printf '%s\n' "mlx-community/Qwen2.5-14B-Instruct-4bit" ;;
+    text_32b) printf '%s\n' "mlx-community/Qwen2.5-32B-Instruct-4bit" ;;
+    *) return 1 ;;
+  esac
+}
+
+text_default_rule_key_for_profile() {
+  local tier="${1:-}"
+  local throughput="${2:-unknown}"
+  local thermal="${3:-}"
+  case "${tier}" in
+    constrained|"")
+      printf '%s\n' text_small
+      ;;
+    standard)
+      if profile_standard_fast_cooled "${throughput}" "${thermal}"; then
+        printf '%s\n' text_7b_8b
+      else
+        printf '%s\n' text_small
+      fi
+      ;;
+    high)
+      if profile_high_very_fast_cooled "${throughput}" "${thermal}"; then
+        printf '%s\n' text_14b
+      else
+        printf '%s\n' text_7b_8b
+      fi
+      ;;
+    workstation)
+      printf '%s\n' text_14b
+      ;;
+    large)
       printf '%s\n' text_32b
       ;;
     *)
@@ -122,38 +168,17 @@ text_default_model_for_profile() {
   local tier="${1:-}"
   local throughput="${2:-unknown}"
   local thermal="${3:-}"
+  local key model
   if profile_fanless_or_unknown_throughput "${throughput}" "${thermal}"; then
     recommended_model_for_tier "${tier}"
     return
   fi
-  case "${tier}" in
-    constrained|"")
-      printf '%s\n' "mlx-community/Llama-3.2-3B-Instruct-4bit"
-      ;;
-    standard)
-      if profile_standard_fast_cooled "${throughput}" "${thermal}"; then
-        printf '%s\n' "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
-      else
-        printf '%s\n' "mlx-community/Llama-3.2-3B-Instruct-4bit"
-      fi
-      ;;
-    high)
-      if profile_high_very_fast_cooled "${throughput}" "${thermal}"; then
-        printf '%s\n' "mlx-community/Qwen2.5-14B-Instruct-4bit"
-      else
-        printf '%s\n' "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
-      fi
-      ;;
-    workstation)
-      printf '%s\n' "mlx-community/Qwen2.5-14B-Instruct-4bit"
-      ;;
-    large)
-      printf '%s\n' "mlx-community/Qwen2.5-32B-Instruct-4bit"
-      ;;
-    *)
-      recommended_model_for_tier "${tier}"
-      ;;
-  esac
+  key="$(text_default_rule_key_for_profile "${tier}" "${throughput}" "${thermal}")"
+  if model="$(_text_canonical_model_for_rule_key "${key}")"; then
+    printf '%s\n' "${model}"
+  else
+    recommended_model_for_tier "${tier}"
+  fi
 }
 
 # --- Image catalog: checkpoint id|rule_key ---
