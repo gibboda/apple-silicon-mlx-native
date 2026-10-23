@@ -94,4 +94,4 @@ run_fixture high_very_fast \
 run_fixture workstation_cooled \
   "OVERRIDE_MEMORY_TIER=workstation OVERRIDE_THERMAL_CLASS=cooled OVERRIDE_CHIP_FAMILY=3 OVERRIDE_GPU_CORES=18"
 
-echo "OK: common-golden self-test passed"
+assert_finish "common-golden self-test passed"
