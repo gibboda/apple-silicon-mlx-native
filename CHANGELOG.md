@@ -9,21 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
+### Breaking
+
+- `make install` now requires CPython 3.12–3.14. Pinning `numpy==2.5.4` drops Python 3.10 and 3.11; `mlx==0.32.2` and torch 2.14.x still have no cp315 wheels
+
 ### Added
 
 - `requirements/constraints.txt` with MLX core pins and key transitive pins (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every pip install path exports `PIP_CONSTRAINT` via `mlx_pip_install` so media installs cannot float core MLX packages. Dependabot watches `requirements/` for pip updates. `core-pip` disk headroom (default 12 GiB, `MLX_DISK_MIN_CORE_GIB`) runs before core installs in `make install` / `make rebuild`
 
 ### Changed
 
+- Bump mlx-lm to 0.32.0
+- Bump torch to 2.14.1
 - Bump mlx-audio to 0.5.8
-- Bump mflux to 0.22.0. Same-seed images change for `schnell` (FLUX.1 norm bias restored) and `z-image-turbo` (bf16 transformer; pass `-- --float32` to `make image` / `generate-mlx-image.sh` to reproduce older images). New transitive floors: urllib3>=2.8.0, fsspec>=2026.6.0 (security)
-- Pin `numpy==2.5.4`. `make install` now requires CPython 3.12–3.14: numpy 2.5.4 dropped 3.10 and 3.11, and `mlx==0.32.2` plus torch 2.14.x still have no cp315 wheels
+- Bump mflux to 0.22.0. Same-seed images change for `schnell` (FLUX.1 norm bias restored) and `z-image-turbo` (bf16 transformer; use `GENERATE_IMAGE_ARGS='-- --float32' make image` or `scripts/generate-mlx-image.sh ... -- --float32` to reproduce older images). New transitive floors: urllib3>=2.8.0, fsspec>=2026.6.0 (security)
+- Pin `numpy==2.5.4`
 - CI runs the full portable test suite on macOS with `/bin/bash` 3.2, audits PR titles for Conventional Commits, pins ShellCheck v0.11.0, limits duplicate ShellCheck runs on same-repo PR pushes, and serializes release publishing
 - Document Python version policy in `docs/troubleshooting.md`: default Homebrew `python@3.12`, pinned `mlx` macOS arm64 wheels through CPython 3.14 (3.15 blocked until upstream ships `cp315` wheels), optional `MLX_PYTHON_VERSION=3.13` trial (`export`, rollback, macOS 14+ / torch wheel notes), README link, and a non-stale pointer comment at `MLX_PYTHON_VERSION`
 - Shell self-tests share `tests/lib/assert.sh` (`expect_line`, `skip`, subshell-safe `expect_fail`). Wrapper argv is recorded via fake CLIs in `tests/wrapper-argv.test.sh`. Plan `key=value` checks use exact-line matching so mutations like `steps=40` no longer pass when asserting `steps=4`
+- README: fix frame range, commit ranges, Make targets, quickstart, and output nits
 
 ### Fixed
 
+- Non-interactive `make rebuild` now requires `--force`. `models.env` upsert preserves file mode and symlinks. Venv create lock timeout extended. Homebrew prefix matching fixed. Merged-PR branch delete skips protected branches. `mlx_lm --help` probe is captured before grep
 - `make list-image` reports `cached yes` only when every diffusers weight component (transformer or UNet, text encoders, VAE) has non-empty shards, not when a partial tree or zero-byte shard is present. `make list` applies the same non-empty rule to indexed text-model shards
 - Honor user `MLX_RECOMMENDED_CONTEXT` from the process environment or `config/models.env` after chip policy compose; process env now wins over `models.env` for allowlisted keys. Precedence table in `docs/models.md`
 - `make image`, `make video`, and `make generate-text` pass the prompt through unchanged. Backticks, `$VAR`, `$(...)`, quotes, backslashes, and newlines stay literal on macOS Make 3.81. Make strips leading whitespace from a `VAR=value` command-line assignment; set the variable in the environment instead (e.g. `IMAGE_PROMPT='  text' make image`) to keep it
@@ -220,7 +230,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.10...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.10...v0.3.0
 [0.2.10]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.7...v0.2.8
