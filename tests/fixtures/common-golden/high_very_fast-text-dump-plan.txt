@@ -1,0 +1,11 @@
+tier=high
+physical_tier=standard
+device=default
+apply_working_set_limits=0
+cache_limit_bytes=
+model=mlx-community/Mistral-7B-Instruct-v0.3-4bit
+recommended_model=mlx-community/Mistral-7B-Instruct-v0.3-4bit
+recommended_context=4096
+max_tokens=
+max_kv_size=4096
+temp=

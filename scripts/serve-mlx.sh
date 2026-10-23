@@ -97,7 +97,7 @@ if ((${#PASSTHRU[@]} > 0)); then
   done < <(argv_flag_values --port "${PASSTHRU[@]}")
 fi
 if (( DUMP_PLAN == 1 )); then
-  MLX_SKIP_DEVICE_PROBE=1
+  export MLX_SKIP_DEVICE_PROBE=1
 fi
 load_runtime_profile
 

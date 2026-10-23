@@ -2,6 +2,7 @@
 # Parser and compose fixtures for chip-aware defaults (Linux CI safe: no sysctl GPU).
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
+# shellcheck disable=SC2034
 
 set -euo pipefail
 

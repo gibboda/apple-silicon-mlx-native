@@ -1,0 +1,16 @@
+family=flux2
+model=flux2-klein-4b
+cli=mflux-generate-flux2
+tier=constrained
+throughput_class=slow
+thermal_class=fanless
+chip_family=1
+chip_sku=base
+gpu_cores=8
+quantize=4
+steps=4
+width=512
+height=512
+low_ram=1
+vae_tiling=1
+seed=

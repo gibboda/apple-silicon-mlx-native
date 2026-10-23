@@ -65,7 +65,7 @@ for pkg in transformers numpy huggingface-hub mlx-vlm torch; do
   fi
 done
 
-direct_pip="$(grep -RIn --exclude='common.sh' -E '(\$\{PIP\}|-m pip)[[:space:]]+install' "${ROOT}/scripts" || true)"
+direct_pip="$(grep -RIn --exclude-dir=lib -E '(\$\{PIP\}|-m pip)[[:space:]]+install' "${ROOT}/scripts" || true)"
 if [[ -n "${direct_pip}" ]]; then
   fail "direct pip install outside mlx_pip_install: ${direct_pip}"
 else

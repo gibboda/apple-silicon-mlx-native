@@ -181,7 +181,7 @@ if (( DUMP_PLAN == 0 )); then
   assert_apple_silicon
 fi
 if (( DUMP_PLAN == 1 )); then
-  MLX_SKIP_DEVICE_PROBE=1
+  export MLX_SKIP_DEVICE_PROBE=1
 fi
 load_runtime_profile
 
