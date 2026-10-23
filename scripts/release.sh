@@ -15,7 +15,7 @@
 # Does not bump pinned mlx/mflux versions. Does not force-push tags.
 # Does not skip git hooks (--no-verify is never passed).
 #
-# This is a bash script. `python3 scripts/release.sh` re-execs bash.
+# Bash driver. `python3 scripts/release.sh` re-execs via scripts/lib/release_notes.py.
 # Polyglot: Python opens a ''' string (the trailing :' is string body).
 # Bash concatenates '' with ':' and runs : (no-op). Do not change to ''' —
 # that would start a single-quoted string and swallow the script.
@@ -531,10 +531,15 @@ else
   log_info "Publish skipped (--no-push)"
 fi
 
-# python3 $0 swallows the bash body in a string, then re-execs bash.
+# python3 $0 runs the tail below (implementation in scripts/lib/release_notes.py).
 : <<'ENDPYTHON'
 '''
 import os
 import sys
-os.execvp("bash", ["bash"] + sys.argv)
+
+_LIB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib")
+sys.path.insert(0, _LIB)
+from release_notes import main  # noqa: E402
+
+main()
 ENDPYTHON
