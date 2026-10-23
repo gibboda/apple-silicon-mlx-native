@@ -37,12 +37,7 @@ jobs:
           echo "${RUNNER_TEMP}/shellcheck-v${SHELLCHECK_VERSION}" >> "${GITHUB_PATH}"
 
       - name: Run ShellCheck
-        run: |
-          status=0
-          while IFS= read -r -d '' script; do
-            shellcheck -x "$script" || status=1
-          done < <(find scripts tests -type f -name '*.sh' -print0)
-          exit "$status"
+        run: make lint
 
   selftest:
     name: Portable self-tests

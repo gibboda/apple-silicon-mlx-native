@@ -224,7 +224,7 @@ cli_name="$(image_cli_for_family "${FAMILY}")" \
   || die "Unknown --family ${FAMILY}. Use flux2, z-image-turbo, or schnell."
 
 VAE_TILING=0
-if argv_has_flag "--vae-tiling" "${PASSTHRU[@]}"; then
+if ((${#PASSTHRU[@]} > 0)) && argv_has_flag "--vae-tiling" "${PASSTHRU[@]}"; then
   VAE_TILING=1
 elif [[ "${MLX_TIER_ID}" == "constrained" || "${MLX_TIER_ID}" == "standard" || "${MLX_POLICY_THERMAL_CLASS:-}" == "fanless" ]]; then
   VAE_TILING=1
@@ -277,7 +277,7 @@ fi
 if is_truthy "${LOW_RAM}"; then
   cmd+=(--low-ram)
 fi
-if (( VAE_TILING == 1 )) && ! argv_has_flag "--vae-tiling" "${PASSTHRU[@]}"; then
+if (( VAE_TILING == 1 )) && ((${#PASSTHRU[@]} == 0 || ! argv_has_flag "--vae-tiling" "${PASSTHRU[@]}")); then
   cmd+=(--vae-tiling)
 fi
 if ((${#PASSTHRU[@]} > 0)); then

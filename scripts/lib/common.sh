@@ -85,6 +85,7 @@ readonly COLOR_BOLD=$'\033[1m'
 readonly COLOR_RESET=$'\033[0m'
 
 # Cohesive modules (order matters). Callers still source common.sh only.
+# shellcheck disable=SC1091
 # shellcheck source=ui.sh
 source "${SCRIPT_LIB_DIR}/ui.sh"
 # shellcheck source=detect.sh

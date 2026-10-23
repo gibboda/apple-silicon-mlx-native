@@ -5,6 +5,7 @@
 # shellcheck disable=SC2034
 
 # shellcheck source=policy_fit_rules.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_LIB_DIR}/policy_fit_rules.sh"
 
 # stdout: apply|cache_bytes. apply=1 only for physical constrained RAM.
