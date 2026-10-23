@@ -10,7 +10,7 @@ From the repository root:
 ./tests/regen-common-golden.sh
 ```
 
-Use `LC_ALL=C` (the regen script sets it). Volatile fields (`MLX_WORKSPACE`, `python_version`, video `model_dir`) are normalized in the test and regen script.
+Use `LC_ALL=C` (the regen script sets it). Volatile fields (`MLX_WORKSPACE`, `python_version`, Homebrew/Xcode CLT presence, video `model_dir`) are normalized in the test and regen script so Linux stub CI and macOS runners match.
 
 ## Profiles
 

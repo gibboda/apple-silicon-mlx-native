@@ -45,8 +45,14 @@ normalize_volatile() {
   sed \
     -e 's/^MLX_PYTHON_VERSION_DETECTED=.*/MLX_PYTHON_VERSION_DETECTED=<PYTHON>/' \
     -e 's|^MLX_WORKSPACE=.*|MLX_WORKSPACE=<WORKSPACE>|' \
+    -e 's/^MLX_HOMEBREW=.*/MLX_HOMEBREW=false/' \
+    -e "s/^MLX_HOMEBREW_PREFIX=.*/MLX_HOMEBREW_PREFIX=''/" \
+    -e 's/^MLX_XCODE_CLT=.*/MLX_XCODE_CLT=false/' \
     -e 's/"python_version": "[^"]*"/"python_version": "<PYTHON>"/' \
-    -e 's/"workspace": "[^"]*"/"workspace": "<WORKSPACE>"/'
+    -e 's/"workspace": "[^"]*"/"workspace": "<WORKSPACE>"/' \
+    -e 's/"homebrew": [^,]*/"homebrew": false/' \
+    -e 's/"homebrew_prefix": "[^"]*"/"homebrew_prefix": ""/' \
+    -e 's/"xcode_clt": [^,]*/"xcode_clt": false/'
 }
 
 write_golden() {
