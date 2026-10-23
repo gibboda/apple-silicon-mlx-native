@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-10-22
+
 ### Added
 
 - `requirements/constraints.txt` with MLX core pins and key transitive pins (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every pip install path exports `PIP_CONSTRAINT` via `mlx_pip_install` so media installs cannot float core MLX packages. Dependabot watches `requirements/` for pip updates. `core-pip` disk headroom (default 12 GiB, `MLX_DISK_MIN_CORE_GIB`) runs before core installs in `make install` / `make rebuild`
@@ -220,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.10...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.11...HEAD
+[0.2.11]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.7...v0.2.8
