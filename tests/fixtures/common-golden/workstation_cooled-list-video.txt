@@ -1,9 +1,9 @@
 Apple chip:       Apple M3 Pro
-Chip family/SKU (policy):  3 base
+Chip family/SKU (policy):  3 pro
 Memory:           16 GiB
 Memory tier:      workstation (physical standard)
 Thermal class:    cooled
-Throughput class: moderate
+Throughput class: fast
 Default video:    prince-canuma/LTX-2-distilled
 Family:           ltx2
 Size:             512x512

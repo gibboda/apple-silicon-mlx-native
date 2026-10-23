@@ -1,0 +1,25 @@
+Apple chip:       Apple M3 Pro
+Chip family/SKU (policy):  9 base
+Memory:           16 GiB
+Memory tier:      standard (physical standard)
+Thermal class:    cooled
+Throughput class: unknown
+Default video:    wan21-t2v-1.3b-q4
+Family:           wan21
+Size:             832x480
+Frames:           17
+Steps:            10
+Generate:         refused unless --force (UMT5 ~11 GB)
+
+fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
+cached is yes for Wan when models/video/wan21-t2v-1.3b-q4 has config.json,
+model.safetensors, t5_encoder.safetensors, and vae.safetensors. LTX is cached when
+the distilled snapshot has every transformer, text-encoder, and VAE-decoder shard,
+text projections, and a spatial x2 upscaler. Nothing is downloaded.
+
+fit	cached	model	weights	use
+default	yes	wan21-t2v-1.3b-q4	UMT5 encoder ~11 GB	Wan2.1 T2V 1.3B 4-bit; convert once with make prepare-video
+poor	no	prince-canuma/LTX-2-distilled	distilled, 36 GB+	Quality path on cooled 36 GB and up
+
+One clip at a time: make video VIDEO_PROMPT="..."
+Wan convert (once): make prepare-video
