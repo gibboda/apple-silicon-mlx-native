@@ -181,7 +181,8 @@ if (( DUMP_PLAN == 0 )); then
   assert_apple_silicon
 fi
 if (( DUMP_PLAN == 1 )); then
-  export MLX_SKIP_DEVICE_PROBE=1
+  # shellcheck disable=SC2034
+  MLX_SKIP_DEVICE_PROBE=1
 fi
 load_runtime_profile
 
