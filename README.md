@@ -411,7 +411,7 @@ apple-silicon-mlx-native/
 
 The tree lists every tracked file. `tests/readme-tree.test.sh` fails when a tracked path is missing from it, or when it names a path that is not tracked.
 
-`scripts/lib/common.sh` is a thin aggregator over cohesive modules (`detect`, `policy`, `catalog`, `venv`, and others) for shared detection, bandwidth lookup, and compose helpers. `scripts/lib/mlx_launch.py` applies the ≤8 GB Metal working-set limits before text generation or `mlx_lm.server` starts.
+`scripts/lib/common.sh` is a thin aggregator; callers still source it only. Modules under `scripts/lib/` are `ui.sh`, `detect.sh`, `policy.sh`, `policy_fit_rules.sh`, `catalog.sh`, `envfile.sh`, and `venv.sh`, plus `detect_json.py`, `mlx_launch.py`, and `release_notes.py`. `scripts/lib/mlx_launch.py` applies the ≤8 GB Metal working-set limits before text generation or `mlx_lm.server` starts.
 
 ## Make targets
 
