@@ -50,7 +50,7 @@ Why not default-install `mflux`?
 - Peak unified-memory use often dwarfs LLM 3B–4B workloads.
 - Unsafe default on 8 GB machines (swap thrash).
 
-Install into an existing `.venv` (does not rebuild). **`mflux` is pinned** to `0.19.1` by default (`MLX_IMAGE_PACKAGE` in `scripts/lib/common.sh`); override before install, e.g. `MLX_IMAGE_PACKAGE=mflux==0.20.0 make install-image`.
+Install into an existing `.venv` (does not rebuild). **`mflux` is pinned** to `0.22.0` by default (`MLX_IMAGE_PACKAGE`, read from `requirements/constraints.txt`); override before install, e.g. `MLX_IMAGE_PACKAGE=mflux==0.20.0 make install-image`.
 
 ```bash
 make install-image
@@ -78,7 +78,7 @@ make image IMAGE_PROMPT="a red fox in snow"
 | standard + fast+ cooled (16 GB M5, 18 GB Pro) | `flux2` / `flux2-klein-4b` | 8-bit, 768² | 18 GB SKUs stay here; not the 24 GB `z-image-turbo` 1024² profile |
 | high+ cooled (≥24 GB) | `z-image-turbo` | 8-bit, 1024², 9 steps | Higher quality default |
 
-Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. **`--family` selects the mflux CLI and default checkpoint only**; width, height, steps, quantize, and `--low-ram` still follow the composed profile unless you set those flags or `MLX_IMAGE_*`. So `--family z-image-turbo` on 8 GB still uses 512² / 4 steps / 4-bit, not the ≥24 GB 1024² / 9-step profile. `make image` passes `IMAGE_PROMPT` through unchanged (no shell expansion). Make strips leading whitespace from a `VAR=value` command-line assignment; to keep it, set the variable in the environment instead, e.g. `IMAGE_PROMPT='  text' make image`. Width, height, and steps must be positive integers from 1 to 999999. Quantize must be 3, 4, 5, 6, or 8. Seed, when set, must be a non-negative integer. A bad flag, environment value, or `models.env` value fails before launch.
+Override with `--family`, `--model`, `--quantize`, `--width`, `--height`, `--seed`, or `MLX_IMAGE_*` / `MLX_IMAGE_SEED` in `config/models.env`. **`--family` selects the mflux CLI and default checkpoint only**; width, height, steps, quantize, and `--low-ram` still follow the composed profile unless you set those flags or `MLX_IMAGE_*`. So `--family z-image-turbo` on 8 GB still uses 512² / 4 steps / 4-bit, not the ≥24 GB 1024² / 9-step profile. `make image` passes `IMAGE_PROMPT` through unchanged (no shell expansion). Make strips leading whitespace from a `VAR=value` command-line assignment; to keep it, set the variable in the environment instead, e.g. `IMAGE_PROMPT='  text' make image`. Width, height, and steps must be positive integers from 1 to 999999. Quantize must be 3, 4, 5, 6, or 8. Seed, when set, must be a non-negative integer. mflux 0.22.0 changes same-seed images for `schnell` (FLUX.1 output-norm bias restored) and `z-image-turbo` (bf16 transformer; pass `-- --float32` to `make image` or `generate-mlx-image.sh` to reproduce older images). A bad flag, environment value, or `models.env` value fails before launch.
 
 Inspect the resolved plan without generating:
 
@@ -191,7 +191,7 @@ List the video catalog against this Mac. `default` is the composed checkpoint (W
 make list-video
 ```
 
-Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.19.1`).
+Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.22.0`).
 
 `make clean` removes only `.venv`. Converted Wan weights under `models/video/` survive cleanup. To remove them: `rm -rf models/video` or `scripts/cleanup-mlx-native.sh --workspace-caches --force` (also drops other workspace caches such as `outputs/`).
 
