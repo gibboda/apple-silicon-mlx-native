@@ -236,28 +236,48 @@ install_packaging_tools() {
 }
 
 # Shared core/media/image/video pip installs for initial-build and rebuild.
-
-# Shared core/media/image/video pip installs for initial-build and rebuild.
+# Scope: all (default), core, media, image, or video.
 install_core_packages() {
-  log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
-  warn_or_die_disk_headroom core-pip
-  mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
-
-  if ! is_truthy "${MLX_SKIP_MEDIA:-0}"; then
-    log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
-    warn_or_die_disk_headroom media-pip
-    mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
-  fi
-
-  if is_truthy "${MLX_INSTALL_IMAGE:-0}"; then
-    warn_or_die_disk_headroom image-pip
-    mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
-  fi
-
-  if is_truthy "${MLX_INSTALL_VIDEO:-0}"; then
-    warn_or_die_disk_headroom video-pip
-    mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
-  fi
+  local scope="${1:-all}"
+  case "${scope}" in
+    all)
+      install_core_packages core
+      if ! is_truthy "${MLX_SKIP_MEDIA:-0}"; then
+        install_core_packages media
+      fi
+      if is_truthy "${MLX_INSTALL_IMAGE:-0}"; then
+        install_core_packages image
+      fi
+      if is_truthy "${MLX_INSTALL_VIDEO:-0}"; then
+        install_core_packages video
+      fi
+      ;;
+    core)
+      log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
+      warn_or_die_disk_headroom core-pip
+      mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
+      ;;
+    media)
+      log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
+      warn_or_die_disk_headroom media-pip
+      mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
+      ;;
+    image)
+      if is_truthy "${MLX_INSTALL_IMAGE:-0}"; then
+        warn_or_die_disk_headroom image-pip
+        mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
+      fi
+      ;;
+    video)
+      if is_truthy "${MLX_INSTALL_VIDEO:-0}"; then
+        warn_or_die_disk_headroom video-pip
+        mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
+      fi
+      ;;
+    *)
+      die "install_core_packages: unknown scope '${scope}' (use all, core, media, image, or video)"
+      ;;
+  esac
 }
 
 # Absolute physical path: resolve . / .. and follow existing directory symlinks.
