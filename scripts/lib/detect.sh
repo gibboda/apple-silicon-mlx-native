@@ -84,15 +84,22 @@ detect_chip() {
 # "Apple M1 Pro" → family 1, sku pro (not base). "Apple M10" → family 10 (not 1).
 # Emit: family|sku   (empty fields on failure)
 parse_apple_chip_brand() {
-  local brand
+  local brand family rest
   brand="$(trim_whitespace "${1:-}")"
-  if [[ "${brand}" =~ ^Apple\ M([0-9]+)(\ Ultra|\ Max|\ Pro)?$ ]]; then
-    printf '%s|' "${BASH_REMATCH[1]}"
-    case "${BASH_REMATCH[2]:-}" in
+  # Suffix SKUs via rest (not ERE \\ Pro) so /bin/bash 3.2 on macOS matches GNU bash 5.
+  if [[ "${brand}" =~ ^Apple[[:space:]]M([0-9]+) ]]; then
+    family="${BASH_REMATCH[1]}"
+    rest="${brand#Apple M"${family}"}"
+    printf '%s|' "${family}"
+    case "${rest}" in
       " Ultra") printf 'ultra\n' ;;
       " Max") printf 'max\n' ;;
       " Pro") printf 'pro\n' ;;
-      *) printf 'base\n' ;;
+      "") printf 'base\n' ;;
+      *)
+        printf '|\n'
+        return 1
+        ;;
     esac
     return 0
   fi

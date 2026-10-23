@@ -45,7 +45,6 @@ normalize_volatile() {
   sed \
     -e 's/^MLX_PYTHON_VERSION_DETECTED=.*/MLX_PYTHON_VERSION_DETECTED=<PYTHON>/' \
     -e 's|^MLX_WORKSPACE=.*|MLX_WORKSPACE=<WORKSPACE>|' \
-    -e 's/"python_detected": "[^"]*"/"python_detected": "<PYTHON>"/' \
     -e 's/"python_version": "[^"]*"/"python_version": "<PYTHON>"/' \
     -e 's/"workspace": "[^"]*"/"workspace": "<WORKSPACE>"/'
 }
