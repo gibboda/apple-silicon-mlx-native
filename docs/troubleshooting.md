@@ -133,7 +133,7 @@ This toolkit targets Homebrew **`python@3.12`** (`MLX_PYTHON_VERSION`, default `
 
 Homebrew’s default **`python3`** may be a newer minor release (currently **3.15**; Homebrew’s `python3` / `python` aliases point at `python@3.15`). Do **not** create or reuse `.venv` with that interpreter unless you change `MLX_PYTHON_VERSION` and rebuild on purpose. `make venv` refuses a venv whose Python minor does not match `MLX_PYTHON_VERSION`.
 
-The pinned **`mlx`** package ships prebuilt macOS **arm64** wheels (macOS **14+**, `macosx_14_0` and newer tags) only for specific CPython tags. For the default pin (`mlx==0.32.2`), PyPI wheels exist for **3.10–3.14** (`cp310`–`cp314`), not **3.15** (`cp315`). **`torch`** (pulled in by `make install-image`) also stops at **cp314**. Until upstream publishes matching wheels for your pinned versions, **`python@3.15` cannot satisfy `make install`** as written.
+The pinned set’s macOS **arm64** wheels (macOS **14+**, `macosx_14_0` and newer tags) decide which CPython versions `make install` can use. **`numpy==2.5.4`** requires **CPython 3.12 or newer** and has no `cp310` or `cp311` wheel, so **3.10 and 3.11 no longer satisfy `make install`**. **`mlx==0.32.2`** and **`torch`** 2.14.x (pulled in by `make install-image`) ship wheels through **cp314** and have no **cp315** wheel. The effective range for this pin set is **CPython 3.12–3.14**. **`python@3.15` cannot satisfy `make install`** until upstream publishes matching wheels.
 
 To stay current on the supported line:
 
