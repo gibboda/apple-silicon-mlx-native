@@ -5,6 +5,8 @@
 
 set -euo pipefail
 
+export LC_ALL=C
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GOLDEN="${ROOT}/tests/fixtures/common-golden"
 DETECT="${ROOT}/scripts/detect-apple-silicon.sh"
