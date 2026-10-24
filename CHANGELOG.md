@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Require **macOS 26 or newer** on **Apple Silicon** for `make doctor`, `make detect`, `make venv`, and `make install`; macOS 14–15 are refused with a clear error. Versions newer than CI smoke (macOS 27 today) log a non-fatal warning
 
+### Changed
+
+- Bump **`setuptools`** from 84.0.0 to 84.1.0 in `requirements/constraints.txt` (#104)
+
 ### Fixed
 
 - Pin `pillow==12.3.0` so `make image` can import mflux. Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12–3.15 does not define (`ImportError` from `PIL._typing`). Re-run `make install-image` to apply the pin in an existing `.venv`
