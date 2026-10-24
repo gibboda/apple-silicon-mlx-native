@@ -438,15 +438,6 @@ assert_mlx_python_version_supported() {
     || die "MLX_PYTHON_VERSION=${ver} is above the supported range (${MLX_PYTHON_VERSION_MIN}–${MLX_PYTHON_VERSION_MAX}). See docs/troubleshooting.md#python-version-venv"
 }
 
-assert_minimum_macos_for_mlx() {
-  local ver major
-  [[ "$(uname -s)" == "Darwin" ]] || return 0
-  ver="$(detect_macos_version)"
-  major="${ver%%.*}"
-  [[ -n "${major}" && "${major}" -ge 14 ]] \
-    || die "macOS ${ver} is below the minimum supported major version (14). See docs/troubleshooting.md"
-}
-
 venv_version_matches_expected() {
   local dir="${1:-${MLX_VENV}}"
   local cfg_ver cfg_minor expected_minor

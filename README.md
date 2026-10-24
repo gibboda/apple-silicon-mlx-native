@@ -33,13 +33,13 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 
 ## Supported hardware
 
-- macOS **14+** on **Apple Silicon** (`Darwin` `arm64`) only (including macOS 27 Golden Gate; CI smoke tests run on `macos-latest` and `xcode-27`)
+- macOS **26 or newer** on **Apple Silicon** (`Darwin` `arm64`) only; CI smoke tests run on `macos-latest` (26) and `xcode-27` (27)
 - Linux ARM and Intel/x86_64 Macs are **rejected** with a clear error
 - Memory tiers drive the **OOM fence** (what fits); chip throughput/thermal class drive the **performance fence** (how hard to push at that RAM). Unknown chips fall back to RAM-only defaults without failing install. Details: [docs/hardware-tiers.md](docs/hardware-tiers.md).
 
 ## Requirements
 
-- Apple Silicon Mac
+- Apple Silicon Mac on macOS 26 or newer
 - Xcode Command Line Tools
 - Homebrew (script can install with `MLX_INSTALL_HOMEBREW=1`)
 - Network access to install packages and (later) download models
@@ -289,6 +289,7 @@ apple-silicon-mlx-native/
 │   ├── create-mlx-venv.sh
 │   ├── delete-merged-pr-branch.sh
 │   ├── detect-apple-silicon.sh
+│   ├── doctor-mlx-native.sh
 │   ├── generate-mlx-image.sh
 │   ├── generate-mlx-text.sh
 │   ├── generate-mlx-video.sh
@@ -391,6 +392,7 @@ apple-silicon-mlx-native/
 │   │       └── workstation_cooled-video-dump-plan.txt
 │   ├── generate-args.test.sh
 │   ├── host-safety.test.sh
+│   ├── macos-version.test.sh
 │   ├── media-list.test.sh
 │   ├── mlx-image.test.sh
 │   ├── mlx-limits.test.sh
@@ -420,6 +422,7 @@ The tree lists every tracked file. `tests/readme-tree.test.sh` fails when a trac
 | --- | --- |
 | `make help` | Describe commands |
 | `make detect` | Hardware detection (chip + RAM) |
+| `make doctor` | Verify Apple Silicon macOS 26+ before venv/install |
 | `make recommend` | Print composed defaults (does not write `models.env`) |
 | `make list` | List catalog text models with fit for this Mac (does not download) |
 | `make list-image` | List catalog image models with fit for this Mac (does not download) |

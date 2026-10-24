@@ -75,12 +75,14 @@ done
 
 if [[ "${MODE}" == "quiet" ]]; then
   if host_is_apple_silicon; then
+    assert_minimum_macos_for_mlx
     exit 0
   fi
   exit 1
 fi
 
 assert_apple_silicon
+assert_minimum_macos_for_mlx
 
 export_detect_env
 brew_prefix="$(homebrew_prefix)"

@@ -516,7 +516,7 @@ exit 0
 EOF
 cat >"${cli_bin}/sw_vers" <<'EOF'
 #!/bin/sh
-printf '%s\n' 15.0
+printf '%s\n' 26.0
 EOF
 cat >"${cli_bin}/df" <<'EOF'
 #!/bin/sh

@@ -26,6 +26,11 @@ case "\${1:-}" in
 esac
 EOF
 chmod +x "${BIN}/uname"
+cat >"${BIN}/sw_vers" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 26.0
+EOF
+chmod +x "${BIN}/sw_vers"
 
 with_uname() {
   local kernel="$1"
@@ -691,7 +696,7 @@ esac
 EOF
 cat >"${SCRIPT_STUB}/sw_vers" <<'EOF'
 #!/bin/sh
-printf '%s\n' 15.0
+printf '%s\n' 26.0
 EOF
 cat >"${SCRIPT_STUB}/df" <<'EOF'
 #!/bin/sh
@@ -734,7 +739,7 @@ brew_prefix_json="$(
   env -u DETECT_BREW_PREFIX \
     DETECT_ARCH=arm64 DETECT_CHIP=test DETECT_MEM_BYTES=1 DETECT_MEM_GIB=1 \
     DETECT_TIER_ID=constrained DETECT_TIER_LABEL=label DETECT_TIER_HINT=hint \
-    DETECT_CORES=8 DETECT_MACOS=15 DETECT_PY=3.12 DETECT_BREW_OK=false \
+    DETECT_CORES=8 DETECT_MACOS=26 DETECT_PY=3.12 DETECT_BREW_OK=false \
     DETECT_XCODE=false DETECT_MODEL=model DETECT_WORKSPACE=/tmp \
     python3 "${ROOT}/scripts/lib/detect_json.py" 2>/dev/null
 )" || true
