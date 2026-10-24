@@ -68,7 +68,7 @@ MLX_VIDEO_PACKAGE="${MLX_VIDEO_PACKAGE:-git+https://github.com/Blaizzy/mlx-video
 # MLX_PIP_PACKAGE=pip. Bump requirements/constraints.txt; these fallbacks apply
 # only when that manifest has no matching line.
 MLX_PIP_PACKAGE="${MLX_PIP_PACKAGE:-$(_pin_default pip pip==26.2.1)}"
-MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-$(_pin_default setuptools setuptools==84.0.0)}"
+MLX_SETUPTOOLS_PACKAGE="${MLX_SETUPTOOLS_PACKAGE:-$(_pin_default setuptools setuptools==84.1.0)}"
 MLX_WHEEL_PACKAGE="${MLX_WHEEL_PACKAGE:-$(_pin_default wheel wheel==0.48.0)}"
 # wheel 0.48.0 depends on packaging>=24.0. Pin the library itself so a fresh
 # venv does not float to whatever packaging release is newest that day.
