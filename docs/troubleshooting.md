@@ -22,7 +22,7 @@ ERROR: Apple Silicon macOS (Darwin arm64) required.
 ERROR: macOS 15.0 is below the minimum supported major version (26).
 ```
 
-This toolkit supports **Apple Silicon only** on **macOS 26 or newer**. Older releases (for example Sonoma or Sequoia) are not supported here.
+This toolkit supports **Apple Silicon only** on **macOS 26 or newer**. Older releases (macOS 15 and earlier) are not supported here.
 
 On a macOS major **newer than 27** (the newest version CI smoke-tests today), `make doctor`, `make detect`, `make venv`, and `make install` continue but print a **WARN** that CI has not exercised that release yet.
 

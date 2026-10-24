@@ -330,7 +330,7 @@ detect_macos_version() {
 assert_minimum_macos_for_mlx() {
   local ver major
   [[ "$(uname -s)" == "Darwin" ]] || return 0
-  ver="$(detect_macos_version)"
+  ver="$(detect_macos_version 2>/dev/null)" || ver=""
   major="${ver%%.*}"
   [[ -n "${major}" && "${major}" =~ ^[0-9]+$ ]] \
     || die "Could not parse macOS version from sw_vers (got: ${ver}). See docs/troubleshooting.md#macos-version"

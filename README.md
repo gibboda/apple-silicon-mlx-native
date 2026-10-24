@@ -392,11 +392,11 @@ apple-silicon-mlx-native/
 │   │       └── workstation_cooled-video-dump-plan.txt
 │   ├── generate-args.test.sh
 │   ├── host-safety.test.sh
+│   ├── macos-version.test.sh
 │   ├── media-list.test.sh
 │   ├── mlx-image.test.sh
 │   ├── mlx-limits.test.sh
 │   ├── mlx-video.test.sh
-│   ├── macos-version.test.sh
 │   ├── model-list.test.sh
 │   ├── models-env.test.sh
 │   ├── pip-constraints.test.sh
