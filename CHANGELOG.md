@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-23
+
 ### Added
 
 - Shell self-tests for supported `MLX_PYTHON_VERSION` range (3.12–3.14) and exact major.minor venv matching (guards against `3.1` matching `3.12`)
@@ -247,7 +249,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.10...v0.3.0
 [0.2.10]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.8...v0.2.9
