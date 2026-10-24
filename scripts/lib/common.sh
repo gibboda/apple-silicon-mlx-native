@@ -18,6 +18,9 @@ MLX_PYTHON_VERSION="${MLX_PYTHON_VERSION:-3.12}"
 # Supported Homebrew python@ minors for make install (macOS arm64 wheel availability).
 MLX_PYTHON_VERSION_MIN="${MLX_PYTHON_VERSION_MIN:-3.12}"
 MLX_PYTHON_VERSION_MAX="${MLX_PYTHON_VERSION_MAX:-3.14}"
+# Supported macOS major versions (Apple Silicon only). See docs/troubleshooting.md.
+MLX_MACOS_VERSION_MIN_MAJOR="${MLX_MACOS_VERSION_MIN_MAJOR:-26}"
+MLX_MACOS_VERSION_MAX_MAJOR="${MLX_MACOS_VERSION_MAX_MAJOR:-27}"
 MLX_CONFIG_DIR="${MLX_CONFIG_DIR:-${MLX_WORKSPACE}/config}"
 MLX_MODELS_ENV="${MLX_MODELS_ENV:-${MLX_CONFIG_DIR}/models.env}"
 MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"

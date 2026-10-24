@@ -327,6 +327,22 @@ detect_macos_version() {
 }
 
 
+assert_minimum_macos_for_mlx() {
+  local ver major
+  [[ "$(uname -s)" == "Darwin" ]] || return 0
+  ver="$(detect_macos_version)"
+  major="${ver%%.*}"
+  [[ -n "${major}" && "${major}" =~ ^[0-9]+$ ]] \
+    || die "Could not parse macOS version from sw_vers (got: ${ver}). See docs/troubleshooting.md#macos-version"
+  if [[ "${major}" -lt "${MLX_MACOS_VERSION_MIN_MAJOR}" ]]; then
+    die "macOS ${ver} is below the minimum supported major version (${MLX_MACOS_VERSION_MIN_MAJOR}). Supported: macOS ${MLX_MACOS_VERSION_MIN_MAJOR}–${MLX_MACOS_VERSION_MAX_MAJOR} on Apple Silicon only. See docs/troubleshooting.md#macos-version"
+  fi
+  if [[ "${major}" -gt "${MLX_MACOS_VERSION_MAX_MAJOR}" ]]; then
+    die "macOS ${ver} is above the maximum supported major version (${MLX_MACOS_VERSION_MAX_MAJOR}). Supported: macOS ${MLX_MACOS_VERSION_MIN_MAJOR}–${MLX_MACOS_VERSION_MAX_MAJOR} on Apple Silicon only. See docs/troubleshooting.md#macos-version"
+  fi
+}
+
+
 detect_disk_available_gib() {
   # Available space (whole GiB) on the volume containing the path.
   # Returns empty when df fails (do not treat as 0 GiB free).

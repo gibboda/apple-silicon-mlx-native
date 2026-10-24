@@ -27,12 +27,13 @@ mlx_bs := $(subst ,,\)
 unexport IMAGE_PROMPT VIDEO_PROMPT PROMPT
 mlx_lit = $$'$(subst $(mlx_nl),\n,$(subst ',\047,$(subst $(mlx_bs),$(mlx_bs)$(mlx_bs),$(value 1))))'
 
-.PHONY: help detect recommend list list-image list-video venv install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
+.PHONY: help detect doctor recommend list list-image list-video venv install rebuild validate clean uninstall audit lint test install-image image install-video prepare-video video generate-text serve release
 
 help: ## Show available targets
 	@printf '%s\n' \
 		'make help      — show this help' \
 		'make detect    — detect Apple Silicon hardware, chip class, and memory tier' \
+		'make doctor    — verify Apple Silicon macOS 26–27 before venv/install' \
 		'make recommend — print composed LLM/image/video defaults (does not write models.env)' \
 		'make list      — list catalog text models with fit for this Mac (does not download)' \
 		'make list-image — list catalog image models with fit for this Mac (does not download)' \
@@ -57,6 +58,9 @@ help: ## Show available targets
 
 detect: ## Detect Apple Silicon hardware
 	@$(SCRIPTS)/detect-apple-silicon.sh
+
+doctor: ## Verify supported Apple Silicon macOS before venv/install
+	@$(SCRIPTS)/doctor-mlx-native.sh
 
 recommend: ## Print composed defaults for this Mac (does not write models.env)
 	@$(SCRIPTS)/detect-apple-silicon.sh --recommend
