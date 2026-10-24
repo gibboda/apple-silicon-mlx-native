@@ -1,0 +1,16 @@
+family=z-image-turbo
+model=z-image-turbo
+cli=mflux-generate-z-image-turbo
+tier=high
+throughput_class=fast
+thermal_class=cooled
+chip_family=5
+chip_sku=base
+gpu_cores=24
+quantize=8
+steps=9
+width=1024
+height=1024
+low_ram=0
+vae_tiling=0
+seed=

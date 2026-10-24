@@ -77,7 +77,7 @@ Cleanup (`scripts/cleanup-mlx-native.sh`) is the reverse of **toolkit-owned** st
 | `validate-mlx.sh` | Fast correctness checks plus `mx.device_info()` working-set limits |
 | `conventional-commits-audit.sh` | Commit subject policy |
 
-Shared helpers live in `scripts/lib/common.sh` so detection, compose logic, and packaging-tool pins stay consistent. **RAM is the OOM fence; chip class is the performance fence.** Unknown chips warn and fall back to RAM-only defaults; install does not fail. See [hardware-tiers.md](hardware-tiers.md).
+Shell scripts source `scripts/lib/common.sh`, a thin aggregator over cohesive modules: `ui.sh` (logging and argv helpers), `detect.sh` (hardware facts and bandwidth), `policy.sh` and `policy_fit_rules.sh` (composed defaults and catalog fit labels), `catalog.sh` (model list rows), `envfile.sh` (`models.env` I/O), and `venv.sh` (venv lifecycle and pip installs). Python helpers include `detect_json.py`, `mlx_launch.py`, and `release_notes.py` (bash re-exec entry for `release.sh`). **RAM is the OOM fence; chip class is the performance fence.** Unknown chips warn and fall back to RAM-only defaults; install does not fail. See [hardware-tiers.md](hardware-tiers.md).
 
 ## Memory accounting (design constraint)
 

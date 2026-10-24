@@ -65,7 +65,7 @@ for pkg in transformers numpy huggingface-hub mlx-vlm torch; do
   fi
 done
 
-direct_pip="$(grep -RIn --exclude='common.sh' -E '(\$\{PIP\}|-m pip)[[:space:]]+install' "${ROOT}/scripts" || true)"
+direct_pip="$(grep -RIn --exclude-dir=lib -E '(\$\{PIP\}|-m pip)[[:space:]]+install' "${ROOT}/scripts" || true)"
 if [[ -n "${direct_pip}" ]]; then
   fail "direct pip install outside mlx_pip_install: ${direct_pip}"
 else
@@ -78,7 +78,7 @@ for installer in \
   "${ROOT}/scripts/install-mlx-image.sh" \
   "${ROOT}/scripts/install-mlx-video.sh"
 do
-  if grep -q 'mlx_pip_install' "${installer}"; then
+  if grep -qE 'mlx_pip_install|install_core_packages' "${installer}"; then
     pass "mlx_pip_install in $(basename "${installer}")"
   else
     fail "mlx_pip_install missing in $(basename "${installer}")"

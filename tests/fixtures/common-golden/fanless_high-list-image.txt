@@ -1,0 +1,24 @@
+Apple chip:       Apple M3 Pro
+Chip family/SKU (policy):  5 base
+Memory:           16 GiB
+Memory tier:      high (physical standard)
+Thermal class:    fanless
+Throughput class: fast
+Default image:    flux2-klein-4b
+Family:           flux2
+Quantize:         4-bit
+Size:             512x512
+Steps:            4
+Low RAM:          yes
+
+fit is default (composed choice), fits, tight (measure first), or poor for this Mac.
+cached is yes when the Hugging Face cache holds that preset's upstream repo
+(every diffusers weight component with non-empty shards, or a complete single-file
+layout, and no incomplete blob). Nothing is downloaded.
+
+fit	cached	model	weights	use
+default	no	flux2-klein-4b	4B, 4-bit or 8-bit	Floor image model; default through 18 GB and on every fanless Air
+tight	no	z-image-turbo	8-bit, wants 24 GB+	Quality default on cooled 24 GB and up
+tight	no	schnell	FLUX.1 schnell	Optional FLUX.1 path; not a composed default
+
+One image at a time: make image IMAGE_PROMPT="..."

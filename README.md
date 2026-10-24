@@ -273,9 +273,17 @@ apple-silicon-mlx-native/
 │   └── constraints.txt
 ├── scripts/
 │   ├── lib/
+│   │   ├── catalog.sh
 │   │   ├── common.sh
+│   │   ├── detect.sh
 │   │   ├── detect_json.py
-│   │   └── mlx_launch.py
+│   │   ├── envfile.sh
+│   │   ├── mlx_launch.py
+│   │   ├── policy.sh
+│   │   ├── policy_fit_rules.sh
+│   │   ├── release_notes.py
+│   │   ├── ui.sh
+│   │   └── venv.sh
 │   ├── cleanup-mlx-native.sh
 │   ├── conventional-commits-audit.sh
 │   ├── create-mlx-venv.sh
@@ -300,10 +308,87 @@ apple-silicon-mlx-native/
 │   │   └── fake_venv_python.py
 │   ├── chip-profile.test.sh
 │   ├── cleanup-mlx-native.test.sh
+│   ├── common-golden.test.sh
+│   ├── regen-common-golden.sh
 │   ├── config-precedence.test.sh
 │   ├── conventional-commits-audit.test.sh
 │   ├── delete-merged-pr-branch.test.sh
 │   ├── disk-headroom.test.sh
+│   ├── fixtures/
+│   │   └── common-golden/
+│   │       ├── README.md
+│   │       ├── constrained_fanless-detect-env.txt
+│   │       ├── constrained_fanless-detect-json.txt
+│   │       ├── constrained_fanless-image-dump-plan.txt
+│   │       ├── constrained_fanless-list-image.txt
+│   │       ├── constrained_fanless-list-video.txt
+│   │       ├── constrained_fanless-list.txt
+│   │       ├── constrained_fanless-text-dump-plan.txt
+│   │       ├── constrained_fanless-video-dump-plan.txt
+│   │       ├── fanless_high-detect-env.txt
+│   │       ├── fanless_high-detect-json.txt
+│   │       ├── fanless_high-image-dump-plan.txt
+│   │       ├── fanless_high-list-image.txt
+│   │       ├── fanless_high-list-video.txt
+│   │       ├── fanless_high-list.txt
+│   │       ├── fanless_high-text-dump-plan.txt
+│   │       ├── fanless_high-video-dump-plan.txt
+│   │       ├── high_fast_cooled-detect-env.txt
+│   │       ├── high_fast_cooled-detect-json.txt
+│   │       ├── high_fast_cooled-image-dump-plan.txt
+│   │       ├── high_fast_cooled-list-image.txt
+│   │       ├── high_fast_cooled-list-video.txt
+│   │       ├── high_fast_cooled-list.txt
+│   │       ├── high_fast_cooled-text-dump-plan.txt
+│   │       ├── high_fast_cooled-video-dump-plan.txt
+│   │       ├── high_very_fast_cooled-detect-env.txt
+│   │       ├── high_very_fast_cooled-detect-json.txt
+│   │       ├── high_very_fast_cooled-image-dump-plan.txt
+│   │       ├── high_very_fast_cooled-list-image.txt
+│   │       ├── high_very_fast_cooled-list-video.txt
+│   │       ├── high_very_fast_cooled-list.txt
+│   │       ├── high_very_fast_cooled-text-dump-plan.txt
+│   │       ├── high_very_fast_cooled-video-dump-plan.txt
+│   │       ├── large_cooled-detect-env.txt
+│   │       ├── large_cooled-detect-json.txt
+│   │       ├── large_cooled-image-dump-plan.txt
+│   │       ├── large_cooled-list-image.txt
+│   │       ├── large_cooled-list-video.txt
+│   │       ├── large_cooled-list.txt
+│   │       ├── large_cooled-text-dump-plan.txt
+│   │       ├── large_cooled-video-dump-plan.txt
+│   │       ├── standard_fast_cooled-detect-env.txt
+│   │       ├── standard_fast_cooled-detect-json.txt
+│   │       ├── standard_fast_cooled-image-dump-plan.txt
+│   │       ├── standard_fast_cooled-list-image.txt
+│   │       ├── standard_fast_cooled-list-video.txt
+│   │       ├── standard_fast_cooled-list.txt
+│   │       ├── standard_fast_cooled-text-dump-plan.txt
+│   │       ├── standard_fast_cooled-video-dump-plan.txt
+│   │       ├── unknown-detect-env.txt
+│   │       ├── unknown-detect-json.txt
+│   │       ├── unknown-image-dump-plan.txt
+│   │       ├── unknown-list-image.txt
+│   │       ├── unknown-list-video.txt
+│   │       ├── unknown-list.txt
+│   │       ├── unknown-text-dump-plan.txt
+│   │       ├── unknown-video-dump-plan.txt
+│   │       ├── very_fast-detect-env.txt
+│   │       ├── very_fast-detect-json.txt
+│   │       ├── very_fast-image-dump-plan.txt
+│   │       ├── very_fast-list-image.txt
+│   │       ├── very_fast-list-video.txt
+│   │       ├── very_fast-list.txt
+│   │       ├── very_fast-text-dump-plan.txt
+│   │       ├── very_fast-video-dump-plan.txt
+│   │       ├── workstation_cooled-detect-env.txt
+│   │       ├── workstation_cooled-detect-json.txt
+│   │       ├── workstation_cooled-image-dump-plan.txt
+│   │       ├── workstation_cooled-list-image.txt
+│   │       ├── workstation_cooled-list-video.txt
+│   │       ├── workstation_cooled-list.txt
+│   │       ├── workstation_cooled-text-dump-plan.txt
+│   │       └── workstation_cooled-video-dump-plan.txt
 │   ├── generate-args.test.sh
 │   ├── host-safety.test.sh
 │   ├── media-list.test.sh
@@ -326,7 +411,7 @@ apple-silicon-mlx-native/
 
 The tree lists every tracked file. `tests/readme-tree.test.sh` fails when a tracked path is missing from it, or when it names a path that is not tracked.
 
-`scripts/lib/common.sh` holds shared detection, bandwidth lookup, and compose helpers. `scripts/lib/mlx_launch.py` applies the ≤8 GB Metal working-set limits before text generation or `mlx_lm.server` starts.
+`scripts/lib/common.sh` is a thin aggregator; callers still source it only. Modules under `scripts/lib/` are `ui.sh`, `detect.sh`, `policy.sh`, `policy_fit_rules.sh`, `catalog.sh`, `envfile.sh`, and `venv.sh`, plus `detect_json.py`, `mlx_launch.py`, and `release_notes.py`. `scripts/lib/mlx_launch.py` applies the ≤8 GB Metal working-set limits before text generation or `mlx_lm.server` starts.
 
 ## Make targets
 

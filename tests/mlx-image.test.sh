@@ -37,6 +37,7 @@ expect_fail "generate with prompt but no venv" "${GENERATE}" --prompt "a test pr
 out="$("${GENERATE}" 2>&1 || true)"
 expect_contains "missing prompt mentions --prompt" "--prompt" "${out}"
 
+# No passthru args: exercises empty PASSTHRU under set -u (macOS /bin/bash 3.2).
 plan_default="$("${GENERATE}" --dump-plan --prompt "plan")"
 expect_line "constrained default family is flux2" "family=flux2" "${plan_default}"
 expect_line "constrained default model is flux2-klein-4b" "model=flux2-klein-4b" "${plan_default}"

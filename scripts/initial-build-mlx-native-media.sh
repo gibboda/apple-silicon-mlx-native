@@ -128,15 +128,11 @@ PIP="$(venv_pip)"
 install_packaging_tools
 
 log_header "MLX core packages"
-log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
-warn_or_die_disk_headroom core-pip
-mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
+install_core_packages core
 
 if ! is_truthy "${MLX_SKIP_MEDIA}"; then
   log_header "Selected MLX-native media packages"
-  log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
-  warn_or_die_disk_headroom media-pip
-  mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
+  install_core_packages media
 else
   log_warn "Skipping media packages (MLX_SKIP_MEDIA=1)"
 fi
@@ -146,8 +142,7 @@ if is_truthy "${MLX_INSTALL_IMAGE}"; then
     log_warn "Image generation (mflux) typically needs ≥16 GB unified memory; proceeding due to MLX_INSTALL_IMAGE=1"
   fi
   log_info "Installing Pure MLX image tooling: ${MLX_IMAGE_PACKAGE} (opt-in)"
-  warn_or_die_disk_headroom image-pip
-  mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
+  install_core_packages image
 else
   log_info "Image tooling (${MLX_IMAGE_PACKAGE}) not installed by default. Run: make install-image"
 fi
@@ -157,8 +152,7 @@ if is_truthy "${MLX_INSTALL_VIDEO}"; then
     log_warn "Video generation (mlx-video) typically needs ≥24 GB unified memory; proceeding due to MLX_INSTALL_VIDEO=1"
   fi
   log_info "Installing Pure MLX video tooling: ${MLX_VIDEO_PACKAGE} (opt-in)"
-  warn_or_die_disk_headroom video-pip
-  mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
+  install_core_packages video
 else
   log_info "Video tooling (mlx-video) is not installed by default. Run: make install-video"
 fi

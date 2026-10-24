@@ -2,6 +2,7 @@
 # Constrained-tier MLX limit plan (no GPU, no model load).
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
+# shellcheck disable=SC2034
 
 set -euo pipefail
 

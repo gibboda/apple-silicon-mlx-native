@@ -56,13 +56,7 @@ export_detect_env
 log_info "Detected chip: ${MLX_CHIP} (family=${MLX_CHIP_FAMILY:-unknown} sku=${MLX_CHIP_SKU:-unknown})"
 log_info "Throughput: ${MLX_THROUGHPUT_CLASS:-unknown} thermal=${MLX_THERMAL_CLASS:-unknown} policy_tier=${MLX_TIER_ID}"
 
-ensure_homebrew_in_path
-[[ -n "$(homebrew_prefix)" ]] || die "Homebrew not found. Run: make venv"
-require_cmd brew
-if [[ "$(homebrew_prefix)" == "/usr/local" ]]; then
-  die "Homebrew prefix is /usr/local (Intel/Rosetta). Install Apple Silicon Homebrew at /opt/homebrew, then re-run."
-fi
-log_ok "Homebrew validated at $(homebrew_prefix)"
+ensure_homebrew_ready "make venv"
 
 # Validate expected workspace
 assert_workspace_safe
@@ -107,25 +101,7 @@ create_atomic_project_venv "${BREW_PY}" "${MLX_VENV}"
 PY="$(venv_python)"
 PIP="$(venv_pip)"
 install_packaging_tools
-log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
-warn_or_die_disk_headroom core-pip
-mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
-
-if ! is_truthy "${MLX_SKIP_MEDIA}"; then
-  log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
-  warn_or_die_disk_headroom media-pip
-  mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
-fi
-
-if is_truthy "${MLX_INSTALL_IMAGE}"; then
-  warn_or_die_disk_headroom image-pip
-  mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
-fi
-
-if is_truthy "${MLX_INSTALL_VIDEO}"; then
-  warn_or_die_disk_headroom video-pip
-  mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
-fi
+install_core_packages
 
 log_header "Validation"
 "${SCRIPT_DIR}/validate-mlx.sh" --venv "${MLX_VENV}"

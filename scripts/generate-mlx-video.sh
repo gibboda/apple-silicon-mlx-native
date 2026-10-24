@@ -217,6 +217,7 @@ if (( DUMP_PLAN == 0 )); then
   assert_apple_silicon
 fi
 if (( DUMP_PLAN == 1 )); then
+  # shellcheck disable=SC2034
   MLX_SKIP_DEVICE_PROBE=1
 fi
 load_runtime_profile
@@ -422,6 +423,7 @@ fi
 if [[ "${FAMILY}" == "wan21" ]]; then
   # Local --model-dir plus the MP4. Do not probe the hub cache: a full
   # cache volume must not abort a generate that never downloads weights.
+  # shellcheck disable=SC2034
   MLX_WAN_GENERATE_DIR="${MODEL_DIR}"
   warn_or_die_disk_headroom wan-generate
 else

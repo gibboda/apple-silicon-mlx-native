@@ -1,0 +1,11 @@
+tier=workstation
+physical_tier=standard
+device=default
+apply_working_set_limits=0
+cache_limit_bytes=
+model=mlx-community/Qwen2.5-14B-Instruct-4bit
+recommended_model=mlx-community/Qwen2.5-14B-Instruct-4bit
+recommended_context=8192
+max_tokens=
+max_kv_size=8192
+temp=

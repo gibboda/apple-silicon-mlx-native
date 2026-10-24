@@ -37,12 +37,7 @@ jobs:
           echo "${RUNNER_TEMP}/shellcheck-v${SHELLCHECK_VERSION}" >> "${GITHUB_PATH}"
 
       - name: Run ShellCheck
-        run: |
-          status=0
-          while IFS= read -r -d '' script; do
-            shellcheck -x "$script" || status=1
-          done < <(find scripts tests -type f -name '*.sh' -print0)
-          exit "$status"
+        run: make lint
 
   selftest:
     name: Portable self-tests
@@ -129,6 +124,19 @@ jobs:
           out="$(make recommend)"
           printf '%s\n' "${out}"
           grep -E -q '^recommended_model=.+' <<<"${out}"
+
+      - name: Image dump-plan without passthru (bash 3.2)
+        env:
+          MLX_SKIP_DEVICE_PROBE: 1
+          OVERRIDE_MEMORY_TIER: constrained
+          OVERRIDE_THERMAL_CLASS: cooled
+        run: |
+          set -euo pipefail
+          ws="${RUNNER_TEMP}/mlx-image-smoke"
+          mkdir -p "${ws}"
+          export MLX_WORKSPACE="${ws}"
+          # Empty PASSTHRU + tier-default vae_tiling must not trip set -u on bash 3.2.
+          /bin/bash scripts/generate-mlx-image.sh --dump-plan --prompt x | grep -q '^vae_tiling=1$'
 
       - name: Portable self-tests (bash 3.2)
         run: |

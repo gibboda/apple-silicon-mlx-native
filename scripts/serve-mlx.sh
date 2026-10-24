@@ -97,6 +97,7 @@ if ((${#PASSTHRU[@]} > 0)); then
   done < <(argv_flag_values --port "${PASSTHRU[@]}")
 fi
 if (( DUMP_PLAN == 1 )); then
+  # shellcheck disable=SC2034
   MLX_SKIP_DEVICE_PROBE=1
 fi
 load_runtime_profile

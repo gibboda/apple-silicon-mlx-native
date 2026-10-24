@@ -18,9 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `requirements/constraints.txt` with MLX core pins and key transitive pins (`transformers`, `numpy`, `huggingface-hub`, `mlx-vlm`, `torch`). Every pip install path exports `PIP_CONSTRAINT` via `mlx_pip_install` so media installs cannot float core MLX packages. Dependabot watches `requirements/` for pip updates. `core-pip` disk headroom (default 12 GiB, `MLX_DISK_MIN_CORE_GIB`) runs before core installs in `make install` / `make rebuild`
+- `tests/common-golden.test.sh` with composed-profile fixtures and `tests/regen-common-golden.sh` to refresh golden output for detect, catalog lists, and wrapper `--dump-plan`
 
 ### Changed
 
+- Split `scripts/lib/common.sh` into cohesive modules (`ui`, `detect`, `policy`, `policy_fit_rules`, `catalog`, `envfile`, `venv`) with `common.sh` as the aggregator; centralize text catalog fit labels and composed text defaults in `policy_fit_rules.sh`. Move the `release.sh` Python re-exec helper to `scripts/lib/release_notes.py`
 - Bump mlx-lm to 0.32.0
 - Bump torch to 2.14.1
 - Bump mlx-audio to 0.5.8
