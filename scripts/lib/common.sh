@@ -30,7 +30,9 @@ MLX_WORKSPACE_SENTINEL_NAME=".mlx-workspace"
 # requirements/constraints.txt is the pin manifest. Defaults below read that
 # file so a Dependabot edit is the install default. An explicit MLX_* spec
 # still wins, and export_pip_constraint rewrites PIP_CONSTRAINT so the old
-# pin does not force the override back. Not a full lockfile yet.
+# pin does not force the override back. An MLX_PACKAGE override also
+# retargets mlx-metal to the same mlx==version, or drops that pin when the
+# spec is not an exact pin. Not a full lockfile yet.
 # Override a spec to track upstream, for example:
 #   MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 # Do not add PyTorch/MPS as a generation backend.

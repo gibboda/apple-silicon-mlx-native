@@ -149,6 +149,30 @@ if grep -q '^mflux==0.19.1$' "${override_constraint}"; then
 else
   pass "override constraint drops the manifest mflux pin"
 fi
+manifest_metal="$(grep -E '^mlx-metal==[^[:space:]]+$' "${CONSTRAINTS}" | head -n 1)"
+expect_eq "unrelated override keeps mlx-metal pin" "${manifest_metal}" "$(grep -E '^mlx-metal==' "${override_constraint}" || true)"
+
+: >"${override_ws}/pip-env"
+MLX_WORKSPACE="${override_ws}" MLX_VENV="${override_ws}/.venv" MLX_PACKAGE='mlx==1.2.3' \
+  bash -c 'source "$1"; mlx_pip_install --upgrade mlx==1.2.3' bash "${COMMON}" >/dev/null
+mlx_override="$(sed -n 's/^PIP_CONSTRAINT=//p' "${override_ws}/pip-env" | head -n 1)"
+expect_eq "mlx override retargets mlx" "mlx==1.2.3" "$(grep -E '^mlx==' "${mlx_override}" || true)"
+expect_eq "mlx override retargets mlx-metal" "mlx-metal==1.2.3" "$(grep -E '^mlx-metal==' "${mlx_override}" || true)"
+if grep -qx "${manifest_metal}" "${mlx_override}"; then
+  fail "mlx override still pins ${manifest_metal}"
+else
+  pass "mlx override drops the manifest mlx-metal pin"
+fi
+
+: >"${override_ws}/pip-env"
+MLX_WORKSPACE="${override_ws}" MLX_VENV="${override_ws}/.venv" MLX_PACKAGE='mlx>=1.2.3' \
+  bash -c 'source "$1"; mlx_pip_install --upgrade mlx' bash "${COMMON}" >/dev/null
+range_constraint="$(sed -n 's/^PIP_CONSTRAINT=//p' "${override_ws}/pip-env" | head -n 1)"
+if grep -q '^mlx==' "${range_constraint}" || grep -q '^mlx-metal==' "${range_constraint}"; then
+  fail "non-exact mlx override still constrains mlx or mlx-metal"
+else
+  pass "non-exact mlx override omits mlx and mlx-metal pins"
+fi
 
 : >"${override_ws}/pip-env"
 MLX_WORKSPACE="${override_ws}" MLX_VENV="${override_ws}/.venv" MLX_PACKAGE='mlx' \
@@ -158,6 +182,11 @@ if grep -q '^mlx==' "${bare_constraint}"; then
   fail "bare mlx override still constrains mlx"
 else
   pass "bare mlx override omits the mlx pin"
+fi
+if grep -q '^mlx-metal==' "${bare_constraint}"; then
+  fail "bare mlx override still constrains mlx-metal"
+else
+  pass "bare mlx override omits the mlx-metal pin"
 fi
 rm -rf "${override_ws}"
 

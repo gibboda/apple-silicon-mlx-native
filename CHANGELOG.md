@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enforce **`MLX_PYTHON_VERSION`** in the supported **3.12–3.14** range at `make venv` / `make install` / `make rebuild`; compare venv `pyvenv.cfg` version by exact major.minor
 - Refuse **`make venv`** / **`make install`** on macOS major versions below **14**
 
+### Fixed
+
+- An **`MLX_PACKAGE`** override retargets **`mlx-metal`** to the same exact version, or drops that pin when the spec is not `mlx==version`, so the Metal backend is not left on the manifest release
+
 ## [0.3.0] - 2026-10-22
 
 ### Breaking

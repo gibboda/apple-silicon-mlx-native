@@ -140,19 +140,45 @@ _constraint_override_specs() {
     "${MLX_LM_PACKAGE}" \
     "${MLX_AUDIO_PACKAGE}" \
     "${MLX_IMAGE_PACKAGE}"
+  _mlx_metal_companion_spec
+}
+
+# mlx requires mlx-metal at the same release. When MLX_PACKAGE overrides the
+# manifest mlx pin, retarget that backend pin to the same exact version, or
+# drop it when the override is not name==version. A bare MLX_PACKAGE=mlx would
+# otherwise stay locked to the old mlx-metal pin.
+_mlx_metal_companion_spec() {
+  local spec="${MLX_PACKAGE}"
+  local manifest metal_line version
+  manifest="$(_pin_default mlx "")"
+  metal_line="$(_pin_default mlx-metal "")"
+  [[ -n "${manifest}" && -n "${metal_line}" ]] || return 0
+  [[ "${spec}" == "${manifest}" ]] && return 0
+  if [[ "${spec}" =~ ^mlx==[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+    version="${spec#mlx==}"
+    printf 'mlx-metal==%s\n' "${version}"
+    return 0
+  fi
+  # Any other mlx spec (bare name or a range) must not keep the old backend pin.
+  # Patterns are split so bash 3.2 does not treat '<' as a redirection.
+  case "${spec}" in
+    mlx|mlx=*|'mlx>'*|'mlx<'*|mlx'!'*|mlx'~'*)
+      printf 'mlx-metal\n'
+      ;;
+  esac
 }
 
 # Export PIP_CONSTRAINT for dependency installs (core, media, and packaging).
 # Unchanged specs use requirements/constraints.txt. A one-off override writes
 # a workspace copy that replaces or drops that package's pin so pip does not
 # force the manifest version (ResolutionImpossible, or a bare name stuck on
-# the old pin).
+# the old pin). An MLX_PACKAGE override also retargets or drops mlx-metal.
 
 # Export PIP_CONSTRAINT for dependency installs (core, media, and packaging).
 # Unchanged specs use requirements/constraints.txt. A one-off override writes
 # a workspace copy that replaces or drops that package's pin so pip does not
 # force the manifest version (ResolutionImpossible, or a bare name stuck on
-# the old pin).
+# the old pin). An MLX_PACKAGE override also retargets or drops mlx-metal.
 export_pip_constraint() {
   local spec name file_line rewritten=0
   local effective="${MLX_WORKSPACE}/.mlx-pip-constraint.txt"

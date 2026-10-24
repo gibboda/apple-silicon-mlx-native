@@ -26,6 +26,8 @@ Bootstrap installs `mlx-audio` and Homebrew `ffmpeg` (encoding/decoding support)
 MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 ```
 
+An `MLX_PACKAGE` override also rewrites `mlx-metal` to the same exact version, or drops that pin when the spec is not `mlx==version`, so the Metal backend stays aligned with `mlx`.
+
 Extra TTS feature extras may be needed for some models; install those intentionally after reading upstream docs.
 
 Example (after `source .venv/bin/activate`):
