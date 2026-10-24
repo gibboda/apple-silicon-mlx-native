@@ -206,7 +206,7 @@ exit 0
 EOF
 cat >"${BIN}/sw_vers" <<'EOF'
 #!/bin/sh
-printf '%s\n' 15.0
+printf '%s\n' 26.0
 EOF
 cat >"${BIN}/df" <<'EOF'
 #!/bin/sh

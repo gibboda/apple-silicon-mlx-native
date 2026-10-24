@@ -18,7 +18,7 @@
   "physical_memory_tier_label": "16\u201318 GB \u2014 standard",
   "memory_tier_hint": "7B\u201314B 4-bit / selected 8-bit",
   "cpu_cores": 8,
-  "macos_version": "15.0",
+  "macos_version": "26.0",
   "disk_available_gib": 800,
   "python_version": "<PYTHON>",
   "homebrew": false,
