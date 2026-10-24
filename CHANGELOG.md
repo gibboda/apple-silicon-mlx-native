@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Shell self-tests for supported `MLX_PYTHON_VERSION` range (3.12–3.14) and exact major.minor venv matching (guards against `3.1` matching `3.12`)
+- Required GitHub Actions macOS smoke job on **`xcode-27`** (macOS 27 Golden Gate) alongside `macos-latest`
+
+### Changed
+
+- Bump **`mlx`** and **`mlx-metal`** to **0.32.4** (macOS 27 / Xcode 27 SDK fixes); pin **`mlx-metal`** in `requirements/constraints.txt`
+- Enforce **`MLX_PYTHON_VERSION`** in the supported **3.12–3.14** range at `make venv` / `make install` / `make rebuild`; compare venv `pyvenv.cfg` version by exact major.minor
+- Refuse **`make venv`** / **`make install`** on macOS major versions below **14**
+
+### Fixed
+
+- An **`MLX_PACKAGE`** override retargets **`mlx-metal`** to the same exact version, or drops that pin when the spec is not `mlx==version`, so the Metal backend is not left on the manifest release
+
 ## [0.3.0] - 2026-10-22
 
 ### Breaking

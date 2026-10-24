@@ -76,6 +76,8 @@ done
 log_header "Apple Silicon MLX native — initial build"
 
 assert_apple_silicon
+assert_minimum_macos_for_mlx
+assert_mlx_python_version_supported
 export_detect_env
 
 log_info "Detected chip: ${MLX_CHIP} (family=${MLX_CHIP_FAMILY:-unknown} sku=${MLX_CHIP_SKU:-unknown})"

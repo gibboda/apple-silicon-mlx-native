@@ -15,6 +15,9 @@ MLX_VENV="${MLX_VENV:-${MLX_WORKSPACE}/.venv}"
 # Default 3.12 until project policy changes; venv guards follow MLX_PYTHON_VERSION.
 # See docs/troubleshooting.md#python-version-venv before changing the default.
 MLX_PYTHON_VERSION="${MLX_PYTHON_VERSION:-3.12}"
+# Supported Homebrew python@ minors for make install (macOS arm64 wheel availability).
+MLX_PYTHON_VERSION_MIN="${MLX_PYTHON_VERSION_MIN:-3.12}"
+MLX_PYTHON_VERSION_MAX="${MLX_PYTHON_VERSION_MAX:-3.14}"
 MLX_CONFIG_DIR="${MLX_CONFIG_DIR:-${MLX_WORKSPACE}/config}"
 MLX_MODELS_ENV="${MLX_MODELS_ENV:-${MLX_CONFIG_DIR}/models.env}"
 MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
@@ -27,7 +30,9 @@ MLX_WORKSPACE_SENTINEL_NAME=".mlx-workspace"
 # requirements/constraints.txt is the pin manifest. Defaults below read that
 # file so a Dependabot edit is the install default. An explicit MLX_* spec
 # still wins, and export_pip_constraint rewrites PIP_CONSTRAINT so the old
-# pin does not force the override back. Not a full lockfile yet.
+# pin does not force the override back. An MLX_PACKAGE override also
+# retargets mlx-metal to the same mlx==version, or drops that pin when the
+# spec is not an exact pin. Not a full lockfile yet.
 # Override a spec to track upstream, for example:
 #   MLX_PACKAGE=mlx MLX_LM_PACKAGE=mlx-lm MLX_AUDIO_PACKAGE=mlx-audio make rebuild
 # Do not add PyTorch/MPS as a generation backend.
@@ -48,7 +53,7 @@ _pin_default() {
   fi
 }
 
-MLX_PACKAGE="${MLX_PACKAGE:-$(_pin_default mlx mlx==0.32.2)}"
+MLX_PACKAGE="${MLX_PACKAGE:-$(_pin_default mlx mlx==0.32.4)}"
 MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-$(_pin_default mlx-lm mlx-lm==0.32.0)}"
 MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-$(_pin_default mlx-audio mlx-audio==0.5.8)}"
 MLX_CORE_PACKAGES=("${MLX_PACKAGE}" "${MLX_LM_PACKAGE}")
