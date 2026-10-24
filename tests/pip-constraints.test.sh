@@ -99,7 +99,7 @@ if [ "\$1" = "-m" ] && [ "\$2" = "pip" ]; then
   printf '\\n' >> "${INSTALL_WS}/pip-args"
   exit 0
 fi
-printf '%s\\n' 'pip 26.2.1' 'setuptools 84.0.0' 'wheel 0.48.0' 'packaging 26.3'
+printf '%s\\n' 'pip 26.2.1' 'setuptools 84.1.0' 'wheel 0.48.0' 'packaging 26.3'
 EOF
 chmod +x "${INSTALL_WS}/.venv/bin/python"
 
@@ -136,7 +136,7 @@ if [ "\$1" = "-m" ] && [ "\$2" = "pip" ]; then
   printf 'PIP_CONSTRAINT=%s\n' "\${PIP_CONSTRAINT:-}" >> "${override_ws}/pip-env"
   exit 0
 fi
-printf '%s\\n' 'pip 26.2.1' 'setuptools 84.0.0' 'wheel 0.48.0' 'packaging 26.3'
+printf '%s\\n' 'pip 26.2.1' 'setuptools 84.1.0' 'wheel 0.48.0' 'packaging 26.3'
 EOF
 chmod +x "${override_ws}/.venv/bin/python"
 : >"${override_ws}/pip-env"
