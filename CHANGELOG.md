@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-24
+
 ### Breaking
 
 - Require **macOS 26 or newer** on **Apple Silicon** for `make doctor`, `make detect`, `make venv`, and `make install`; macOS 14–15 are refused with a clear error. Versions newer than CI smoke (macOS 27 today) log a non-fatal warning
+
+### Changed
+
+- Bump **`setuptools`** from 84.0.0 to 84.1.0 in `requirements/constraints.txt` (#104)
 
 ### Fixed
 
@@ -257,7 +263,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.10...v0.3.0
 [0.2.10]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.2.9...v0.2.10
