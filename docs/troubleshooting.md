@@ -241,6 +241,8 @@ scripts/generate-mlx-image.sh --prompt "a red fox in snow" --family z-image-turb
 
 Do not pass `--model flux2-klein-4b` with `--family z-image-turbo`.
 
+If `mflux-generate-flux2` (or another mflux CLI) fails with `ImportError: cannot import name '_IntegralLike' from 'numbers'`, the venv has Pillow 13. Pillow 13.0.0 imports `numbers._IntegralLike` at startup, and CPython 3.12–3.15 does not define that name. This toolkit pins `pillow==12.3.0` in `requirements/constraints.txt` (mflux requires `pillow>=12.3.0`). Re-run `make install-image` so pip downgrades Pillow, then retry `make image`.
+
 `mflux` is not a default bootstrap package. See [media.md](media.md).
 
 ## Text-to-video (`mlx-video`) missing or generate fails
