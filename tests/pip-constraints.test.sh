@@ -57,7 +57,7 @@ expect_eq "constraints file exists" "yes" "$(test -f "${CONSTRAINTS}" && printf 
 shared="$(comm -12 <(constraint_pins) <(common_default_pins))"
 expect_eq "constraints include all common.sh default pins" "$(common_default_pins | wc -l | tr -d ' ')" "$(printf '%s\n' "${shared}" | sed '/^$/d' | wc -l | tr -d ' ')"
 
-for pkg in transformers numpy huggingface-hub mlx-vlm torch mlx-metal; do
+for pkg in transformers numpy huggingface-hub mlx-vlm torch mlx-metal pillow; do
   if grep -q "^${pkg}==" "${CONSTRAINTS}"; then
     pass "transitive pin ${pkg}"
   else

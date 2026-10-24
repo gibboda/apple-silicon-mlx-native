@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pin `pillow==12.3.0` so `make image` can import mflux. Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12–3.15 does not define (`ImportError` from `PIL._typing`). Re-run `make install-image` to apply the pin in an existing `.venv`
+
 ## [0.3.1] - 2026-10-23
 
 ### Added
