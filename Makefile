@@ -33,7 +33,7 @@ help: ## Show available targets
 	@printf '%s\n' \
 		'make help      — show this help' \
 		'make detect    — detect Apple Silicon hardware, chip class, and memory tier' \
-		'make doctor    — verify Apple Silicon macOS 26–27 before venv/install' \
+		'make doctor    — verify Apple Silicon macOS 26+ before venv/install' \
 		'make recommend — print composed LLM/image/video defaults (does not write models.env)' \
 		'make list      — list catalog text models with fit for this Mac (does not download)' \
 		'make list-image — list catalog image models with fit for this Mac (does not download)' \

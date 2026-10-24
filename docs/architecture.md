@@ -36,7 +36,7 @@ Priorities for this toolkit:
 ├─────────────────────────────────────────────┤
 │  mlx  (Metal / unified memory)              │
 ├─────────────────────────────────────────────┤
-│  macOS 26–27 + Apple Silicon                │
+│  macOS 26+ + Apple Silicon                  │
 └─────────────────────────────────────────────┘
 ```
 

@@ -22,7 +22,9 @@ ERROR: Apple Silicon macOS (Darwin arm64) required.
 ERROR: macOS 15.0 is below the minimum supported major version (26).
 ```
 
-This toolkit supports **Apple Silicon only** on **macOS 26 and macOS 27 (Golden Gate)**. Older releases (for example Sonoma or Sequoia) and newer majors above 27 are not supported here.
+This toolkit supports **Apple Silicon only** on **macOS 26 or newer**. Older releases (for example Sonoma or Sequoia) are not supported here.
+
+On a macOS major **newer than 27** (the newest version CI smoke-tests today), `make doctor`, `make detect`, `make venv`, and `make install` continue but print a **WARN** that CI has not exercised that release yet.
 
 Run `make doctor` for a fast platform check before `make venv` or `make install`.
 
@@ -76,7 +78,7 @@ Expected: `arm64`.
 
 ## Metal status inconclusive or unavailable
 
-- Ensure you are on Apple Silicon macOS **26 or 27** (`make doctor`).
+- Ensure you are on Apple Silicon macOS **26 or newer** (`make doctor`).
 - Quit other GPU-heavy apps and retry.
 - Reinstall MLX inside the venv: `make rebuild`.
 
@@ -143,7 +145,7 @@ This toolkit targets Homebrew **`python@3.12`** (`MLX_PYTHON_VERSION`, default `
 
 Homebrew’s default **`python3`** may be a newer minor release (currently **3.15**; Homebrew’s `python3` / `python` aliases point at `python@3.15`). Do **not** create or reuse `.venv` with that interpreter unless you change `MLX_PYTHON_VERSION` and rebuild on purpose. `make venv` refuses a venv whose Python minor does not match `MLX_PYTHON_VERSION`.
 
-The pinned set’s macOS **arm64** wheels (`macosx_14_0` and newer PyPI tags) decide which CPython versions `make install` can use. The **host OS** must still be macOS **26 or 27** on Apple Silicon. **`numpy==2.5.4`** requires **CPython 3.12 or newer** and has no `cp310` or `cp311` wheel, so **3.10 and 3.11 no longer satisfy `make install`**. **`mlx==0.32.4`** / **`mlx-metal==0.32.4`** and **`torch`** 2.14.x (pulled in by `make install-image`) ship wheels through **cp314** and have no **cp315** wheel. The effective range for this pin set is **CPython 3.12–3.14**. **`make venv`**, **`make install`**, and **`make rebuild`** refuse `MLX_PYTHON_VERSION` outside that range with a clear error. **`python@3.15` cannot satisfy `make install`** until upstream publishes matching wheels.
+The pinned set’s macOS **arm64** wheels (`macosx_14_0` and newer PyPI tags) decide which CPython versions `make install` can use. The **host OS** must still be macOS **26 or newer** on Apple Silicon. **`numpy==2.5.4`** requires **CPython 3.12 or newer** and has no `cp310` or `cp311` wheel, so **3.10 and 3.11 no longer satisfy `make install`**. **`mlx==0.32.4`** / **`mlx-metal==0.32.4`** and **`torch`** 2.14.x (pulled in by `make install-image`) ship wheels through **cp314** and have no **cp315** wheel. The effective range for this pin set is **CPython 3.12–3.14**. **`make venv`**, **`make install`**, and **`make rebuild`** refuse `MLX_PYTHON_VERSION` outside that range with a clear error. **`python@3.15` cannot satisfy `make install`** until upstream publishes matching wheels.
 
 On **macOS 27 (Golden Gate)**, PyPI still publishes the **`macosx_26_0_arm64`** MLX / mlx-metal wheel (there is no `macosx_27_0` tag yet). That wheel installs and runs on macOS 27; CI smoke tests cover **`macos-latest`** (macOS 26) and the **`xcode-27`** runner (macOS 27).
 

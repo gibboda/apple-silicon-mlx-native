@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- Require **macOS 26–27** on **Apple Silicon** for `make doctor`, `make detect`, `make venv`, and `make install`; macOS 14–15 and future majors above 27 are refused with a clear error
+- Require **macOS 26 or newer** on **Apple Silicon** for `make doctor`, `make detect`, `make venv`, and `make install`; macOS 14–15 are refused with a clear error. Versions newer than CI smoke (macOS 27 today) log a non-fatal warning
 
 ### Fixed
 
