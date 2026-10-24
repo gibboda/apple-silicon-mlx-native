@@ -51,6 +51,7 @@ done
 log_header "Apple Silicon MLX native — rebuild"
 
 assert_apple_silicon
+assert_mlx_python_version_supported
 export_detect_env
 
 log_info "Detected chip: ${MLX_CHIP} (family=${MLX_CHIP_FAMILY:-unknown} sku=${MLX_CHIP_SKU:-unknown})"

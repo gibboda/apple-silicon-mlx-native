@@ -357,12 +357,78 @@ venv_pip_script_runs() {
 }
 
 
+python_major_minor() {
+  local ver="$1"
+  local rest minor
+  rest="${ver#*.}"
+  minor="${rest%%.*}"
+  printf '%s.%s' "${ver%%.*}" "${minor}"
+}
+
+_python_minor_ge() {
+  local have want
+  have="$1"
+  want="$2"
+  awk -v h="${have}" -v w="${want}" 'BEGIN {
+    split(h, H, ".");
+    split(w, W, ".");
+    if ((H[1] + 0) > (W[1] + 0)) { exit 0; }
+    if ((H[1] + 0) < (W[1] + 0)) { exit 1; }
+    if ((H[2] + 0) >= (W[2] + 0)) { exit 0; }
+    exit 1;
+  }'
+}
+
+_python_minor_le() {
+  local have want
+  have="$1"
+  want="$2"
+  awk -v h="${have}" -v w="${want}" 'BEGIN {
+    split(h, H, ".");
+    split(w, W, ".");
+    if ((H[1] + 0) < (W[1] + 0)) { exit 0; }
+    if ((H[1] + 0) > (W[1] + 0)) { exit 1; }
+    if ((H[2] + 0) <= (W[2] + 0)) { exit 0; }
+    exit 1;
+  }'
+}
+
+assert_mlx_python_version_supported() {
+  local ver minor
+  ver="${MLX_PYTHON_VERSION}"
+  case "${ver}" in
+    *.*.*)
+      die "MLX_PYTHON_VERSION must be major.minor (for example 3.12), not a patch release: ${ver}"
+      ;;
+    *.*) ;;
+    *)
+      die "MLX_PYTHON_VERSION must be major.minor (for example 3.12), got: ${ver}"
+      ;;
+  esac
+  minor="$(python_major_minor "${ver}")"
+  _python_minor_ge "${minor}" "${MLX_PYTHON_VERSION_MIN}" \
+    || die "MLX_PYTHON_VERSION=${ver} is below the supported range (${MLX_PYTHON_VERSION_MIN}–${MLX_PYTHON_VERSION_MAX}). See docs/troubleshooting.md#python-version-venv"
+  _python_minor_le "${minor}" "${MLX_PYTHON_VERSION_MAX}" \
+    || die "MLX_PYTHON_VERSION=${ver} is above the supported range (${MLX_PYTHON_VERSION_MIN}–${MLX_PYTHON_VERSION_MAX}). See docs/troubleshooting.md#python-version-venv"
+}
+
+assert_minimum_macos_for_mlx() {
+  local ver major
+  [[ "$(uname -s)" == "Darwin" ]] || return 0
+  ver="$(detect_macos_version)"
+  major="${ver%%.*}"
+  [[ -n "${major}" && "${major}" -ge 14 ]] \
+    || die "macOS ${ver} is below the minimum supported major version (14). See docs/troubleshooting.md"
+}
+
 venv_version_matches_expected() {
   local dir="${1:-${MLX_VENV}}"
-  local cfg_ver
+  local cfg_ver cfg_minor expected_minor
   cfg_ver="$(pyvenv_cfg_value "${dir}" version)" || return 1
   [[ -n "${cfg_ver}" ]] || return 1
-  [[ "${cfg_ver}" == "${MLX_PYTHON_VERSION}"* ]]
+  cfg_minor="$(python_major_minor "${cfg_ver}")"
+  expected_minor="$(python_major_minor "${MLX_PYTHON_VERSION}")"
+  [[ "${cfg_minor}" == "${expected_minor}" ]]
 }
 
 

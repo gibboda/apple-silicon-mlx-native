@@ -15,6 +15,9 @@ MLX_VENV="${MLX_VENV:-${MLX_WORKSPACE}/.venv}"
 # Default 3.12 until project policy changes; venv guards follow MLX_PYTHON_VERSION.
 # See docs/troubleshooting.md#python-version-venv before changing the default.
 MLX_PYTHON_VERSION="${MLX_PYTHON_VERSION:-3.12}"
+# Supported Homebrew python@ minors for make install (macOS arm64 wheel availability).
+MLX_PYTHON_VERSION_MIN="${MLX_PYTHON_VERSION_MIN:-3.12}"
+MLX_PYTHON_VERSION_MAX="${MLX_PYTHON_VERSION_MAX:-3.14}"
 MLX_CONFIG_DIR="${MLX_CONFIG_DIR:-${MLX_WORKSPACE}/config}"
 MLX_MODELS_ENV="${MLX_MODELS_ENV:-${MLX_CONFIG_DIR}/models.env}"
 MLX_MODELS_EXAMPLE="${REPO_ROOT}/config/models.example.env"
@@ -48,7 +51,7 @@ _pin_default() {
   fi
 }
 
-MLX_PACKAGE="${MLX_PACKAGE:-$(_pin_default mlx mlx==0.32.2)}"
+MLX_PACKAGE="${MLX_PACKAGE:-$(_pin_default mlx mlx==0.32.4)}"
 MLX_LM_PACKAGE="${MLX_LM_PACKAGE:-$(_pin_default mlx-lm mlx-lm==0.32.0)}"
 MLX_AUDIO_PACKAGE="${MLX_AUDIO_PACKAGE:-$(_pin_default mlx-audio mlx-audio==0.5.8)}"
 MLX_CORE_PACKAGES=("${MLX_PACKAGE}" "${MLX_LM_PACKAGE}")

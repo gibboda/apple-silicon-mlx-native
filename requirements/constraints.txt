@@ -4,7 +4,8 @@ pip==26.2.1
 setuptools==84.0.0
 wheel==0.48.0
 packaging==26.3
-mlx==0.32.2
+mlx==0.32.4
+mlx-metal==0.32.4
 mlx-lm==0.32.0
 mlx-audio==0.5.8
 mflux==0.22.0

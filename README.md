@@ -33,7 +33,7 @@ MLX targets unified memory and Metal on Apple Silicon. This toolkit standardizes
 
 ## Supported hardware
 
-- macOS on **Apple Silicon** (`Darwin` `arm64`) only
+- macOS **14+** on **Apple Silicon** (`Darwin` `arm64`) only (including macOS 27 Golden Gate; CI smoke tests run on `macos-latest` and `xcode-27`)
 - Linux ARM and Intel/x86_64 Macs are **rejected** with a clear error
 - Memory tiers drive the **OOM fence** (what fits); chip throughput/thermal class drive the **performance fence** (how hard to push at that RAM). Unknown chips fall back to RAM-only defaults without failing install. Details: [docs/hardware-tiers.md](docs/hardware-tiers.md).
 

@@ -57,7 +57,7 @@ expect_eq "constraints file exists" "yes" "$(test -f "${CONSTRAINTS}" && printf 
 shared="$(comm -12 <(constraint_pins) <(common_default_pins))"
 expect_eq "constraints include all common.sh default pins" "$(common_default_pins | wc -l | tr -d ' ')" "$(printf '%s\n' "${shared}" | sed '/^$/d' | wc -l | tr -d ' ')"
 
-for pkg in transformers numpy huggingface-hub mlx-vlm torch; do
+for pkg in transformers numpy huggingface-hub mlx-vlm torch mlx-metal; do
   if grep -q "^${pkg}==" "${CONSTRAINTS}"; then
     pass "transitive pin ${pkg}"
   else
@@ -105,9 +105,9 @@ chmod +x "${INSTALL_WS}/.venv/bin/python"
 
 : >"${INSTALL_WS}/pip-env"
 : >"${INSTALL_WS}/pip-args"
-MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" bash -c "source \"${COMMON}\"; mlx_pip_install --upgrade mlx==0.32.2" >/dev/null
+MLX_WORKSPACE="${INSTALL_WS}" MLX_VENV="${INSTALL_WS}/.venv" bash -c "source \"${COMMON}\"; mlx_pip_install --upgrade mlx==0.32.4" >/dev/null
 expect_contains "mlx_pip_install sets PIP_CONSTRAINT" "PIP_CONSTRAINT=${CONSTRAINTS}" "$(cat "${INSTALL_WS}/pip-env")"
-expect_contains "mlx_pip_install passes upgrade" "--upgrade mlx==0.32.2" "$(cat "${INSTALL_WS}/pip-args")"
+expect_contains "mlx_pip_install passes upgrade" "--upgrade mlx==0.32.4" "$(cat "${INSTALL_WS}/pip-args")"
 
 : >"${INSTALL_WS}/pip-env"
 : >"${INSTALL_WS}/pip-args"

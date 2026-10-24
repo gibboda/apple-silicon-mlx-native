@@ -49,13 +49,18 @@ jobs:
       - name: Run portable self-tests
         run: make test
 
-  # GitHub-hosted macos-latest is Apple Silicon. The macos-26-arm64 image ships
-  # Bash 3.2.57, so running tests with /bin/bash is the real bash 3.2 coverage.
-  # This job does not install models or MLX packages. It is part of the required
-  # ShellCheck gate, so a hang must not block merges for hours.
+  # GitHub-hosted macos-latest is Apple Silicon (macOS 26). macOS 27 (Golden Gate)
+  # uses the xcode-27 label (no macos-27). Both images ship Bash 3.2.57, so
+  # running tests with /bin/bash is the real bash 3.2 coverage. This job does not
+  # install models or MLX packages. It is part of the required ShellCheck gate,
+  # so a hang must not block merges for hours.
   macos-smoke:
-    name: macOS Apple Silicon smoke
-    runs-on: macos-latest
+    name: macOS Apple Silicon smoke (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, xcode-27]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
       - name: Checkout
