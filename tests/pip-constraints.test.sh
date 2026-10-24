@@ -65,6 +65,15 @@ for pkg in transformers numpy huggingface-hub mlx-vlm torch mlx-metal pillow; do
   fi
 done
 
+pillow_pin="$(grep -E '^pillow==[^[:space:]]+$' "${CONSTRAINTS}" | head -n 1 || true)"
+pillow_major="${pillow_pin#pillow==}"
+pillow_major="${pillow_major%%.*}"
+if [[ "${pillow_major}" == "12" ]]; then
+  pass "pillow pin stays on 12.x (Pillow 13 breaks mflux on CPython 3.12+)"
+else
+  fail "pillow pin must stay on 12.x until mflux supports Pillow 13 (got ${pillow_pin})"
+fi
+
 direct_pip="$(grep -RIn --exclude-dir=lib -E '(\$\{PIP\}|-m pip)[[:space:]]+install' "${ROOT}/scripts" || true)"
 if [[ -n "${direct_pip}" ]]; then
   fail "direct pip install outside mlx_pip_install: ${direct_pip}"

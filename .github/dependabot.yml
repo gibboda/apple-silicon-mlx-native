@@ -20,3 +20,8 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # Pillow 13 breaks `import mflux` on Python 3.12+ (#105). Remove when mflux
+      # supports Pillow 13.
+      - dependency-name: pillow
+        versions: [">=13"]
