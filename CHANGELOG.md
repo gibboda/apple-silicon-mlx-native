@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump **`pip`** from 26.2.1 to 26.2.2 in `requirements/constraints.txt` (#115)
+- Bump **`setuptools`** from 84.1.0 to 84.2.1 in `requirements/constraints.txt` (#114)
 
 ## [0.4.0] - 2026-10-24
 
