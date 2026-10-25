@@ -57,7 +57,10 @@ expect_eq "constraints file exists" "yes" "$(test -f "${CONSTRAINTS}" && printf 
 shared="$(comm -12 <(constraint_pins) <(common_default_pins))"
 expect_eq "constraints include all common.sh default pins" "$(common_default_pins | wc -l | tr -d ' ')" "$(printf '%s\n' "${shared}" | sed '/^$/d' | wc -l | tr -d ' ')"
 
+pin_default_assignment_count="$(grep -c '_pin_default [^ ]' "${COMMON}" || true)"
+pin_default_parity_checked=0
 while read -r _pin name fallback; do
+  pin_default_parity_checked=$((pin_default_parity_checked + 1))
   [[ -n "${name}" ]] || continue
   manifest_line="$(grep -E "^${name}==[^[:space:]]+$" "${CONSTRAINTS}" | head -n 1 || true)"
   if [[ -z "${manifest_line}" ]]; then
@@ -66,6 +69,7 @@ while read -r _pin name fallback; do
   fi
   expect_eq "_pin_default fallback ${name}" "${manifest_line}" "${fallback}"
 done < <(grep -oE '_pin_default [^ ]+ [^)]+' "${COMMON}")
+expect_eq "_pin_default parity covers all assignments" "${pin_default_assignment_count}" "${pin_default_parity_checked}"
 
 for pkg in transformers numpy huggingface-hub mlx-vlm torch mlx-metal pillow; do
   if grep -q "^${pkg}==" "${CONSTRAINTS}"; then

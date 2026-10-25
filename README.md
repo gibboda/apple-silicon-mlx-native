@@ -253,6 +253,7 @@ On ≤32 GB this uses Wan2.1 T2V **1.3B 4-bit**, 832×480, 17–49 frames (see [
 ```text
 apple-silicon-mlx-native/
 ├── .github/
+│   ├── actionlint.yaml
 │   ├── CODEOWNERS
 │   ├── dependabot.yml
 │   ├── pull_request_template.md
