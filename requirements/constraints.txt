@@ -16,4 +16,4 @@ mlx-vlm==0.7.4
 torch==2.14.1
 # Pillow 13.0.0 imports numbers._IntegralLike, which CPython 3.12–3.15 does
 # not define, so mflux fails at startup. mflux requires pillow>=12.3.0.
-pillow==13.0.0
+pillow==12.3.0
