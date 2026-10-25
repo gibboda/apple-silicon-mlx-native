@@ -57,6 +57,16 @@ expect_eq "constraints file exists" "yes" "$(test -f "${CONSTRAINTS}" && printf 
 shared="$(comm -12 <(constraint_pins) <(common_default_pins))"
 expect_eq "constraints include all common.sh default pins" "$(common_default_pins | wc -l | tr -d ' ')" "$(printf '%s\n' "${shared}" | sed '/^$/d' | wc -l | tr -d ' ')"
 
+while read -r _pin name fallback; do
+  [[ -n "${name}" ]] || continue
+  manifest_line="$(grep -E "^${name}==[^[:space:]]+$" "${CONSTRAINTS}" | head -n 1 || true)"
+  if [[ -z "${manifest_line}" ]]; then
+    fail "_pin_default ${name} has no matching line in constraints.txt (fallback ${fallback})"
+    continue
+  fi
+  expect_eq "_pin_default fallback ${name}" "${manifest_line}" "${fallback}"
+done < <(grep -oE '_pin_default [^ ]+ [^)]+' "${COMMON}")
+
 for pkg in transformers numpy huggingface-hub mlx-vlm torch mlx-metal pillow; do
   if grep -q "^${pkg}==" "${CONSTRAINTS}"; then
     pass "transitive pin ${pkg}"
@@ -152,9 +162,10 @@ chmod +x "${override_ws}/.venv/bin/python"
 MLX_WORKSPACE="${override_ws}" MLX_VENV="${override_ws}/.venv" MLX_IMAGE_PACKAGE='mflux==0.20.0' \
   bash -c 'source "$1"; mlx_pip_install --upgrade mflux==0.20.0' bash "${COMMON}" >/dev/null
 override_constraint="$(sed -n 's/^PIP_CONSTRAINT=//p' "${override_ws}/pip-env" | head -n 1)"
+manifest_mflux="$(grep -E '^mflux==[^[:space:]]+$' "${CONSTRAINTS}" | head -n 1)"
 expect_contains "override constraint replaces mflux pin" "mflux==0.20.0" "$(cat "${override_constraint}")"
-if grep -q '^mflux==0.19.1$' "${override_constraint}"; then
-  fail "override constraint still pins mflux==0.19.1"
+if grep -qx "${manifest_mflux}" "${override_constraint}"; then
+  fail "override constraint still pins ${manifest_mflux}"
 else
   pass "override constraint drops the manifest mflux pin"
 fi

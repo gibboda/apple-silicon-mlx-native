@@ -9,12 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep `_pin_default` fallbacks in `scripts/lib/common.sh` aligned with `requirements/constraints.txt`; extend `tests/pip-constraints.test.sh` to fail on drift
+- Scope GitHub Actions `contents: write` to the publish-release and delete-merged-branch jobs (workflow default is `contents: read`)
+- Guard `rm -rf` on `MLX_VENV` in `scripts/rebuild-mlx-native-media.sh` with `${MLX_VENV:?}`
+
+### Changed
+
+- Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
+
 ## [0.4.1] - 2026-10-25
 
 ### Changed
 
+- Bump **`mflux`** from 0.22.0 to 0.23.0 in `requirements/constraints.txt` (#112)
+- Bump **`transformers`** from 5.19.0 to 5.20.2 in `requirements/constraints.txt` (#113)
+- Bump **`mlx-audio`** from 0.5.8 to 0.6.1 in `requirements/constraints.txt` (#116)
 - Bump **`pip`** from 26.2.1 to 26.2.2 in `requirements/constraints.txt` (#115)
 - Bump **`setuptools`** from 84.1.0 to 84.2.1 in `requirements/constraints.txt` (#114)
+
+### Fixed
+
+- Restore the **`pillow==12.3.0`** pin in `requirements/constraints.txt`. The v0.4.0 tag shipped **`pillow==13.0.0`**, which breaks `import mflux` on Python 3.12+ (`ImportError` from `PIL._typing`). Re-run `make install-image` to apply the pin in an existing `.venv` (#111)
+- Dependabot ignores **`pillow` >=13** so the pin is not bumped back accidentally (#111)
 
 ## [0.4.0] - 2026-10-24
 
@@ -28,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Pin `pillow==12.3.0` so `make image` can import mflux. Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12–3.15 does not define (`ImportError` from `PIL._typing`). Re-run `make install-image` to apply the pin in an existing `.venv`
+- Document pinning **`pillow==12.3.0`** so `make image` can import mflux (Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12–3.15 does not define). The **v0.4.0 tag actually shipped `pillow==13.0.0`**; the **`pillow==12.3.0`** pin landed in **0.4.1** (#111)
 
 ## [0.3.1] - 2026-10-23
 

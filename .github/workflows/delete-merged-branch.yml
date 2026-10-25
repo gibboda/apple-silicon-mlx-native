@@ -5,11 +5,14 @@ on:
     types: [closed]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 jobs:
   delete-head:
+    permissions:
+      contents: write
+      pull-requests: read
     name: Delete merged head branch
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
