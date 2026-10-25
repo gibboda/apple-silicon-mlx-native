@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump **`pip`** from 26.2.1 to 26.2.2 in `requirements/constraints.txt` (#115)
+
 ## [0.4.0] - 2026-10-24
 
 ### Breaking
