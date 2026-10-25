@@ -1,7 +1,7 @@
 # PIP_CONSTRAINT for every project pip install (see scripts/lib/common.sh).
 # Keep version pins in sync with MLX_* defaults in common.sh; tests enforce parity.
 pip==26.2.2
-setuptools==84.1.0
+setuptools==84.2.1
 wheel==0.48.0
 packaging==26.3
 mlx==0.32.4
