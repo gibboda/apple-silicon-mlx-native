@@ -6,7 +6,7 @@ wheel==0.48.0
 packaging==26.3
 mlx==0.32.4
 mlx-metal==0.32.4
-mlx-lm==0.32.0
+mlx-lm==0.32.2
 mlx-audio==0.6.1
 mflux==0.23.0
 transformers==5.20.2
