@@ -1,0 +1,10 @@
+# actionlint configuration (see https://github.com/rhysd/actionlint/blob/main/docs/config.md).
+self-hosted-runner:
+  labels:
+    - xcode-27
+
+paths:
+  # GitHub documents concurrency.queue (single|max); actionlint 1.7.x does not yet.
+  .github/workflows/publish-release.yml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section.+'

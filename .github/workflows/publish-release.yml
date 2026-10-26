@@ -5,11 +5,14 @@ on:
     types: [closed]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 jobs:
   publish:
+    permissions:
+      contents: write
+      pull-requests: read
     # Job-level so skipped (non-release) PR closes never join the group.
     concurrency:
       group: publish-release

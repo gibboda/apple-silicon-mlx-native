@@ -93,7 +93,7 @@ if [[ -e "${MLX_VENV}" ]]; then
     fi
   fi
   log_info "Removing ${MLX_VENV}"
-  rm -rf "${MLX_VENV}"
+  rm -rf -- "${MLX_VENV:?}"
 fi
 
 log_info "Creating venv with ${BREW_PY}"
