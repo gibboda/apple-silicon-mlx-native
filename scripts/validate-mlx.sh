@@ -97,9 +97,9 @@ else
 fi
 
 # Optional Pure MLX image package (info only if absent)
-if "${python_bin}" -c 'import mflux' 2>/dev/null; then
+if "${python_bin}" -c 'import mflux.utils.image_util' 2>/dev/null; then
   mflux_ver="$("${python_bin}" -c 'import importlib.metadata as m; print(m.version("mflux"))')"
-  pass "mflux importable (version ${mflux_ver})"
+  pass "mflux image imports OK (version ${mflux_ver}, Pillow 13 compat)"
 else
   log_info "mflux not installed (opt-in text-to-image; make install-image)"
 fi

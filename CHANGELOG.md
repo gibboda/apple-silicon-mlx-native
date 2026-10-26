@@ -14,16 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep `_pin_default` fallbacks in `scripts/lib/common.sh` aligned with `requirements/constraints.txt`; extend `tests/pip-constraints.test.sh` to fail on drift
 - Scope GitHub Actions `contents: write` to the publish-release and delete-merged-branch jobs (workflow default is `contents: read`)
 - Guard `rm -rf` on `MLX_VENV` in `scripts/rebuild-mlx-native-media.sh` with `${MLX_VENV:?}`
+- Install Pillow 13 **`numbers._IntegralLike`** compat shim (`scripts/lib/pillow_numbers_compat.py`) so `mflux` image CLIs import on Python 3.12+ ([#105](https://github.com/gibboda/apple-silicon-mlx-native/pull/105))
 
 ### Changed
 
 - Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
 - Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
+- Bump **`pillow`** from 12.3.0 to **13.0.0** in `requirements/constraints.txt`; install **`mlx_pillow_numbers_compat`** into the venv on `make install-image` so mflux image imports work on CPython 3.12–3.14 (Pillow 13 expects `numbers._IntegralLike`, which stdlib lacks)
+- Remove Dependabot **`pillow >=13`** ignore (security advisories remediated at 13.0.0)
 
 ### Security
 
-- **`pillow`** remains at **`12.3.0`** (latest PyPI **12.x**; manifest `requirements/constraints.txt`). No safe bump: all **41** open Dependabot/OSV advisories for this pin list **13.0.0** as the first fixed release, and Pillow **13.x** still breaks `import mflux` on CPython 3.12+ ([#105](https://github.com/gibboda/apple-silicon-mlx-native/pull/105)). Re-audited with **osv-scanner** and **OSV API** (GitHub Dependabot alerts API returned 403 for this token).
-- Blocked advisories (package bump would require Pillow 13.0.0):
+- Bump **`pillow`** to **13.0.0** in `requirements/constraints.txt` — fixes **41** Dependabot/OSV advisories that patched only in Pillow 13.0.0 (GHSA/CVE list below). mflux image tooling stays importable via the venv compat shim until upstream Pillow or mflux drops the `numbers._IntegralLike` import ([#119](https://github.com/gibboda/apple-silicon-mlx-native/pull/119)).
+- Fixed advisories ( **`pillow` 12.3.0 → 13.0.0** ):
   - GHSA-v9pv-5gc8-w2m6 / CVE-2026-96639 (severity 9.8)
   - GHSA-332p-7hrc-92wf / CVE-2026-112393 (severity 9.2)
   - GHSA-5x8w-8jj5-q52h / CVE-2026-112398 (severity 9.2)

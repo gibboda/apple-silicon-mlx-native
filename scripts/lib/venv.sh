@@ -242,6 +242,29 @@ mlx_pip_install() {
   "${py}" -m pip install --disable-pip-version-check "$@"
 }
 
+# Pillow 13 imports numbers._IntegralLike; CPython 3.12–3.14 stdlib lacks it.
+# Copy a tiny auto-import shim into site-packages for mflux image tooling.
+install_pillow_numbers_compat() {
+  local py site src mod pth
+  py="$(venv_python)"
+  if [[ ! -x "${py}" ]]; then
+    return 0
+  fi
+  site="$("${py}" -c 'import site; print(site.getsitepackages()[0])' 2>/dev/null || true)"
+  if [[ -z "${site}" ]]; then
+    log_warn "Could not locate venv site-packages for Pillow compat shim"
+    return 0
+  fi
+  src="${REPO_ROOT}/scripts/lib/pillow_numbers_compat.py"
+  mod="${site}/mlx_pillow_numbers_compat.py"
+  pth="${site}/mlx_pillow_numbers_compat.pth"
+  if [[ ! -f "${src}" ]]; then
+    die "Missing Pillow compat shim: ${src}"
+  fi
+  cp "${src}" "${mod}"
+  printf '%s\n' 'import mlx_pillow_numbers_compat' >"${pth}"
+}
+
 # Install the shared packaging-tool pins into the active venv.
 
 # Install the shared packaging-tool pins into the active venv.
@@ -292,6 +315,7 @@ install_core_packages() {
       if is_truthy "${MLX_INSTALL_IMAGE:-0}"; then
         warn_or_die_disk_headroom image-pip
         mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
+        install_pillow_numbers_compat
       fi
       ;;
     video)

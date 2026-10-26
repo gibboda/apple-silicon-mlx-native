@@ -82,10 +82,17 @@ done
 pillow_pin="$(grep -E '^pillow==[^[:space:]]+$' "${CONSTRAINTS}" | head -n 1 || true)"
 pillow_major="${pillow_pin#pillow==}"
 pillow_major="${pillow_major%%.*}"
-if [[ "${pillow_major}" == "12" ]]; then
-  pass "pillow pin stays on 12.x (Pillow 13 breaks mflux on CPython 3.12+)"
+if [[ "${pillow_major}" == "13" ]]; then
+  pass "pillow pin on 13.x (Dependabot security remediated; compat shim for mflux)"
 else
-  fail "pillow pin must stay on 12.x until mflux supports Pillow 13 (got ${pillow_pin})"
+  fail "pillow pin must be 13.x for security advisories (got ${pillow_pin})"
+fi
+
+compat_src="${ROOT}/scripts/lib/pillow_numbers_compat.py"
+if [[ -f "${compat_src}" ]]; then
+  pass "pillow numbers compat shim present"
+else
+  fail "missing scripts/lib/pillow_numbers_compat.py"
 fi
 
 direct_pip="$(grep -RIn --exclude-dir=lib -E '(\$\{PIP\}|-m pip)[[:space:]]+install' "${ROOT}/scripts" || true)"

@@ -64,12 +64,13 @@ log_info "Installing ${MLX_IMAGE_PACKAGE} into ${MLX_VENV}"
 warn_or_die_disk_headroom image-pip
 install_packaging_tools
 mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
+install_pillow_numbers_compat
 
-if "${PY}" -c "import mflux" >/dev/null 2>&1; then
+if "${PY}" -c "import mflux.utils.image_util" >/dev/null 2>&1; then
   ver="$("${PY}" -c 'import importlib.metadata as m; print(m.version("mflux"))')"
-  log_ok "mflux importable (version ${ver})"
+  log_ok "mflux image stack importable (version ${ver}, Pillow 13 compat active)"
 else
-  die "mflux installed but is not importable"
+  die "mflux installed but image imports failed (check Pillow / mlx_pillow_numbers_compat)"
 fi
 
 if "${PY}" -c "import torch" >/dev/null 2>&1; then
