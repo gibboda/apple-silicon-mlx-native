@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
 - Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
-- Bump **`pillow`** from 12.3.0 to **13.0.0** in `requirements/constraints.txt`; install **`mlx_pillow_numbers_compat`** into the venv on `make install-image` so mflux image imports work on CPython 3.12–3.14 (Pillow 13 expects `numbers._IntegralLike`, which stdlib lacks)
+- Bump **`pillow`** from 12.3.0 to **13.0.0** in `requirements/constraints.txt`; install **`mlx_pillow_numbers_compat`** into the venv on `make install-image` so mflux image imports work on CPython 3.12+ (Pillow 13 expects `numbers._IntegralLike`, which stdlib lacks)
 - Remove Dependabot **`pillow >=13`** ignore (security advisories remediated at 13.0.0)
 
 ### Security
@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Document pinning **`pillow==12.3.0`** so `make image` can import mflux (Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12–3.15 does not define). The **v0.4.0 tag actually shipped `pillow==13.0.0`**; the **`pillow==12.3.0`** pin landed in **0.4.1** (#111)
+- Document pinning **`pillow==12.3.0`** so `make image` can import mflux (Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12+ stdlib does not define). The **v0.4.0 tag actually shipped `pillow==13.0.0`**; the **`pillow==12.3.0`** pin landed in **0.4.1** (#111)
 
 ## [0.3.1] - 2026-10-23
 

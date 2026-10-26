@@ -1,5 +1,5 @@
 # Pillow 13.0.0 loads PIL._typing, which does `from numbers import _IntegralLike`.
-# That name exists in typeshed stubs but not in CPython 3.12–3.14 stdlib numbers.
+# That name exists in typeshed stubs but not in CPython 3.12+ stdlib numbers.
 # mflux imports PIL._typing (StrOrBytesPath) for image I/O.
 #
 # Installed into the project venv via install_pillow_numbers_compat() (.pth auto-import).

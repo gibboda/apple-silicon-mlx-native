@@ -242,7 +242,7 @@ mlx_pip_install() {
   "${py}" -m pip install --disable-pip-version-check "$@"
 }
 
-# Pillow 13 imports numbers._IntegralLike; CPython 3.12–3.14 stdlib lacks it.
+# Pillow 13 imports numbers._IntegralLike; CPython 3.12+ stdlib lacks it.
 # Copy a tiny auto-import shim into site-packages for mflux image tooling.
 install_pillow_numbers_compat() {
   local py site src mod pth
