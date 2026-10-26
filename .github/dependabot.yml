@@ -22,6 +22,8 @@ updates:
       include: scope
     ignore:
       # Pillow 13 breaks `import mflux` on Python 3.12+ (#105). Remove when mflux
-      # supports Pillow 13.
+      # supports Pillow 13. As of 2026-10-26, all 41 open Dependabot alerts for
+      # this repo are Pillow 12.3.0 advisories whose only patched release is 13.0.0;
+      # this ignore also suppresses Dependabot security-update PRs to 13.x.
       - dependency-name: pillow
         versions: [">=13"]
