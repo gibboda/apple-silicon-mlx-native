@@ -143,6 +143,11 @@ jobs:
           # Empty PASSTHRU + tier-default vae_tiling must not trip set -u on bash 3.2.
           /bin/bash scripts/generate-mlx-image.sh --dump-plan --prompt x | grep -q '^vae_tiling=1$'
 
+      - name: Pillow 13 compat regression (bash 3.2)
+        env:
+          CI: "true"
+        run: /bin/bash tests/mflux-pillow-import.test.sh
+
       - name: Portable self-tests (bash 3.2)
         run: |
           set -euo pipefail

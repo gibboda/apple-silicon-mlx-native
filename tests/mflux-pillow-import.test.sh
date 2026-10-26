@@ -15,6 +15,9 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
 if ! python3 -m venv "${TMP}/.venv" >/dev/null 2>&1; then
+  if [[ "${CI:-}" == "true" ]]; then
+    fail "python3 venv unavailable in CI (install python3-venv for Pillow 13 import test)"
+  fi
   printf 'SKIP: python3 venv unavailable (need python3-venv for Pillow 13 import test)\n'
   exit 0
 fi
@@ -25,7 +28,9 @@ PY="${MLX_VENV}/bin/python"
 
 "${PY}" -m pip install --disable-pip-version-check -q "pillow==13.0.0"
 
-if "${PY}" -c 'from PIL import _typing' >/dev/null 2>&1; then
+if python3 -c 'import numbers; numbers._IntegralLike' >/dev/null 2>&1; then
+  pass "stdlib already defines numbers._IntegralLike (skip Pillow 13 baseline)"
+elif "${PY}" -c 'from PIL import _typing' >/dev/null 2>&1; then
   fail "expected Pillow 13 to fail PIL._typing without compat shim on this interpreter"
 else
   pass "Pillow 13 fails PIL._typing without compat (baseline)"

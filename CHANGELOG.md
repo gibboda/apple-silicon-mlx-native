@@ -14,7 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep `_pin_default` fallbacks in `scripts/lib/common.sh` aligned with `requirements/constraints.txt`; extend `tests/pip-constraints.test.sh` to fail on drift
 - Scope GitHub Actions `contents: write` to the publish-release and delete-merged-branch jobs (workflow default is `contents: read`)
 - Guard `rm -rf` on `MLX_VENV` in `scripts/rebuild-mlx-native-media.sh` with `${MLX_VENV:?}`
-- Install Pillow 13 **`numbers._IntegralLike`** compat shim (`scripts/lib/pillow_numbers_compat.py`) so `mflux` image CLIs import on Python 3.12+ ([#105](https://github.com/gibboda/apple-silicon-mlx-native/pull/105))
 
 ### Changed
 
@@ -25,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Bump **`pillow`** to **13.0.0** in `requirements/constraints.txt` — fixes **41** Dependabot/OSV advisories that patched only in Pillow 13.0.0 (GHSA/CVE list below). mflux image tooling stays importable via the venv compat shim until upstream Pillow or mflux drops the `numbers._IntegralLike` import ([#119](https://github.com/gibboda/apple-silicon-mlx-native/pull/119)).
+- Bump **`pillow`** to **13.0.0** in `requirements/constraints.txt` — fixes **41** Dependabot/OSV advisories that patched only in Pillow 13.0.0 (GHSA/CVE list below). **`mlx_pillow_numbers_compat`** keeps Pillow/mflux imports working on CPython 3.12+ until upstream drops the `numbers._IntegralLike` import ([#123](https://github.com/gibboda/apple-silicon-mlx-native/pull/123); docs-only audit in [#119](https://github.com/gibboda/apple-silicon-mlx-native/pull/119)).
 - Fixed advisories ( **`pillow` 12.3.0 → 13.0.0** ):
   - GHSA-v9pv-5gc8-w2m6 / CVE-2026-96639 (severity 9.8)
   - GHSA-332p-7hrc-92wf / CVE-2026-112393 (severity 9.2)
