@@ -31,7 +31,7 @@ else
   pass "Pillow 13 fails PIL._typing without compat (baseline)"
 fi
 
-bash -c "source \"${COMMON}\"; install_pillow_numbers_compat"
+bash -c "source \"${COMMON}\"; ensure_pillow_numbers_compat"
 
 site="$("${PY}" -c 'import site; print(site.getsitepackages()[0])')"
 if [[ -f "${site}/mlx_pillow_numbers_compat.py" && -f "${site}/mlx_pillow_numbers_compat.pth" ]]; then

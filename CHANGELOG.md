@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
 - Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
-- Bump **`pillow`** from 12.3.0 to **13.0.0** in `requirements/constraints.txt`; install **`mlx_pillow_numbers_compat`** into the venv on `make install-image` so mflux image imports work on CPython 3.12+ (Pillow 13 expects `numbers._IntegralLike`, which stdlib lacks)
-- Remove Dependabot **`pillow >=13`** ignore (security advisories remediated at 13.0.0)
+- Bump **`pillow`** from 12.3.0 to **13.0.0** in `requirements/constraints.txt`; install **`mlx_pillow_numbers_compat`** into the venv on every pip install path (`make install`, `make rebuild`, media/image/video installers) when the pin is 13+ so Pillow/mflux imports work on CPython 3.12+
+- Remove Dependabot **`pillow >=13`** ignore now that the compat shim covers every constrained venv (not image-only)
 
 ### Security
 

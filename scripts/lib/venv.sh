@@ -242,8 +242,18 @@ mlx_pip_install() {
   "${py}" -m pip install --disable-pip-version-check "$@"
 }
 
+# True when constraints pin Pillow 13+ (shim required for PIL._typing on CPython 3.12+).
+pin_requires_pillow_numbers_compat() {
+  local line major
+  line="$(grep -E '^pillow==[0-9]+' "${MLX_PIP_CONSTRAINT_FILE}" | head -n 1 || true)"
+  [[ -n "${line}" ]] || return 1
+  major="${line#pillow==}"
+  major="${major%%.*}"
+  [[ "${major:-0}" -ge 13 ]]
+}
+
 # Pillow 13 imports numbers._IntegralLike; CPython 3.12+ stdlib lacks it.
-# Copy a tiny auto-import shim into site-packages for mflux image tooling.
+# Copy a tiny auto-import shim into site-packages (every venv that may load Pillow).
 install_pillow_numbers_compat() {
   local py site src mod pth
   py="$(venv_python)"
@@ -265,7 +275,11 @@ install_pillow_numbers_compat() {
   printf '%s\n' 'import mlx_pillow_numbers_compat' >"${pth}"
 }
 
-# Install the shared packaging-tool pins into the active venv.
+ensure_pillow_numbers_compat() {
+  if pin_requires_pillow_numbers_compat; then
+    install_pillow_numbers_compat
+  fi
+}
 
 # Install the shared packaging-tool pins into the active venv.
 install_packaging_tools() {
@@ -305,23 +319,26 @@ install_core_packages() {
       log_info "Installing pinned core: ${MLX_CORE_PACKAGES[*]}"
       warn_or_die_disk_headroom core-pip
       mlx_pip_install --upgrade "${MLX_CORE_PACKAGES[@]}"
+      ensure_pillow_numbers_compat
       ;;
     media)
       log_info "Installing Pure MLX speech/audio: ${MLX_MEDIA_PACKAGES[*]}"
       warn_or_die_disk_headroom media-pip
       mlx_pip_install --upgrade "${MLX_MEDIA_PACKAGES[@]}"
+      ensure_pillow_numbers_compat
       ;;
     image)
       if is_truthy "${MLX_INSTALL_IMAGE:-0}"; then
         warn_or_die_disk_headroom image-pip
         mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
-        install_pillow_numbers_compat
+        ensure_pillow_numbers_compat
       fi
       ;;
     video)
       if is_truthy "${MLX_INSTALL_VIDEO:-0}"; then
         warn_or_die_disk_headroom video-pip
         mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
+        ensure_pillow_numbers_compat
       fi
       ;;
     *)

@@ -253,7 +253,7 @@ scripts/generate-mlx-image.sh --prompt "a red fox in snow" --family z-image-turb
 
 Do not pass `--model flux2-klein-4b` with `--family z-image-turbo`.
 
-If `mflux-generate-flux2` (or another mflux CLI) fails with `ImportError: cannot import name '_IntegralLike' from 'numbers'`, the venv is missing the Pillow compat shim (Pillow 13 imports that name; CPython 3.12+ stdlib does not define it). Re-run `make install-image` (or `make rebuild` with image tooling) so `install_pillow_numbers_compat` copies `mlx_pillow_numbers_compat` into site-packages, then retry `make image`.
+If `mflux-generate-flux2` (or another mflux CLI) fails with `ImportError: cannot import name '_IntegralLike' from 'numbers'`, the venv is missing the Pillow compat shim (Pillow 13 imports that name; CPython 3.12+ stdlib does not define it). Re-run `make install` or `make rebuild` (or `make install-image`) so `ensure_pillow_numbers_compat` copies `mlx_pillow_numbers_compat` into site-packages, then retry `make image`.
 
 `mflux` is not a default bootstrap package. See [media.md](media.md).
 

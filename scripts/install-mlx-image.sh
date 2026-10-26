@@ -64,7 +64,7 @@ log_info "Installing ${MLX_IMAGE_PACKAGE} into ${MLX_VENV}"
 warn_or_die_disk_headroom image-pip
 install_packaging_tools
 mlx_pip_install --upgrade "${MLX_IMAGE_PACKAGE}"
-install_pillow_numbers_compat
+ensure_pillow_numbers_compat
 
 if "${PY}" -c "import mflux.utils.image_util" >/dev/null 2>&1; then
   ver="$("${PY}" -c 'import importlib.metadata as m; print(m.version("mflux"))')"

@@ -11,17 +11,21 @@ from __future__ import annotations
 
 
 def apply() -> None:
-    import numbers
+    try:
+        import numbers
 
-    if hasattr(numbers, "_IntegralLike"):
+        if hasattr(numbers, "_IntegralLike"):
+            return
+
+        import typing
+
+        class _IntegralLike(typing.Protocol):
+            def __index__(self) -> int: ...
+
+        numbers._IntegralLike = _IntegralLike  # type: ignore[attr-defined]
+    except Exception:
+        # Never break venv python startup if compat setup fails.
         return
-
-    import typing
-
-    class _IntegralLike(typing.Protocol):
-        def __index__(self) -> int: ...
-
-    numbers._IntegralLike = _IntegralLike  # type: ignore[attr-defined]
 
 
 apply()
