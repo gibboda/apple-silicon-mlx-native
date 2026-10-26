@@ -18,7 +18,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump **`mlx-vlm`** from 0.7.4 to 0.7.10 in `requirements/constraints.txt` (#122)
+- Bump **`mlx-lm`** from 0.32.0 to 0.32.2 in `requirements/constraints.txt` (#121)
+- Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
 - Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
+
+### Security
+
+- **`pillow`** remains at **`12.3.0`** (latest PyPI **12.x**; manifest `requirements/constraints.txt`). No safe bump: all **41** open Dependabot/OSV advisories for this pin list **13.0.0** as the first fixed release, and Pillow **13.x** still breaks `import mflux` on CPython 3.12+ ([#105](https://github.com/gibboda/apple-silicon-mlx-native/pull/105)). Re-audited with **osv-scanner** and **OSV API** (GitHub Dependabot alerts API returned 403 for this token).
+- Blocked advisories (package bump would require Pillow 13.0.0):
+  - GHSA-v9pv-5gc8-w2m6 / CVE-2026-96639 (severity 9.8)
+  - GHSA-332p-7hrc-92wf / CVE-2026-112393 (severity 9.2)
+  - GHSA-5x8w-8jj5-q52h / CVE-2026-112398 (severity 9.2)
+  - GHSA-8g5g-8vmr-9782 / CVE-2026-112403 (severity 9.2)
+  - GHSA-w889-685w-c8fh / CVE-2026-112900 (severity 9.2)
+  - GHSA-c6hw-5grf-ff96 / CVE-2026-112404 (severity 8.8)
+  - GHSA-pchr-8j38-3x4p / CVE-2026-112896 (severity 8.8)
+  - GHSA-xvh5-g6gv-559v / CVE-2026-112902 (severity 8.8)
+  - GHSA-58r4-6rv3-gfh8 / CVE-2026-112397 (severity 8.7)
+  - GHSA-5xm2-6676-qcp9 / CVE-2026-112399 (severity 8.7)
+  - GHSA-65qm-jvmh-6pqg / CVE-2026-112400 (severity 8.7)
+  - GHSA-7mwm-ghpf-9vrm / CVE-2026-112402 (severity 8.7)
+  - GHSA-cp9v-662q-vvx9 / CVE-2026-112405 (severity 8.7)
+  - GHSA-f2g6-542v-9j58 / CVE-2026-112406 (severity 8.7)
+  - GHSA-gg2r-wvfm-q9rx / CVE-2026-112892 (severity 8.7)
+  - GHSA-jg86-v3jv-hrpm / CVE-2026-112894 (severity 8.7)
+  - GHSA-p4wg-p73j-c528 / CVE-2026-112895 (severity 8.7)
+  - GHSA-q45j-58j2-45rg / CVE-2026-112897 (severity 8.7)
+  - GHSA-22hg-r758-rrw9 / CVE-2026-112390 (severity 8.2)
+  - GHSA-27h8-gf7j-v5hc / CVE-2026-112392 (severity 8.2)
+  - GHSA-j4m9-6w36-pw47 / CVE-2026-112893 (severity 8.2)
+  - GHSA-mrfp-p49p-3hf2 / CVE-2026-96640 (severity 8.2)
+  - GHSA-78g4-xqwv-q3g8 / — (severity 8.1)
+  - GHSA-g7cr-3p24-7wf7 / CVE-2026-96778 (severity 7.7)
+  - GHSA-3j72-p6qg-6xp7 / CVE-2026-96642 (severity 7.1)
+  - GHSA-9v9v-9qvf-h2hj / CVE-2026-96644 (severity 7.1)
+  - GHSA-g4qv-2jxx-769h / CVE-2026-96643 (severity 7.1)
+  - GHSA-g842-9rc4-69pw / CVE-2026-96637 (severity 7.1)
+  - GHSA-74r2-7ff9-mjj2 / CVE-2026-112401 (severity 6.9)
+  - GHSA-fc9g-5qg7-mf45 / CVE-2026-112891 (severity 6.9)
+  - GHSA-rfgq-q3w2-pmv2 / CVE-2026-112898 (severity 6.9)
+  - GHSA-vx6w-vv9f-6gvg / CVE-2026-112899 (severity 6.9)
+  - GHSA-xgh8-jp6q-p5x8 / CVE-2026-112901 (severity 6.9)
+  - GHSA-24rc-8hj2-v98c / CVE-2026-96638 (severity 6.5)
+  - GHSA-462x-pgg6-55fp / CVE-2026-112395 (severity 6.5)
+  - GHSA-4rm8-3hmm-39fg / CVE-2026-96641 (severity 6.5)
+  - GHSA-p8hx-v2p6-rp84 / CVE-2026-96636 (severity 6.5)
+  - GHSA-254f-3936-288h / CVE-2026-112391 (severity 6.3)
+  - GHSA-4558-3h8r-v8xp / CVE-2026-112394 (severity 6.3)
+  - GHSA-654x-cwwv-5j9c / CVE-2026-114501 (severity 6.3)
+  - GHSA-4rr5-89j8-mwwm / CVE-2026-112396 (severity 5.9)
 
 ## [0.4.1] - 2026-10-25
 
