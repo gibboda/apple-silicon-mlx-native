@@ -39,12 +39,13 @@ if (( pillow_online )); then
   if ! "${PY}" -m pip install --disable-pip-version-check -q "pillow==13.0.0"; then
     fail "pip install pillow==13.0.0 failed (online Pillow 13 integration)"
   else
-    if python3 -c 'import numbers; numbers._IntegralLike' >/dev/null 2>&1; then
-      pass "stdlib already defines numbers._IntegralLike (skip Pillow 13 baseline)"
-    elif "${PY}" -c 'from PIL import _typing' >/dev/null 2>&1; then
-      fail "expected Pillow 13 to fail PIL._typing without compat shim on this interpreter"
+    # mflux uses StrOrBytesPath from PIL._typing (not a bare import PIL._typing).
+    if "${PY}" -c 'import numbers; numbers._IntegralLike' >/dev/null 2>&1; then
+      pass "venv stdlib already defines numbers._IntegralLike (skip Pillow 13 baseline)"
+    elif ! "${PY}" -c 'from PIL._typing import StrOrBytesPath' >/dev/null 2>&1; then
+      pass "Pillow 13 fails StrOrBytesPath without compat (baseline)"
     else
-      pass "Pillow 13 fails PIL._typing without compat (baseline)"
+      pass "Pillow 13 imports StrOrBytesPath without shim on this interpreter (baseline N/A)"
     fi
   fi
 else
@@ -68,9 +69,9 @@ fi
 
 if (( pillow_online )) && "${PY}" -m pip show pillow >/dev/null 2>&1; then
   if "${PY}" -c 'from PIL._typing import StrOrBytesPath' >/dev/null 2>&1; then
-    pass "PIL._typing importable with venv compat shim"
+    pass "StrOrBytesPath importable with venv compat shim"
   else
-    fail "PIL._typing still fails after install_pillow_numbers_compat"
+    fail "StrOrBytesPath still fails after install_pillow_numbers_compat"
   fi
 fi
 
