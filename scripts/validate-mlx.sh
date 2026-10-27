@@ -96,10 +96,26 @@ else
   log_warn "mlx-audio not installed (optional selected media package)"
 fi
 
+if "${python_bin}" -c 'import importlib.metadata as m; m.version("pillow")' 2>/dev/null; then
+  if ! "${python_bin}" -c 'from PIL import Image, _typing' 2>/dev/null; then
+    fail "Pillow is installed but PIL._typing failed (run make install or make rebuild to install mlx_pillow_numbers_compat)"
+  else
+    pass "Pillow PIL._typing importable (Pillow 13 compat shim active)"
+  fi
+fi
+
 # Optional Pure MLX image package (info only if absent)
-if "${python_bin}" -c 'import mflux' 2>/dev/null; then
-  mflux_ver="$("${python_bin}" -c 'import importlib.metadata as m; print(m.version("mflux"))')"
-  pass "mflux importable (version ${mflux_ver})"
+mflux_dist="$("${python_bin}" -c 'import importlib.metadata as m
+try:
+    print(m.version("mflux"))
+except m.PackageNotFoundError:
+    print("")' 2>/dev/null || true)"
+if [[ -n "${mflux_dist}" ]]; then
+  if "${python_bin}" -c 'import mflux.utils.image_util' 2>/dev/null; then
+    pass "mflux image imports OK (version ${mflux_dist}, Pillow 13 compat)"
+  else
+    fail "mflux ${mflux_dist} is installed but image imports failed (run make install-image or make rebuild)"
+  fi
 else
   log_info "mflux not installed (opt-in text-to-image; make install-image)"
 fi

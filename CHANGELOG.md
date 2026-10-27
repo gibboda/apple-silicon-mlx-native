@@ -21,11 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump **`mlx-lm`** from 0.32.0 to 0.32.2 in `requirements/constraints.txt` (#121)
 - Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
 - Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
+- Bump **`pillow`** from 12.3.0 to **13.0.0** in `requirements/constraints.txt`; install **`mlx_pillow_numbers_compat`** into the venv on every pip install path (`make install`, `make rebuild`, media/image/video installers) when the pin is 13+ so Pillow/mflux imports work on CPython 3.12+
+- Remove Dependabot **`pillow >=13`** ignore now that the compat shim covers every constrained venv (not image-only)
 
 ### Security
 
-- **`pillow`** remains at **`12.3.0`** (latest PyPI **12.x**; manifest `requirements/constraints.txt`). No safe bump: all **41** open Dependabot/OSV advisories for this pin list **13.0.0** as the first fixed release, and Pillow **13.x** still breaks `import mflux` on CPython 3.12+ ([#105](https://github.com/gibboda/apple-silicon-mlx-native/pull/105)). Re-audited with **osv-scanner** and **OSV API** (GitHub Dependabot alerts API returned 403 for this token).
-- Blocked advisories (package bump would require Pillow 13.0.0):
+- Bump **`pillow`** to **13.0.0** in `requirements/constraints.txt` — fixes **41** Dependabot/OSV advisories that patched only in Pillow 13.0.0 (GHSA/CVE list below). **`mlx_pillow_numbers_compat`** keeps Pillow/mflux imports working on CPython 3.12+ until upstream drops the `numbers._IntegralLike` import ([#123](https://github.com/gibboda/apple-silicon-mlx-native/pull/123); docs-only audit in [#119](https://github.com/gibboda/apple-silicon-mlx-native/pull/119)).
+- Fixed advisories ( **`pillow` 12.3.0 → 13.0.0** ):
   - GHSA-v9pv-5gc8-w2m6 / CVE-2026-96639 (severity 9.8)
   - GHSA-332p-7hrc-92wf / CVE-2026-112393 (severity 9.2)
   - GHSA-5x8w-8jj5-q52h / CVE-2026-112398 (severity 9.2)
@@ -95,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Document pinning **`pillow==12.3.0`** so `make image` can import mflux (Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12–3.15 does not define). The **v0.4.0 tag actually shipped `pillow==13.0.0`**; the **`pillow==12.3.0`** pin landed in **0.4.1** (#111)
+- Document pinning **`pillow==12.3.0`** so `make image` can import mflux (Pillow 13.0.0 imports `numbers._IntegralLike`, which CPython 3.12+ stdlib does not define). The **v0.4.0 tag actually shipped `pillow==13.0.0`**; the **`pillow==12.3.0`** pin landed in **0.4.1** (#111)
 
 ## [0.3.1] - 2026-10-23
 

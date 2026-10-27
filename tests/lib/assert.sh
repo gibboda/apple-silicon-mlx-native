@@ -60,7 +60,8 @@ expect_line() {
   local label="$1"
   local line="$2"
   local haystack="$3"
-  if printf '%s\n' "${haystack}" | grep -qxF -- "${line}"; then
+  # Here-string avoids printf|grep SIGPIPE flakes on macOS bash 3.2 (set -o pipefail).
+  if grep -qxF -- "${line}" <<< "${haystack}"; then
     pass "${label}"
   else
     fail "${label} (missing exact line ${line})"

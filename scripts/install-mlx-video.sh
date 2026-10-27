@@ -66,6 +66,7 @@ log_info "Installing ${MLX_VIDEO_PACKAGE} into ${MLX_VENV}"
 warn_or_die_disk_headroom video-pip
 install_packaging_tools
 mlx_pip_install --upgrade "${MLX_VIDEO_PACKAGE}"
+ensure_pillow_numbers_compat
 
 if "${PY}" -c "import mlx_video" >/dev/null 2>&1; then
   ver="$("${PY}" -c 'import mlx_video, importlib.metadata as m
