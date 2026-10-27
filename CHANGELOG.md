@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump **`mlx-vlm`** from 0.7.4 to 0.7.10 in `requirements/constraints.txt` (#122)
 - Bump **`mlx-lm`** from 0.32.0 to 0.32.2 in `requirements/constraints.txt` (#121)
 - Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
 - Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
