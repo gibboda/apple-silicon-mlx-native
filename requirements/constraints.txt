@@ -11,7 +11,7 @@ mlx-audio==0.6.1
 mflux==0.23.0
 transformers==5.20.2
 numpy==2.5.4
-huggingface-hub==2.2.0
+huggingface-hub==2.3.0
 mlx-vlm==0.7.10
 torch==2.14.1
 # Pillow 13.0.0+ (security fixes). mflux requires pillow>=12.3.0. CPython 3.12+
