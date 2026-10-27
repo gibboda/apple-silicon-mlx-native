@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump **`mlx-vlm`** from 0.7.4 to 0.7.10 in `requirements/constraints.txt` (#122)
+- Bump **`mlx-lm`** from 0.32.0 to 0.32.2 in `requirements/constraints.txt` (#121)
 - Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
 - Add `.github/actionlint.yaml` for the self-hosted `xcode-27` runner label
 - Bump **`pillow`** from 12.3.0 to **13.0.0** in `requirements/constraints.txt`; install **`mlx_pillow_numbers_compat`** into the venv on every pip install path (`make install`, `make rebuild`, media/image/video installers) when the pin is 13+ so Pillow/mflux imports work on CPython 3.12+
