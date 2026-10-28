@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Document the **`huggingface-hub`** 1.x pin for `mflux` in `docs/media.md` and `docs/troubleshooting.md`. `mflux` 0.24.0 still requires `huggingface-hub<2.0`, so a 2.x constraint still makes `make install-image` fail with `ResolutionImpossible`
 - Bump **`mlx-vlm`** from 0.7.4 to 0.7.10 in `requirements/constraints.txt` (#122)
 - Bump **`mlx-lm`** from 0.32.0 to 0.32.2 in `requirements/constraints.txt` (#121)
 - Bump **`huggingface-hub`** from 1.33.0 to 2.2.0 in `requirements/constraints.txt` (#120)
