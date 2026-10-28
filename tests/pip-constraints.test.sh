@@ -88,6 +88,15 @@ else
   fail "pillow pin must be 13.x for security advisories (got ${pillow_pin})"
 fi
 
+hub_pin="$(grep -E '^huggingface-hub==[^[:space:]]+$' "${CONSTRAINTS}" | head -n 1 || true)"
+hub_major="${hub_pin#huggingface-hub==}"
+hub_major="${hub_major%%.*}"
+if [[ "${hub_major}" == "1" ]]; then
+  pass "huggingface-hub pin on 1.x (mflux requires <2.0)"
+else
+  fail "huggingface-hub pin must stay on 1.x until mflux allows hub 2.x (got ${hub_pin})"
+fi
+
 compat_src="${ROOT}/scripts/lib/pillow_numbers_compat.py"
 if [[ -f "${compat_src}" ]]; then
   pass "pillow numbers compat shim present"
