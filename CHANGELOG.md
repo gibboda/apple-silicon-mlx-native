@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Pin **`huggingface-hub`** back to **1.33.0**. `mflux==0.23.0` requires `huggingface-hub>=1.1.6,<2.0`, so the 2.x constraint (`2.2.0` in #120, `2.3.0` in #124) makes `make install-image` fail with `ResolutionImpossible`. `transformers==5.20.2` still accepts 1.33.0 (`>=1.31.0,<3.0`). Dependabot ignores `huggingface-hub` >=2 until mflux allows hub 2.x
+- Pin **`huggingface-hub`** back to **1.33.0**. `mflux==0.23.0` requires `huggingface-hub>=1.1.6,<2.0`, so the 2.x constraint (`2.2.0` in #120, `2.3.0` in #124) makes `make install-image` fail with `ResolutionImpossible`. `transformers==5.20.2` still accepts 1.33.0 (`>=1.31.0,<3.0`). Dependabot ignores `huggingface-hub` >=2 until mflux allows hub 2.x. CI runs `uv pip compile` for the mflux stack on darwin arm64 (Python 3.12–3.14) when `uv` is available
 - Keep `_pin_default` fallbacks in `scripts/lib/common.sh` aligned with `requirements/constraints.txt`; extend `tests/pip-constraints.test.sh` to fail on drift
 - Scope GitHub Actions `contents: write` to the publish-release and delete-merged-branch jobs (workflow default is `contents: read`)
 - Guard `rm -rf` on `MLX_VENV` in `scripts/rebuild-mlx-native-media.sh` with `${MLX_VENV:?}`
