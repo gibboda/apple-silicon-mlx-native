@@ -154,6 +154,12 @@ jobs:
           CI: "true"
         run: /bin/bash tests/mflux-pillow-import.test.sh
 
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -fsSL https://astral.sh/uv/install.sh | sh
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
       - name: Portable self-tests (bash 3.2)
         run: |
           set -euo pipefail
