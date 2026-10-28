@@ -88,6 +88,44 @@ else
   fail "pillow pin must be 13.x for security advisories (got ${pillow_pin})"
 fi
 
+hub_pin="$(grep -E '^huggingface-hub==[^[:space:]]+$' "${CONSTRAINTS}" | head -n 1 || true)"
+hub_major="${hub_pin#huggingface-hub==}"
+hub_major="${hub_major%%.*}"
+if [[ "${hub_major}" == "1" ]]; then
+  pass "huggingface-hub pin on 1.x (mflux requires <2.0)"
+else
+  fail "huggingface-hub pin must stay on 1.x until mflux allows hub 2.x (got ${hub_pin})"
+fi
+
+# Resolve the image stack on darwin arm64 (same graph as make install-image pip).
+# Skips when uv is missing locally; CI installs uv and sets CI=true.
+pip_resolve_required=0
+if [[ "${CI:-}" == "true" || "${MLX_PIP_RESOLVE_TEST:-}" == "1" ]]; then
+  pip_resolve_required=1
+fi
+if command -v uv >/dev/null 2>&1; then
+  compile_req="$(mktemp)"
+  printf '%s\n' mflux mlx-audio mlx-vlm mlx-lm >"${compile_req}"
+  for py in 3.12 3.13 3.14; do
+    compile_err="$(mktemp)"
+    if MACOSX_DEPLOYMENT_TARGET=26.0 uv pip compile "${compile_req}" \
+      -c "${CONSTRAINTS}" \
+      --python-platform aarch64-apple-darwin \
+      --python-version "${py}" \
+      -o /dev/null >"${compile_err}" 2>&1; then
+      pass "uv pip compile darwin arm64 Python ${py} (mflux stack)"
+    else
+      fail "uv pip compile darwin arm64 Python ${py} (mflux stack): $(head -n 3 "${compile_err}" | tr '\n' ' ')"
+    fi
+    rm -f "${compile_err}"
+  done
+  rm -f "${compile_req}"
+elif (( pip_resolve_required )); then
+  fail "uv missing but pip resolution check required (CI=true or MLX_PIP_RESOLVE_TEST=1)"
+else
+  pass "uv pip compile skipped (uv not installed; set MLX_PIP_RESOLVE_TEST=1)"
+fi
+
 compat_src="${ROOT}/scripts/lib/pillow_numbers_compat.py"
 if [[ -f "${compat_src}" ]]; then
   pass "pillow numbers compat shim present"
