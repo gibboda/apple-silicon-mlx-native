@@ -21,8 +21,10 @@ updates:
       prefix: chore
       include: scope
     ignore:
-      # mflux requires huggingface-hub<2.0. Allow 1.x patches; block 2.x
-      # until an mflux release declares hub 2 support.
+      # mflux requires huggingface-hub<2.0. Allow 1.x patches; block all 2.x
+      # (including pre-releases) until an mflux release declares hub 2 support.
+      # This ignore also suppresses Dependabot security PRs for hub 2.x; that is
+      # intentional for now.
       - dependency-name: huggingface-hub
         versions:
-          - ">=2.0.0a"
+          - ">= 2"
