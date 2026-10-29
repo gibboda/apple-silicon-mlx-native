@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-28
+
 ### Fixed
 
 - Apply **`bash -eu -o pipefail`** to GNU Make recipes on macOS Make **3.81** (`.SHELLFLAGS` is ignored until 3.82) via **`scripts/lib/make-recipe-shell.sh`**; resolve the wrapper path from the Makefile directory so `make -f /path/to/Makefile` works outside the repo tree
@@ -345,7 +347,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject Intel/x86_64 hosts and discourage Rosetta-only Homebrew/Python paths on the normal install flow
 - Never use `sudo pip`; isolate packages in a project virtual environment
 
-[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/gibboda/apple-silicon-mlx-native/compare/v0.3.0...v0.3.1
