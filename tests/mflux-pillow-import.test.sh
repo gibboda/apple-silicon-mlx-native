@@ -40,12 +40,20 @@ if (( pillow_online )); then
     fail "pip install pillow==13.0.0 failed (online Pillow 13 integration)"
   else
     # mflux uses StrOrBytesPath from PIL._typing (not a bare import PIL._typing).
+    pillow_needs_shim=1
     if "${PY}" -c 'import numbers; numbers._IntegralLike' >/dev/null 2>&1; then
-      pass "venv stdlib already defines numbers._IntegralLike (skip Pillow 13 baseline)"
-    elif ! "${PY}" -c 'from PIL._typing import StrOrBytesPath' >/dev/null 2>&1; then
-      pass "Pillow 13 fails StrOrBytesPath without compat (baseline)"
+      pillow_needs_shim=0
+    elif "${PY}" -c 'from PIL._typing import StrOrBytesPath' >/dev/null 2>&1; then
+      pillow_needs_shim=0
+    fi
+    if (( pillow_needs_shim )); then
+      if ! "${PY}" -c 'from PIL._typing import StrOrBytesPath' >/dev/null 2>&1; then
+        pass "Pillow 13 fails StrOrBytesPath without compat (baseline)"
+      else
+        fail "Pillow 13 baseline: expected StrOrBytesPath import to fail without shim"
+      fi
     else
-      pass "Pillow 13 imports StrOrBytesPath without shim on this interpreter (baseline N/A)"
+      skip "Pillow 13 imports without numbers._IntegralLike shim (mlx_pillow_numbers_compat may be removable)"
     fi
   fi
 else

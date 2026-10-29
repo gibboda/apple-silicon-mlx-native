@@ -150,6 +150,47 @@ expect_make_prompt "image environment mlx_lit escapes preserved" image IMAGE_PRO
 expect_make_prompt "video environment mlx_lit escapes preserved" video VIDEO_PROMPT generate-mlx-video.sh env "${prompt_escape_payload}"
 expect_make_prompt "text environment mlx_lit escapes preserved" generate-text PROMPT generate-mlx-text.sh env "${prompt_escape_payload}"
 
+# Whitespace-only extras must not expand an empty array under nounset (bash 3.2).
+set +e
+STUB_OUT="${stub_out}" make -C "${ROOT}" image SCRIPTS="${stub_dir}" IMAGE_PROMPT='a fox' GENERATE_IMAGE_ARGS='   ' >/dev/null 2>&1
+ws_image_rc=$?
+set -e
+if [[ "${ws_image_rc}" -ne 0 ]]; then
+  fail "whitespace-only GENERATE_IMAGE_ARGS failed (exit ${ws_image_rc})"
+elif [[ -f "${stub_out}/generate-mlx-image.sh.argv" ]]; then
+  argv_count=0
+  while IFS= read -r -d '' _arg || [[ -n "${_arg}" ]]; do
+    argv_count=$((argv_count + 1))
+  done <"${stub_out}/generate-mlx-image.sh.argv"
+  if [[ "${argv_count}" -eq 2 ]]; then
+    pass "whitespace-only GENERATE_IMAGE_ARGS passes only --prompt"
+  else
+    fail "whitespace-only GENERATE_IMAGE_ARGS passed ${argv_count} argv words (want 2)"
+  fi
+else
+  fail "whitespace-only GENERATE_IMAGE_ARGS did not invoke generator"
+fi
+
+set +e
+STUB_OUT="${stub_out}" make -C "${ROOT}" video SCRIPTS="${stub_dir}" VIDEO_PROMPT='a fox' GENERATE_VIDEO_ARGS=$' \t ' >/dev/null 2>&1
+ws_video_rc=$?
+set -e
+if [[ "${ws_video_rc}" -ne 0 ]]; then
+  fail "whitespace-only GENERATE_VIDEO_ARGS failed (exit ${ws_video_rc})"
+elif [[ -f "${stub_out}/generate-mlx-video.sh.argv" ]]; then
+  argv_count=0
+  while IFS= read -r -d '' _arg || [[ -n "${_arg}" ]]; do
+    argv_count=$((argv_count + 1))
+  done <"${stub_out}/generate-mlx-video.sh.argv"
+  if [[ "${argv_count}" -eq 2 ]]; then
+    pass "whitespace-only GENERATE_VIDEO_ARGS passes only --prompt"
+  else
+    fail "whitespace-only GENERATE_VIDEO_ARGS passed ${argv_count} argv words (want 2)"
+  fi
+else
+  fail "whitespace-only GENERATE_VIDEO_ARGS did not invoke generator"
+fi
+
 rm -f "${stub_out}/generate-mlx-image.sh.argv"
 set +e
 make -C "${ROOT}" image SCRIPTS="${stub_dir}" STUB_OUT="${stub_out}" >/dev/null 2>&1
