@@ -13,14 +13,13 @@ source "${TEST_LIB}/assert.sh"
 wrapper="${ROOT}/scripts/lib/make-recipe-shell.sh"
 expect_ok "make-recipe-shell wrapper is executable" test -x "${wrapper}"
 
-# Recipe shell flags (errexit, nounset, pipefail).
+# Recipe shell flags (errexit, nounset, pipefail) via the repo Makefile SHELL wiring.
 set +e
-make -C "${ROOT}" -f - <<EOF >/dev/null 2>&1
-SHELL := ${ROOT}/scripts/lib/make-recipe-shell.sh
+make -C "${ROOT}" -f Makefile -f - _mlx_strict_shell_probe >/dev/null 2>&1 <<'EOF'
 .PHONY: _mlx_strict_shell_probe
 _mlx_strict_shell_probe:
-	@case "\$\$-:" in *e*) ;; *) exit 11;; esac
-	@case "\$\$-:" in *u*) ;; *) exit 12;; esac
+	@case "$$-:" in *e*) ;; *) exit 11;; esac
+	@case "$$-:" in *u*) ;; *) exit 12;; esac
 	@if set -o | grep -Eq '^pipefail[[:space:]]+on'; then :; else exit 13; fi
 EOF
 probe_rc=$?
@@ -35,11 +34,10 @@ esac
 
 # Unbound variables in recipes must fail (guards against silent Make 3.81 .SHELLFLAGS gap).
 set +e
-make -C "${ROOT}" -f - _mlx_nounset_fail >/dev/null 2>&1 <<EOF
-SHELL := ${ROOT}/scripts/lib/make-recipe-shell.sh
+make -C "${ROOT}" -f Makefile -f - _mlx_nounset_fail >/dev/null 2>&1 <<'EOF'
 .PHONY: _mlx_nounset_fail
 _mlx_nounset_fail:
-	@echo "\$\${MLX_MAKE_TEST_UNSET_VAR:?}"
+	@echo "$${MLX_MAKE_TEST_UNSET_VAR:?}"
 EOF
 nounset_rc=$?
 set -e
