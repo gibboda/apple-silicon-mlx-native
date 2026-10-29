@@ -2,10 +2,11 @@
 # Copyright (C) 2026 Dona Gibbons (gibboda)
 # SPDX-License-Identifier: GPL-3.0-only
 
-SHELL := /bin/bash
-.SHELLFLAGS := -eu -o pipefail -c
-
 SCRIPTS := scripts
+
+# macOS ships GNU Make 3.81, which ignores .SHELLFLAGS (added in 3.82). Delegate to a
+# wrapper so recipes always run under bash -eu -o pipefail on 3.81 and newer.
+SHELL := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/lib/make-recipe-shell.sh
 .DEFAULT_GOAL := help
 
 # Single-quote a Make value so the recipe shell does not evaluate metacharacters.
@@ -96,9 +97,9 @@ image: ## Generate a PNG with mflux (IMAGE_PROMPT required)
 	  exit 1; \
 	fi; \
 	extra=$(call sq,$(GENERATE_IMAGE_ARGS)); \
-	if [[ -n "$$extra" ]]; then \
+	if [[ -n "$${extra//[[:space:]]/}" ]]; then \
 	  read -r -a image_args <<<"$$extra"; \
-	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$$prompt" "$${image_args[@]}"; \
+	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$$prompt" "$${image_args[@]+"$${image_args[@]}"}"; \
 	else \
 	  "$(SCRIPTS)/generate-mlx-image.sh" --prompt "$$prompt"; \
 	fi
@@ -127,9 +128,9 @@ video: ## Generate an MP4 with mlx-video (VIDEO_PROMPT required)
 	  exit 1; \
 	fi; \
 	extra=$(call sq,$(GENERATE_VIDEO_ARGS)); \
-	if [[ -n "$$extra" ]]; then \
+	if [[ -n "$${extra//[[:space:]]/}" ]]; then \
 	  read -r -a video_args <<<"$$extra"; \
-	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$$prompt" "$${video_args[@]}"; \
+	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$$prompt" "$${video_args[@]+"$${video_args[@]}"}"; \
 	else \
 	  "$(SCRIPTS)/generate-mlx-video.sh" --prompt "$$prompt"; \
 	fi

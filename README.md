@@ -280,6 +280,7 @@ apple-silicon-mlx-native/
 │   │   ├── detect_json.py
 │   │   ├── envfile.sh
 │   │   ├── mlx_launch.py
+│   │   ├── make-recipe-shell.sh
 │   │   ├── pillow_numbers_compat.py
 │   │   ├── policy.sh
 │   │   ├── policy_fit_rules.sh
@@ -395,6 +396,7 @@ apple-silicon-mlx-native/
 │   ├── generate-args.test.sh
 │   ├── host-safety.test.sh
 │   ├── macos-version.test.sh
+│   ├── make-recipe-shell.test.sh
 │   ├── media-list.test.sh
 │   ├── mflux-pillow-import.test.sh
 │   ├── mlx-image.test.sh
@@ -417,7 +419,7 @@ apple-silicon-mlx-native/
 
 The tree lists every tracked file. `tests/readme-tree.test.sh` fails when a tracked path is missing from it, or when it names a path that is not tracked.
 
-`scripts/lib/common.sh` is a thin aggregator; callers still source it only. Modules under `scripts/lib/` are `ui.sh`, `detect.sh`, `policy.sh`, `policy_fit_rules.sh`, `catalog.sh`, `envfile.sh`, and `venv.sh`, plus `detect_json.py`, `mlx_launch.py`, `pillow_numbers_compat.py`, and `release_notes.py`. `scripts/lib/mlx_launch.py` applies the ≤8 GB Metal working-set limits before text generation or `mlx_lm.server` starts. When `pillow` is pinned to 13+, `ensure_pillow_numbers_compat` installs `pillow_numbers_compat.py` into the venv (`.pth` auto-import) so Pillow and mflux image imports work on CPython 3.12+.
+`scripts/lib/common.sh` is a thin aggregator; callers still source it only. Modules under `scripts/lib/` are `ui.sh`, `detect.sh`, `policy.sh`, `policy_fit_rules.sh`, `catalog.sh`, `envfile.sh`, and `venv.sh`, plus `detect_json.py`, `make-recipe-shell.sh` (GNU Make 3.81 recipe shell), `mlx_launch.py`, `pillow_numbers_compat.py`, and `release_notes.py`. `scripts/lib/mlx_launch.py` applies the ≤8 GB Metal working-set limits before text generation or `mlx_lm.server` starts. When `pillow` is pinned to 13+, `ensure_pillow_numbers_compat` installs `pillow_numbers_compat.py` into the venv (`.pth` auto-import) so Pillow and mflux image imports work on CPython 3.12+.
 
 ## Make targets
 

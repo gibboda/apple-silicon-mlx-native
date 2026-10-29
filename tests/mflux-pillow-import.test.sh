@@ -41,11 +41,11 @@ if (( pillow_online )); then
   else
     # mflux uses StrOrBytesPath from PIL._typing (not a bare import PIL._typing).
     if "${PY}" -c 'import numbers; numbers._IntegralLike' >/dev/null 2>&1; then
-      pass "venv stdlib already defines numbers._IntegralLike (skip Pillow 13 baseline)"
-    elif ! "${PY}" -c 'from PIL._typing import StrOrBytesPath' >/dev/null 2>&1; then
-      pass "Pillow 13 fails StrOrBytesPath without compat (baseline)"
+      skip "Pillow 13 imports without numbers._IntegralLike shim (mlx_pillow_numbers_compat may be removable)"
+    elif "${PY}" -c 'from PIL._typing import StrOrBytesPath' >/dev/null 2>&1; then
+      skip "Pillow 13 imports without numbers._IntegralLike shim (mlx_pillow_numbers_compat may be removable)"
     else
-      pass "Pillow 13 imports StrOrBytesPath without shim on this interpreter (baseline N/A)"
+      pass "Pillow 13 fails StrOrBytesPath without compat (baseline)"
     fi
   fi
 else
