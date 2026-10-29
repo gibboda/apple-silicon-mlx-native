@@ -6,7 +6,7 @@ SCRIPTS := scripts
 
 # macOS ships GNU Make 3.81, which ignores .SHELLFLAGS (added in 3.82). Delegate to a
 # wrapper so recipes always run under bash -eu -o pipefail on 3.81 and newer.
-SHELL := scripts/lib/make-recipe-shell.sh
+SHELL := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/lib/make-recipe-shell.sh
 .DEFAULT_GOAL := help
 
 # Single-quote a Make value so the recipe shell does not evaluate metacharacters.
