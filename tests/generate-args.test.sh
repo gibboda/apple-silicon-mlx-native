@@ -151,6 +151,7 @@ expect_make_prompt "video environment mlx_lit escapes preserved" video VIDEO_PRO
 expect_make_prompt "text environment mlx_lit escapes preserved" generate-text PROMPT generate-mlx-text.sh env "${prompt_escape_payload}"
 
 # Whitespace-only extras must not expand an empty array under nounset (bash 3.2).
+rm -f "${stub_out}/generate-mlx-image.sh.argv"
 set +e
 STUB_OUT="${stub_out}" make -C "${ROOT}" image SCRIPTS="${stub_dir}" IMAGE_PROMPT='a fox' GENERATE_IMAGE_ARGS='   ' >/dev/null 2>&1
 ws_image_rc=$?
@@ -171,6 +172,7 @@ else
   fail "whitespace-only GENERATE_IMAGE_ARGS did not invoke generator"
 fi
 
+rm -f "${stub_out}/generate-mlx-video.sh.argv"
 set +e
 STUB_OUT="${stub_out}" make -C "${ROOT}" video SCRIPTS="${stub_dir}" VIDEO_PROMPT='a fox' GENERATE_VIDEO_ARGS=$' \t ' >/dev/null 2>&1
 ws_video_rc=$?
