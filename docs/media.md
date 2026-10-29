@@ -52,7 +52,7 @@ Why not default-install `mflux`?
 - Peak unified-memory use often dwarfs LLM 3B–4B workloads.
 - Unsafe default on 8 GB machines (swap thrash).
 
-Install into an existing `.venv` (does not rebuild). **`mflux` is pinned** to `0.23.0` by default (`MLX_IMAGE_PACKAGE`, read from `requirements/constraints.txt`); override before install, e.g. `MLX_IMAGE_PACKAGE=mflux==0.20.0 make install-image`.
+Install into an existing `.venv` (does not rebuild). **`mflux` is pinned** to `0.23.0` by default (`MLX_IMAGE_PACKAGE`, read from `requirements/constraints.txt`); override before install, e.g. `MLX_IMAGE_PACKAGE=mflux==0.20.0 make install-image`. **`huggingface-hub` stays on 1.33.0** because mflux requires `huggingface-hub>=1.1.6,<2.0` (0.24.0 does too). A 2.x pin makes `make install-image` fail with `ResolutionImpossible`.
 
 ```bash
 make install-image
