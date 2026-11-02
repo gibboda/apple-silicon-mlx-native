@@ -8,7 +8,7 @@ mlx==0.32.4
 mlx-metal==0.32.4
 mlx-lm==0.32.2
 mlx-audio==0.6.1
-mflux==0.23.0
+mflux==0.24.0
 transformers==5.20.2
 numpy==2.5.4
 # mflux 0.23.0 requires huggingface-hub>=1.1.6,<2.0. transformers 5.20.2
