@@ -16,6 +16,6 @@ numpy==2.5.4
 huggingface-hub==1.33.0
 mlx-vlm==0.7.12
 torch==2.15.0
-# Pillow 13.0.0+ (security fixes). mflux requires pillow>=12.3.0. CPython 3.12+
+# Pillow 13.0.0+ (security fixes). mflux 0.24.0 requires pillow>=13.0.0. CPython 3.12+
 # lacks numbers._IntegralLike; make install/rebuild/install-image install mlx_pillow_numbers_compat.
 pillow==13.0.0

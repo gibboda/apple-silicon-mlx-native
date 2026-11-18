@@ -52,7 +52,7 @@ Why not default-install `mflux`?
 - Peak unified-memory use often dwarfs LLM 3B–4B workloads.
 - Unsafe default on 8 GB machines (swap thrash).
 
-Install into an existing `.venv` (does not rebuild). **`mflux` is pinned** to `0.23.0` by default (`MLX_IMAGE_PACKAGE`, read from `requirements/constraints.txt`); override before install, e.g. `MLX_IMAGE_PACKAGE=mflux==0.20.0 make install-image`. **`huggingface-hub` stays on 1.33.0** because mflux requires `huggingface-hub>=1.1.6,<2.0` (0.24.0 does too). A 2.x pin makes `make install-image` fail with `ResolutionImpossible`.
+Install into an existing `.venv` (does not rebuild). **`mflux` is pinned** to `0.24.0` by default (`MLX_IMAGE_PACKAGE`, read from `requirements/constraints.txt`); override before install, e.g. `MLX_IMAGE_PACKAGE=mflux==0.20.0 make install-image`. **`huggingface-hub` stays on 1.33.0** because mflux 0.24.0 requires `huggingface-hub>=1.1.6,<2.0`. A 2.x pin makes `make install-image` fail with `ResolutionImpossible`. The same constraint file pins **`pillow==13.0.0`** (mflux 0.24.0 requires `pillow>=13.0.0`) and keeps **`mlx==0.32.4`**, which satisfies mflux's macOS `mlx>=0.32.0,<0.33.0` requirement.
 
 ```bash
 make install-image
@@ -126,7 +126,7 @@ Upstream models and CLIs: [mflux](https://github.com/filipstrand/mflux). Current
 Why not default-install `mlx-video`?
 
 - Peak unified-memory use dwarfs 3B–4B LLM workloads. Wan 1.3B still loads **UMT5-XXL** (~11 GB) plus VAE and diffusion scratch.
-- Git-only package (pinned SHA); pulls `mlx-vlm`, `transformers`, OpenCV, librosa.
+- Git-only package (pinned SHA); pulls `mlx-vlm`, `transformers`, OpenCV, librosa. `requirements/constraints.txt` pins **`mlx-vlm==0.7.12`**, **`transformers==5.23.0`**, and **`torch==2.15.0`** for the combined stack; **`mlx-vlm` 0.7.12** requires **`mlx-audio>=0.6.2`**, satisfied by the bootstrap **`mlx-audio==0.6.3`** pin.
 - Wan weights are **not** preconverted on Hugging Face in mlx-video layout. `scripts/prepare-mlx-video-wan.sh` converts `Wan-AI/Wan2.1-T2V-1.3B` and needs `torch` to load original `.pth` T5/VAE files. Denoising remains MLX.
 - Unsafe default on 8–16 GB machines (swap thrash).
 
@@ -193,7 +193,7 @@ List the video catalog against this Mac. `default` is the composed checkpoint (W
 make list-video
 ```
 
-Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.23.0`).
+Wan generate fails until `models/video/wan21-t2v-1.3b-q4` contains `config.json`, `model.safetensors`, `t5_encoder.safetensors`, and `vae.safetensors`. Do not add `mlx-gen` to this venv (it is an mflux fork and fights pinned `mflux==0.24.0`).
 
 `make clean` removes only `.venv`. Converted Wan weights under `models/video/` survive cleanup. To remove them: `rm -rf models/video` or `scripts/cleanup-mlx-native.sh --workspace-caches --force` (also drops other workspace caches such as `outputs/`).
 
