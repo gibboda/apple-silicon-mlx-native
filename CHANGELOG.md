@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump **`mlx-vlm`** from 0.7.10 to 0.7.12 in `requirements/constraints.txt` (#131)
 - Bump **`torch`** from 2.14.1 to 2.15.0 in `requirements/constraints.txt` (#132)
 - Bump **`mlx-audio`** from 0.6.1 to 0.6.3 in `requirements/constraints.txt` (#133)
-- Refresh **`docs/media.md`** and **`docs/troubleshooting.md`** for the #129–#133 pins (mflux 0.24.0 / pillow / hub / mlx caps, video transitive pins, `torch` 2.15.x and Python 3.12–3.14 policy). Correct the **`mflux 0.24.0` requires `pillow>=13.0.0`** comment in `requirements/constraints.txt`
+- Refresh **`docs/media.md`** and **`docs/troubleshooting.md`** for the #129–#133 pins (mflux 0.24.0 pillow/hub/mlx requirements, video-stack pins, `torch` 2.15.x and the Python 3.12–3.14 policy)
+- Fix the Pillow comment in **`requirements/constraints.txt`**: mflux 0.24.0 requires **`pillow>=13.0.0`** (was documented as **`>=12.3.0`**); the **`pillow==13.0.0`** pin is unchanged
 
 ## [0.4.2] - 2026-10-28
 
