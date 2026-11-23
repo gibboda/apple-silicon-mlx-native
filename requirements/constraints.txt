@@ -10,7 +10,7 @@ mlx-lm==0.32.2
 mlx-audio==0.6.3
 mflux==0.24.0
 transformers==5.23.0
-numpy==2.5.4
+numpy==2.5.5
 # mflux 0.24.0 requires huggingface-hub>=1.1.6,<2.0; stay on the newest 1.x
 # until mflux allows hub 2.
 huggingface-hub==1.33.0
